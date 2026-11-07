@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { apiPost } from '../lib/api';
 import { ShieldCheck, Zap, Mail, RefreshCw, Edit2, CheckCircle2 } from 'lucide-react';
 import Link from 'next/link';
+import PrimeLogo from '../components/ui/PrimeLogo';
 
 export default function VerifyOtpPage() {
   const router = useRouter();
@@ -47,7 +48,7 @@ export default function VerifyOtpPage() {
       login(data.token, data.user);
       sessionStorage.removeItem('otp_email');
       sessionStorage.removeItem('otp_hint');
-      router.push('/dashboard');
+      router.push('/');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Verification failed');
     } finally {
@@ -78,11 +79,8 @@ export default function VerifyOtpPage() {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
       >
-        <div className="flex items-center gap-2 mb-8 justify-center">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center">
-            <Zap size={20} className="text-white" />
-          </div>
-          <span className="text-2xl font-bold">Creator11</span>
+        <div className="flex justify-center mb-8">
+          <PrimeLogo size="md" />
         </div>
 
         <div className="glass p-8 glow-cyan">

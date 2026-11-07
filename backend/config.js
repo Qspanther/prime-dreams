@@ -1,72 +1,70 @@
-// ★★★ CREATOR11 — CENTRAL CONFIGURATION FILE ★★★
-// All tunable constants for the entire application live here.
-// Every backend module imports values from this file.
-// Non-sensitive values are exposed via GET /api/config for the frontend.
+// ★★★ PRIME DREEMS — CENTRAL CONFIGURATION FILE ★★★
+// Cricket Fantasy Sports Platform
+// All tunable constants for the application live here.
 
 require('dotenv').config();
 
 const config = {
-  // ─── Team & Category Rules ───
-  CATEGORIES: ["Gaming", "Vlogging", "Comedy", "Tech", "Lifestyle"],
-  CREATORS_PER_CATEGORY: 3,
-  TOTAL_TEAM_SIZE: 11,  // Hard requirement for a valid fantasy team
-  TOTAL_CREDITS: 125,
+  PLATFORM_NAME: 'Prime Dreems',
+
+  // ─── Canonical Match Categories ───
+  VALID_CATEGORIES: ['World Cup', 'T20', 'League', "Women's"],
+
+  // ─── Cricket Fantasy Team Rules ───
+  TOTAL_TEAM_SIZE: 11,
+  TOTAL_CREDITS: 100,
+  MAX_PLAYERS_PER_TEAM: 7,
+  SQUAD_POOL_SIZE: 30, // 15 players Team A + 15 players Team B
+
+  // Role Constraints
+  ROLE_CONSTRAINTS: {
+    WK: { min: 1, max: 4 },
+    BAT: { min: 3, max: 6 },
+    AR: { min: 1, max: 4 },
+    BOWL: { min: 3, max: 6 },
+  },
 
   // ─── Multipliers ───
   CAPTAIN_MULTIPLIER: 2.0,
   VICE_CAPTAIN_MULTIPLIER: 1.5,
   DEFAULT_MULTIPLIER: 1.0,
 
-  // ─── Tournament Timing ───
-  LOCK_BEFORE_START_MINUTES: 30,
-  TOURNAMENT_DURATIONS_HOURS: {
-    "6h": 6,
-    "24h": 24,
-    "2d": 48,
-    "48h": 48,
-    "3d": 72,
-    "72h": 72,
-  },
-
-  // ─── Scoring Weights ───
-  // 1000 views gained = 1 point (views * 0.001)
-  // 500 likes gained = 1 point (likes * 0.002)
-  // 100 subscribers gained = 1 point (subscribers * 0.01)
+  // ─── Fantasy Cricket Scoring Weights ───
   SCORING_WEIGHTS: {
-    youtube_views: 0.001,
-    youtube_likes: 0.002,
-    youtube_subscribers: 0.01,
-    instagram_likes: 0.002,
-    instagram_followers: 0.01,
+    run: 1,
+    boundary: 1, // 4s bonus
+    six: 2,      // 6s bonus
+    half_century: 8,
+    century: 16,
+    duck: -2,    // Batsman / WK / AR only
+    wicket: 25,
+    four_wickets: 8,
+    five_wickets: 16,
+    maiden_over: 12,
+    catch: 8,
+    stumping: 12,
+    runout_direct: 12,
+    runout_indirect: 6,
+    economy_under_5: 6,
+    economy_5_to_6: 4,
+    economy_9_to_10: -2,
+    economy_over_10: -4,
+    strike_rate_over_170: 6,
+    strike_rate_150_to_170: 4,
+    strike_rate_60_to_70: -2,
+    strike_rate_under_60: -4,
   },
 
-  // ─── Prize Distribution Slabs ───
-  // Rank percentile ranges and their share of the total prize pool.
-  PRIZE_DISTRIBUTION_SLABS: [
-    { minRankPercent: 0,   maxRankPercent: 1,   payoutPercent: 0.30 },  // Top 1% gets 30%
-    { minRankPercent: 1,   maxRankPercent: 5,   payoutPercent: 0.25 },  // Next 4% gets 25%
-    { minRankPercent: 5,   maxRankPercent: 10,  payoutPercent: 0.15 },  // Next 5% gets 15%
-    { minRankPercent: 10,  maxRankPercent: 25,  payoutPercent: 0.10 },  // Next 15% gets 10%
-    { minRankPercent: 25,  maxRankPercent: 50,  payoutPercent: 0.05 },  // Next 25% gets 5%
-    // Bottom 50% gets nothing — platform keeps remaining 15% as margin
-  ],
-
-  // ─── Mock Data Toggle ───
-  USE_MOCK_CREATOR_DATA: false,
-
-  // ─── API Keys (from environment) ───
-  YOUTUBE_API_KEY: process.env.YOUTUBE_API_KEY || '',
-  INSTAGRAM_ACCESS_TOKEN: process.env.INSTAGRAM_ACCESS_TOKEN || '',
-
-  // ─── Bot Manager Network Secret Key ───
-  BOT_API_KEY: process.env.BOT_API_KEY || 'c11_bot_mgr_sec_9938a7fbc21d49e',
+  // ─── Contest Defaults ───
+  DEFAULT_LOCK_MINUTES: 15,
+  H2H_COMMISSION_PERCENT: 15, // Platform margin 15%, Winner pool 85%
 
   // ─── Database ───
   DB_DIALECT: 'sqlite',
-  DB_STORAGE: process.env.DB_STORAGE || require('path').resolve(__dirname, 'creator11.sqlite'),
+  DB_STORAGE: process.env.DB_STORAGE || require('path').resolve(__dirname, 'primedreems.sqlite'),
 
   // ─── Auth ───
-  JWT_SECRET: process.env.JWT_SECRET || 'creator11-dev-secret-change-in-production',
+  JWT_SECRET: process.env.JWT_SECRET || 'prime-dreems-dev-secret-key-2026',
   JWT_EXPIRY: '7d',
   OTP_LENGTH: 6,
   OTP_EXPIRY_MINUTES: 10,
@@ -75,41 +73,8 @@ const config = {
   PORT: process.env.PORT || 5000,
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
 
-  // ─── Mock Data Generation ───
-  MOCK_GROWTH_RATES: {
-    youtube_views_per_hour: { min: 500, max: 5000 },
-    instagram_likes_per_hour: { min: 100, max: 2000 },
-    instagram_followers_per_hour: { min: 10, max: 500 },
-  },
-
-  // ─── Leaderboard Polling ───
-  LEADERBOARD_POLL_INTERVAL_MS: 5000,
-
-  // ─── Tournament Entry Fees & Prize Pools (Fixed ₹99 with 100% Never-Lose Guarantee) ───
-  FIXED_ENTRY_FEE: 99.00,
-  DEFAULT_ENTRY_FEES: {
-    "6h": 99,
-    "24h": 99,
-    "2d": 99,
-    "48h": 99,
-    "3d": 99,
-    "72h": 99,
-  },
-  DEFAULT_PRIZE_POOLS: {
-    "6h": 2500,
-    "24h": 5000,
-    "2d": 15000,
-    "3d": 30000,
-  },
-
-  // ─── Initial Wallet Balance for New Users ───
-  INITIAL_WALLET_BALANCE: 0,
+  // ─── Live Polling Throttle (Section 8: min 10s per match poll) ───
+  LIVE_POLL_INTERVAL_MS: 10000,
 };
-
-if (config.CATEGORIES.length * config.CREATORS_PER_CATEGORY < config.TOTAL_TEAM_SIZE) {
-  throw new Error(
-    `Config error: Not enough possible creators to form a team of ${config.TOTAL_TEAM_SIZE}`
-  );
-}
 
 module.exports = config;

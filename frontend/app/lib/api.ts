@@ -1,7 +1,7 @@
 export function getApiBase() {
   if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-  if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
-    return 'https://creator11-backend.onrender.com';
+  if (typeof window === 'undefined') {
+    return process.env.BACKEND_INTERNAL_URL || 'http://127.0.0.1:5000';
   }
   return '/api-backend';
 }

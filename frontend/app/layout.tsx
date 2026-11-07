@@ -8,20 +8,20 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: "cover",
-  themeColor: "#09090d",
+  themeColor: "#000000",
 };
 
 export const metadata: Metadata = {
-  title: "Creator11 — Creator Entertainment League",
-  description: "Build your entertainment team of verified YouTube creators. Compete in tournaments, earn points from real creator performance, and win prizes.",
-  keywords: "creator entertainment league, youtube creators, creator11, cel",
+  title: "Prime Dreems — Cricket Fantasy Sports Platform",
+  description: "Play Cricket Fantasy Sports on Prime Dreems. Pick your 11-player squad across World Cup, T20, League, and Women's tournaments with guaranteed prizes.",
+  keywords: "prime dreems, cricket fantasy, fantasy sports, cricket league, world cup fantasy, t20 fantasy",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Creator11",
+    title: "Prime Dreems",
   },
-  applicationName: "Creator11",
+  applicationName: "Prime Dreems",
   formatDetection: {
     telephone: false,
   },
@@ -37,12 +37,12 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Montserrat:wght@600;700;800;900&display=swap" rel="stylesheet" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
       </head>
-      <body className="antialiased overflow-x-hidden w-full max-w-full selection:bg-neon-cyan/30" suppressHydrationWarning>
+      <body className="antialiased overflow-x-hidden w-full max-w-full bg-[#000000] text-[#FFFFFF]" suppressHydrationWarning>
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>

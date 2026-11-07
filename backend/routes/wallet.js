@@ -15,12 +15,12 @@ const DEFAULT_INR_CONFIG = {
   maxDeposit: 100000,
   minWithdrawal: 100,
   upi: {
-    id: 'creator11.league@upi',
-    name: 'Creator Entertainment League',
-    qrPayload: 'upi://pay?pa=creator11.league@upi&pn=Creator%20Entertainment%20League&cu=INR'
+    id: 'primedreems@upi',
+    name: 'Prime Dreems',
+    qrPayload: 'upi://pay?pa=primedreems@upi&pn=Prime%20Dreems&cu=INR'
   },
   bank: {
-    accountName: 'Creator Entertainment League Pvt Ltd',
+    accountName: 'Prime Dreems Sports Pvt Ltd',
     accountNumber: '50200084729104',
     ifsc: 'HDFC0000240',
     bankName: 'HDFC Bank Ltd'
@@ -40,7 +40,7 @@ router.get('/config', async (req, res) => {
     settings.forEach(s => {
       if (s.key === 'inr_upi_id' && s.value) {
         config.upi.id = s.value;
-        config.upi.qrPayload = `upi://pay?pa=${encodeURIComponent(s.value)}&pn=Creator%20Entertainment%20League&cu=INR`;
+        config.upi.qrPayload = `upi://pay?pa=${encodeURIComponent(s.value)}&pn=Prime%20Dreems&cu=INR`;
       }
       if (s.key === 'inr_upi_name' && s.value) config.upi.name = s.value;
       if (s.key === 'inr_bank_name' && s.value) config.bank.bankName = s.value;

@@ -66,12 +66,12 @@ export default function AdminInrControlPage() {
 
   // Official Gateway Accounts State
   const [settings, setSettings] = useState<InrSettings>({
-    inr_upi_id: 'creator11.league@upi',
-    inr_upi_name: 'Creator Entertainment League',
+    inr_upi_id: 'primedreems@upi',
+    inr_upi_name: 'Prime Dreems',
     inr_bank_name: 'HDFC Bank Ltd',
     inr_account_number: '50200084729104',
     inr_ifsc: 'HDFC0000240',
-    inr_account_name: 'Creator Entertainment League Pvt Ltd'
+    inr_account_name: 'Prime Dreems Sports Pvt Ltd'
   });
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsSaveSuccess, setSettingsSaveSuccess] = useState(false);
@@ -263,7 +263,7 @@ export default function AdminInrControlPage() {
                 type="text"
                 value={settings.inr_upi_id}
                 onChange={e => setSettings(prev => ({ ...prev, inr_upi_id: e.target.value }))}
-                placeholder="creator11.league@upi"
+                placeholder="primedreems@upi"
                 className="w-full !font-mono !text-xs !py-3 !bg-black/60 !border-white/15 !rounded-xl text-white"
                 required
               />
@@ -277,7 +277,7 @@ export default function AdminInrControlPage() {
                 type="text"
                 value={settings.inr_upi_name}
                 onChange={e => setSettings(prev => ({ ...prev, inr_upi_name: e.target.value }))}
-                placeholder="Creator Entertainment League"
+                placeholder="Prime Dreems"
                 className="w-full !text-xs !py-3 !bg-black/60 !border-white/15 !rounded-xl text-white"
                 required
               />

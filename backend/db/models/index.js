@@ -1,20 +1,20 @@
-const BotWinHistory = require('./BotWinHistory');
 const SystemSetting = require('./SystemSetting');
 const User = require('./User');
 const Wallet = require('./Wallet');
 const Transaction = require('./Transaction');
-const Creator = require('./Creator');
-const Tournament = require('./Tournament');
-const Team = require('./Team');
-const TeamCreator = require('./TeamCreator');
-const CreatorStatsSnapshot = require('./CreatorStatsSnapshot');
-const Score = require('./Score');
-const Leaderboard = require('./Leaderboard');
 const Notification = require('./Notification');
-const Contest = require('./Contest');
-const ContestParticipant = require('./ContestParticipant');
 const ReferralLog = require('./ReferralLog');
 const ShareLog = require('./ShareLog');
+
+// ─── Cricket Models ───
+const CricketMatch = require('./CricketMatch');
+const CricketPlayer = require('./CricketPlayer');
+const MatchContest = require('./MatchContest');
+const CricketTeam = require('./CricketTeam');
+const TeamPlayer = require('./TeamPlayer');
+const H2HChallenge = require('./H2HChallenge');
+const ScoreAuditLog = require('./ScoreAuditLog');
+const PlayerPointsLog = require('./PlayerPointsLog');
 
 // ─── Associations ───
 
@@ -30,91 +30,74 @@ Transaction.belongsTo(Wallet, { foreignKey: 'wallet_id' });
 User.hasMany(ShareLog, { foreignKey: 'user_id', as: 'shareLogs' });
 ShareLog.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
-// User <-> Team (1:N)
-User.hasMany(Team, { foreignKey: 'user_id', as: 'teams' });
-Team.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
+// User <-> Notification (1:N)
+User.hasMany(Notification, { foreignKey: 'user_id', as: 'notifications' });
+Notification.belongsTo(User, { foreignKey: 'user_id' });
 
-// Tournament <-> Team (1:N)
-Tournament.hasMany(Team, { foreignKey: 'tournament_id', as: 'teams' });
-Team.belongsTo(Tournament, { foreignKey: 'tournament_id' });
+// CricketMatch <-> CricketPlayer (1:N)
+CricketMatch.hasMany(CricketPlayer, { foreignKey: 'match_id', as: 'players' });
+CricketPlayer.belongsTo(CricketMatch, { foreignKey: 'match_id', as: 'match' });
 
-// Team <-> TeamCreator (1:N)
-Team.hasMany(TeamCreator, { foreignKey: 'team_id', as: 'teamCreators' });
-TeamCreator.belongsTo(Team, { foreignKey: 'team_id' });
+// CricketMatch <-> MatchContest (1:N)
+CricketMatch.hasMany(MatchContest, { foreignKey: 'match_id', as: 'contests' });
+MatchContest.belongsTo(CricketMatch, { foreignKey: 'match_id', as: 'match' });
 
-// Creator <-> TeamCreator (1:N)
-Creator.hasMany(TeamCreator, { foreignKey: 'creator_id' });
-TeamCreator.belongsTo(Creator, { foreignKey: 'creator_id', as: 'creator' });
+// CricketMatch <-> CricketTeam (1:N)
+CricketMatch.hasMany(CricketTeam, { foreignKey: 'match_id', as: 'teams' });
+CricketTeam.belongsTo(CricketMatch, { foreignKey: 'match_id', as: 'match' });
 
-// Team <-> Creator (M:N through TeamCreator)
-Team.belongsToMany(Creator, { through: TeamCreator, foreignKey: 'team_id', otherKey: 'creator_id', as: 'creators' });
-Creator.belongsToMany(Team, { through: TeamCreator, foreignKey: 'creator_id', otherKey: 'team_id', as: 'teams' });
+// User <-> CricketTeam (1:N)
+User.hasMany(CricketTeam, { foreignKey: 'user_id', as: 'cricketTeams' });
+CricketTeam.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
 
-// Captain/Vice-Captain refs
-Team.belongsTo(Creator, { foreignKey: 'captain_creator_id', as: 'captain' });
-Team.belongsTo(Creator, { foreignKey: 'vice_captain_creator_id', as: 'viceCaptain' });
+// MatchContest <-> CricketTeam (1:N)
+MatchContest.hasMany(CricketTeam, { foreignKey: 'contest_id', as: 'teams' });
+CricketTeam.belongsTo(MatchContest, { foreignKey: 'contest_id', as: 'contest' });
 
-// Creator <-> CreatorStatsSnapshot (1:N)
-Creator.hasMany(CreatorStatsSnapshot, { foreignKey: 'creator_id', as: 'snapshots' });
-CreatorStatsSnapshot.belongsTo(Creator, { foreignKey: 'creator_id' });
+// CricketTeam <-> TeamPlayer (1:N)
+CricketTeam.hasMany(TeamPlayer, { foreignKey: 'team_id', as: 'teamPlayers' });
+TeamPlayer.belongsTo(CricketTeam, { foreignKey: 'team_id', as: 'team' });
 
-// Tournament <-> CreatorStatsSnapshot (1:N)
-Tournament.hasMany(CreatorStatsSnapshot, { foreignKey: 'tournament_id' });
-CreatorStatsSnapshot.belongsTo(Tournament, { foreignKey: 'tournament_id' });
+// CricketPlayer <-> TeamPlayer (1:N)
+CricketPlayer.hasMany(TeamPlayer, { foreignKey: 'player_id', as: 'appearances' });
+TeamPlayer.belongsTo(CricketPlayer, { foreignKey: 'player_id', as: 'player' });
 
-// Team <-> Score (1:N)
-Team.hasMany(Score, { foreignKey: 'team_id', as: 'scores' });
-Score.belongsTo(Team, { foreignKey: 'team_id' });
+// CricketTeam <-> CricketPlayer (M:N through TeamPlayer)
+CricketTeam.belongsToMany(CricketPlayer, { through: TeamPlayer, foreignKey: 'team_id', otherKey: 'player_id', as: 'players' });
+CricketPlayer.belongsToMany(CricketTeam, { through: TeamPlayer, foreignKey: 'player_id', otherKey: 'team_id', as: 'teams' });
 
-// Creator <-> Score (1:N)
-Creator.hasMany(Score, { foreignKey: 'creator_id' });
-Score.belongsTo(Creator, { foreignKey: 'creator_id' });
+// CricketTeam Captain & Vice-Captain
+CricketTeam.belongsTo(CricketPlayer, { foreignKey: 'captain_id', as: 'captain' });
+CricketTeam.belongsTo(CricketPlayer, { foreignKey: 'vice_captain_id', as: 'viceCaptain' });
 
-// Tournament <-> Leaderboard (1:N)
-Tournament.hasMany(Leaderboard, { foreignKey: 'tournament_id', as: 'leaderboard' });
-Leaderboard.belongsTo(Tournament, { foreignKey: 'tournament_id' });
+// CricketMatch <-> H2HChallenge (1:N)
+CricketMatch.hasMany(H2HChallenge, { foreignKey: 'match_id', as: 'challenges' });
+H2HChallenge.belongsTo(CricketMatch, { foreignKey: 'match_id', as: 'match' });
 
-// Team <-> Leaderboard (1:1 per tournament)
-Team.hasOne(Leaderboard, { foreignKey: 'team_id', as: 'leaderboardEntry' });
-Leaderboard.belongsTo(Team, { foreignKey: 'team_id' });
+// MatchContest <-> H2HChallenge (1:1)
+MatchContest.hasOne(H2HChallenge, { foreignKey: 'contest_id', as: 'challenge' });
+H2HChallenge.belongsTo(MatchContest, { foreignKey: 'contest_id', as: 'contest' });
 
-// User <-> Leaderboard
-User.hasMany(Leaderboard, { foreignKey: 'user_id' });
-Leaderboard.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
-
-// Tournament <-> Contest
-Tournament.hasMany(Contest, { foreignKey: 'tournament_id', as: 'contests' });
-Contest.belongsTo(Tournament, { foreignKey: 'tournament_id' });
-
-// Contest <-> ContestParticipant
-Contest.hasMany(ContestParticipant, { foreignKey: 'contest_id', as: 'participants' });
-ContestParticipant.belongsTo(Contest, { foreignKey: 'contest_id' });
-
-// User <-> ContestParticipant
-User.hasMany(ContestParticipant, { foreignKey: 'user_id' });
-ContestParticipant.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
-
-// Team <-> ContestParticipant
-Team.hasMany(ContestParticipant, { foreignKey: 'team_id', as: 'contestEntries' });
-ContestParticipant.belongsTo(Team, { foreignKey: 'team_id', as: 'team' });
+// User <-> H2HChallenge (sender & receiver)
+User.hasMany(H2HChallenge, { foreignKey: 'sender_id', as: 'sentChallenges' });
+User.hasMany(H2HChallenge, { foreignKey: 'receiver_id', as: 'receivedChallenges' });
+H2HChallenge.belongsTo(User, { foreignKey: 'sender_id', as: 'sender' });
+H2HChallenge.belongsTo(User, { foreignKey: 'receiver_id', as: 'receiver' });
 
 module.exports = {
   SystemSetting,
   User,
   Wallet,
   Transaction,
-  Creator,
-  Tournament,
-  Team,
-  TeamCreator,
-  CreatorStatsSnapshot,
-  Score,
-  Leaderboard,
   Notification,
-  Contest,
-  ContestParticipant,
-  BotWinHistory,
   ReferralLog,
   ShareLog,
+  CricketMatch,
+  CricketPlayer,
+  MatchContest,
+  CricketTeam,
+  TeamPlayer,
+  H2HChallenge,
+  ScoreAuditLog,
+  PlayerPointsLog,
 };
-

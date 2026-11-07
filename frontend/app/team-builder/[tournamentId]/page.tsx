@@ -1,1088 +1,445 @@
 'use client';
 
-import { useState, useEffect, use, useMemo } from 'react';
-import { useAuth } from '../../lib/auth-context';
-import { apiGet, apiPost, apiPut } from '../../lib/api';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, use } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Shield, Crown, Star, Check, X, Search,
-  Coins, Users, ArrowRight, Sparkles, TrendingUp, Eye, Heart, Video,
-  AlertCircle, ShieldCheck, MessageCircle, Send, Copy, Lock, CheckCircle2, Share2
+import { 
+  Shield, Crown, Star, Check, X, ArrowLeft, 
+  AlertCircle, Users, Award, ChevronRight, Zap 
 } from 'lucide-react';
-import TiltCard3D from '../../components/ui/TiltCard3D';
-import { playSpatialSFX } from '../../components/ui/StageControls3D';
+import { apiGet, apiPost } from '../../lib/api';
+import { useAuth } from '../../lib/auth-context';
+import CategoryBadge from '../../components/ui/CategoryBadge';
 
-interface Creator {
+interface Player {
   id: string;
   name: string;
-  platform: string;
-  category: string;
-  credit_cost: string;
-  base_views: number;
-  base_likes: number;
-  base_followers: number;
-  profile_image_url?: string;
-  profile_url?: string;
-  external_channel_id?: string;
+  team_name: string;
+  role: 'WK' | 'BAT' | 'AR' | 'BOWL';
+  credits: number;
+  points: number;
 }
 
-interface AppConfig {
-  categories: string[];
-  creatorsPerCategory: number;
-  totalTeamSize: number;
-  totalCredits: number;
-  captainMultiplier: number;
-  viceCaptainMultiplier: number;
-}
-
-export default function TeamBuilder3DPage({ params }: { params: Promise<{ tournamentId: string }> }) {
-  const { tournamentId } = use(params);
-  const { token } = useAuth();
+export default function CricketTeamBuilderPage({ params }: { params: Promise<{ tournamentId: string }> }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const contestId = searchParams.get('contestId');
+  const { tournamentId: matchId } = use(params);
+  const { token, user } = useAuth();
 
-    const [creators, setCreators] = useState<Creator[]>([]);
-  const [tournament, setTournament] = useState<{ id?: string; name: string; platform: string; entry_fee: string; prize_pool: string; duration_type?: string; status?: string; lock_time?: string; start_time?: string } | null>(null);
-  const [insufficientModal, setInsufficientModal] = useState<{ isOpen: boolean; required: number; balance: number; needed: number }>({ isOpen: false, required: 0, balance: 0, needed: 0 });
-
-  const isLocked = useMemo(() => {
-    if (!tournament) return false;
-    if (['locked', 'live', 'completed'].includes((tournament as any).status || '')) return true;
-    if ((tournament as any).lock_time && new Date((tournament as any).lock_time).getTime() <= Date.now()) return true;
-    return false;
-  }, [tournament]);
-  const [config, setConfig] = useState<AppConfig | null>(null);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [match, setMatch] = useState<any>(null);
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [selectedRole, setSelectedRole] = useState<'WK' | 'BAT' | 'AR' | 'BOWL'>('WK');
+  const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [captainId, setCaptainId] = useState<string | null>(null);
   const [viceCaptainId, setViceCaptainId] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState<string>('All');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [sortBy, setSortBy] = useState<'cost_desc' | 'cost_asc' | 'name'>('cost_desc');
-  const [pitchTilt, setPitchTilt] = useState<number>(22);
-  const [mobileTab, setMobileTab] = useState<"pitch" | "creators">("pitch");
+  const [showCapModal, setShowCapModal] = useState(false);
+  const [teamName, setTeamName] = useState('My Prime XI');
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  const [existingTeam, setExistingTeam] = useState<string | null>(null);
-  const [walletBalance, setWalletBalance] = useState<number | null>(null);
-  const [hasActivePass, setHasActivePass] = useState<boolean | null>(null);
-  const [modalCreator, setModalCreator] = useState<Creator | null>(null);
-  const [accessModalOpen, setAccessModalOpen] = useState(false);
-  const [purchasingPass, setPurchasingPass] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [userShareData, setUserShareData] = useState<{
-    code: string;
-    shareUrl: string;
-    targetShares: number;
-    totalShares: number;
-    totalReferrals: number;
-    monthlyPrice: number;
-  }>({
-    code: '',
-    shareUrl: '',
-    targetShares: 3,
-    totalShares: 0,
-    totalReferrals: 0,
-    monthlyPrice: 199,
-  });
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent('creator11:camera-preset', { detail: 'stadium' }));
-    if (!token) return;
-
-    Promise.all([
-      apiGet(`/tournaments/${tournamentId}`, token),
-      apiGet('/api/config'),
-      apiGet(`/teams/tournament/${tournamentId}`, token).catch(() => null),
-    ]).then(([t, c, team]) => {
-      setTournament(t);
-      setConfig(c);
-
-      const platform = (t?.platform || 'youtube').toLowerCase();
-      apiGet(`/creators?platform=${platform}`, token)
-        .then((data) => setCreators(data))
-        .finally(() => setLoading(false));
-
-      if (team && team.id) {
-        setExistingTeam(team.id);
-        const ids = new Set<string>(team.teamCreators.map((tc: { creator_id: string }) => tc.creator_id));
-        setSelected(ids);
-        if (team.captain_creator_id) setCaptainId(team.captain_creator_id);
-        if (team.vice_captain_creator_id) setViceCaptainId(team.vice_captain_creator_id);
-      }
-
-      apiGet('/wallet/balance', token)
-        .then((wb) => {
-          if (wb && wb.balance !== undefined) {
-            setWalletBalance(parseFloat(wb.balance));
-          }
-        })
-        .catch(() => {});
-
-      apiGet('/subscription/status', token)
-        .then((res) => {
-          if (res && res.success) {
-            const isAuthorized = Boolean(res.access?.hasAccess || res.freePromo?.isFreeNow);
-            setHasActivePass(isAuthorized);
-            if (res.share) {
-              setUserShareData({
-                code: res.share.code || '',
-                shareUrl: res.share.shareUrl || '',
-                targetShares: res.share.targetShares || 3,
-                totalShares: res.share.totalShares || 0,
-                totalReferrals: res.share.totalReferrals || 0,
-                monthlyPrice: res.subscription?.monthlyPrice || 199,
-              });
-            }
-          }
-        })
-        .catch(() => {
-          apiGet('/auth/me', token)
-            .then((u) => {
-              if (u) setHasActivePass(Boolean(u.hasActiveSubscription));
-            })
-            .catch(() => {});
-        });
-    }).catch(() => setLoading(false));
-  }, [token, tournamentId, sortBy]);
-
-  const creatorsById = useMemo(() => {
-    const map: Record<string, Creator> = {};
-    creators.forEach((c) => { map[c.id] = c; });
-    return map;
-  }, [creators]);
-
-  const selectedCreators = useMemo(() =>
-    Array.from(selected).map((id) => creatorsById[id]).filter(Boolean),
-    [selected, creatorsById]
-  );
-
-  const creditsUsed = useMemo(() =>
-    selectedCreators.reduce((sum, c) => sum + parseFloat(c.credit_cost), 0),
-    [selectedCreators]
-  );
-
-  const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    selectedCreators.forEach((c) => {
-      counts[c.category] = (counts[c.category] || 0) + 1;
-    });
-    return counts;
-  }, [selectedCreators]);
-
-  const maxCredits = config?.totalCredits || 125;
-  const totalRequired = config?.totalTeamSize || 11;
-
-  const categoryWithThree = useMemo(() => {
-    return Object.keys(categoryCounts).find((cat) => (categoryCounts[cat] || 0) >= 3) || null;
-  }, [categoryCounts]);
-
-  const getCategoryMax = (cat: string) => {
-    if (categoryWithThree) {
-      return categoryWithThree === cat ? 3 : 2;
-    }
-    return 3;
-  };
-
-  const filteredCreators = useMemo(() => {
-    let list = [...creators];
-    if (activeCategory !== 'All') {
-      list = list.filter((c) => c.category === activeCategory);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter((c) =>
-        c.name.toLowerCase().includes(q) ||
-        c.category.toLowerCase().includes(q) ||
-        (c.external_channel_id && c.external_channel_id.toLowerCase().includes(q))
-      );
-    }
-    if (sortBy === 'cost_desc') list.sort((a, b) => parseFloat(b.credit_cost) - parseFloat(a.credit_cost));
-    else if (sortBy === 'cost_asc') list.sort((a, b) => parseFloat(a.credit_cost) - parseFloat(b.credit_cost));
-    else if (sortBy === 'name') list.sort((a, b) => a.name.localeCompare(b.name));
-    return list;
-  }, [creators, activeCategory, searchQuery, sortBy]);
-
-  const toggleCreator = (creator: Creator) => {
-    playSpatialSFX('click');
-    const isSelected = selected.has(creator.id);
-
-    if (isSelected) {
-      const next = new Set(selected);
-      next.delete(creator.id);
-      setSelected(next);
-      if (captainId === creator.id) setCaptainId(null);
-      if (viceCaptainId === creator.id) setViceCaptainId(null);
-      setError('');
-    } else {
-      if (selected.size >= totalRequired) {
-        setError(`Maximum team size is ${totalRequired} creators.`);
-        return;
-      }
-
-      const cost = parseFloat(creator.credit_cost);
-      if (creditsUsed + cost > maxCredits) {
-        setError(`Exceeds credit limit! Remaining: ${(maxCredits - creditsUsed).toFixed(1)} cr`);
-        return;
-      }
-
-      const count = categoryCounts[creator.category] || 0;
-      const catMax = getCategoryMax(creator.category);
-      if (count >= catMax) {
-        if (catMax === 2 && categoryWithThree) {
-          setError(`Category "${creator.category}" is locked at 2. Category "${categoryWithThree}" already has 3 players.`);
-        } else {
-          setError(`Category "${creator.category}" is locked (maximum ${catMax} reached).`);
+    apiGet(`/matches/${matchId}`)
+      .then((res) => {
+        if (res?.match) {
+          setMatch(res.match);
+          setPlayers(res.match.players || []);
         }
-        return;
-      }
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [matchId]);
 
-      const next = new Set(selected);
-      next.add(creator.id);
-      setSelected(next);
-      setError('');
+  const selectedPlayers = players.filter((p) => selectedPlayerIds.includes(p.id));
 
-      if (!captainId) setCaptainId(creator.id);
-      else if (!viceCaptainId && captainId !== creator.id) setViceCaptainId(creator.id);
-    }
+  // Counts & limits
+  const totalCreditsUsed = selectedPlayers.reduce((sum, p) => sum + (Number(p.credits) || 9.0), 0);
+  const creditsLeft = Math.round((100 - totalCreditsUsed) * 10) / 10;
+
+  const roleCounts = {
+    WK: selectedPlayers.filter((p) => p.role === 'WK').length,
+    BAT: selectedPlayers.filter((p) => p.role === 'BAT').length,
+    AR: selectedPlayers.filter((p) => p.role === 'AR').length,
+    BOWL: selectedPlayers.filter((p) => p.role === 'BOWL').length,
   };
 
-  const autoDraftSmart11 = () => {
-    playSpatialSFX('power');
-    const cats = config?.categories || ['Gaming', 'Vlogging', 'Comedy', 'Tech', 'Lifestyle'];
-    const byCat: Record<string, Creator[]> = {};
-    cats.forEach((c) => {
-      byCat[c] = creators
-        .filter((item) => item.category === c)
-        .sort((a, b) => parseFloat(a.credit_cost) - parseFloat(b.credit_cost));
-    });
+  const teamCounts: Record<string, number> = {};
+  selectedPlayers.forEach((p) => {
+    teamCounts[p.team_name] = (teamCounts[p.team_name] || 0) + 1;
+  });
 
-    const pickedIds = new Set<string>();
-    const firstCat = cats[0];
-    byCat[firstCat]?.slice(0, 3).forEach((c) => pickedIds.add(c.id));
-    cats.slice(1).forEach((c) => {
-      byCat[c]?.slice(0, 2).forEach((item) => pickedIds.add(item.id));
-    });
+  const togglePlayer = (p: Player) => {
+    const isAlreadySelected = selectedPlayerIds.includes(p.id);
 
-    if (pickedIds.size === 11) {
-      setSelected(pickedIds);
-      const arr = Array.from(pickedIds);
-      setCaptainId(arr[0]);
-      setViceCaptainId(arr[1]);
-      setError('🤖 Smart AI Auto-Drafted compliant 11-Creator Lineup!');
+    if (isAlreadySelected) {
+      setSelectedPlayerIds(selectedPlayerIds.filter((id) => id !== p.id));
+      if (captainId === p.id) setCaptainId(null);
+      if (viceCaptainId === p.id) setViceCaptainId(null);
+      setError(null);
+      return;
     }
+
+    if (selectedPlayerIds.length >= 11) {
+      setError('You can only select exactly 11 players.');
+      return;
+    }
+
+    const currentTeamCount = teamCounts[p.team_name] || 0;
+    if (currentTeamCount >= 7) {
+      setError(`Maximum 7 players allowed from ${p.team_name}.`);
+      return;
+    }
+
+    const nextCredits = creditsLeft - (Number(p.credits) || 9.0);
+    if (nextCredits < 0) {
+      setError('Not enough credits left for this player.');
+      return;
+    }
+
+    // Role caps
+    const currentRoleCount = roleCounts[p.role];
+    const limits = { WK: 4, BAT: 6, AR: 4, BOWL: 6 };
+    if (currentRoleCount >= limits[p.role]) {
+      setError(`Maximum ${limits[p.role]} ${p.role} players allowed.`);
+      return;
+    }
+
+    setSelectedPlayerIds([...selectedPlayerIds, p.id]);
+    setError(null);
   };
 
-  const isCategoryDistributionValid = useMemo(() => {
-    if (selected.size !== totalRequired) return false;
-    let withThree = 0;
-    const allCats = config?.categories || ['Gaming', 'Vlogging', 'Comedy', 'Tech', 'Lifestyle'];
-    for (const cat of allCats) {
-      const c = categoryCounts[cat] || 0;
-      if (c === 3) withThree++;
-      else if (c !== 2) return false;
+  const validateTeamComposition = () => {
+    if (selectedPlayerIds.length !== 11) {
+      return 'Exactly 11 players required.';
     }
-    return withThree === 1;
-  }, [selected.size, totalRequired, categoryCounts, config?.categories]);
+    if (roleCounts.WK < 1) return 'Pick at least 1 Wicket Keeper (1-4).';
+    if (roleCounts.BAT < 3) return 'Pick at least 3 Batters (3-6).';
+    if (roleCounts.AR < 1) return 'Pick at least 1 All-Rounder (1-4).';
+    if (roleCounts.BOWL < 3) return 'Pick at least 3 Bowlers (3-6).';
+    return null;
+  };
 
-  const isTeamComplete = selected.size === totalRequired && isCategoryDistributionValid;
-  const isReadyToSave = isTeamComplete && captainId && viceCaptainId && captainId !== viceCaptainId && creditsUsed <= maxCredits;
+  const handleProceedToCaptain = () => {
+    const validationError = validateTeamComposition();
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+    setError(null);
+    setShowCapModal(true);
+  };
 
-  const handleSave = async () => {
-    if (!isReadyToSave) {
-      if (selected.size !== 11) setError('Please select exactly 11 creators.');
-      else if (!isCategoryDistributionValid) setError('Category rule: exactly 1 category with 3, and 4 categories with 2 creators.');
-      else if (!captainId || !viceCaptainId) setError('Please assign both Captain (2.0x) and Vice-Captain (1.5x).');
+  const handleSubmitTeam = async () => {
+    if (!token) {
+      router.push('/login');
       return;
     }
 
-    if (!existingTeam && hasActivePass === false) {
-      setAccessModalOpen(true);
+    if (!captainId || !viceCaptainId) {
+      setError('Please select both Captain (2×) and Vice-Captain (1.5×).');
       return;
     }
 
-        if (isLocked) {
-      setError('This contest is locked. New team entries or edits are closed.');
-      return;
-    }
-
-    if (!existingTeam) {
-      const entryFee = parseFloat(tournament?.entry_fee || '99');
-      if (walletBalance !== null && walletBalance < entryFee) {
-        setInsufficientModal({
-          isOpen: true,
-          required: entryFee,
-          balance: walletBalance,
-          needed: Math.max(0, entryFee - walletBalance)
-        });
-        return;
-      }
-    }
-
-    playSpatialSFX('power');
-    setSaving(true);
-    setError('');
+    setSubmitting(true);
+    setError(null);
 
     try {
-      if (existingTeam) {
-        await apiPut(
-          `/teams/${existingTeam}`,
-          {
-            creatorIds: Array.from(selected),
-            captainId,
-            viceCaptainId,
-          },
-          token
-        );
+      const res = await apiPost(`/matches/${matchId}/teams`, {
+        team_name: teamName,
+        player_ids: selectedPlayerIds,
+        captain_id: captainId,
+        vice_captain_id: viceCaptainId,
+        contest_id: contestId || null,
+      }, token);
+
+      if (res?.success) {
+        router.push('/my-teams');
       } else {
-        await apiPost(
-          '/teams',
-          {
-            tournamentId,
-            creatorIds: Array.from(selected),
-            captainId,
-            viceCaptainId,
-          },
-          token
-        );
+        setError(res?.error || 'Failed to submit team');
       }
-      router.push('/my-teams');
-        } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : 'Failed to save team';
-      if (errMsg.toLowerCase().includes('insufficient wallet balance')) {
-        const fee = parseFloat(tournament?.entry_fee || '99');
-        setInsufficientModal({
-          isOpen: true,
-          required: fee,
-          balance: walletBalance ?? 0,
-          needed: Math.max(0, fee - (walletBalance ?? 0))
-        });
-      } else if (errMsg.includes('Subscription') || errMsg.includes('Share')) {
-        setAccessModalOpen(true);
-      } else {
-        setError(errMsg);
-      }
+    } catch (err: any) {
+      setError(err?.message || 'Error saving team. Check contest lock and balance.');
     } finally {
-      setSaving(false);
+      setSubmitting(false);
     }
   };
-
-  const formationRows = [[0], [1, 2], [3, 4, 5, 6], [7, 8, 9, 10]];
-  const rowLabels = ['APEX CAPTAIN STAGE', 'FRONT VIRAL WINGS', 'MID ENGAGEMENT CORE', 'BASE LINE ANCHORS'];
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-32">
-        <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+      <div className="py-24 text-center text-[#A3A3A3] bg-[#000000]">
+        <div className="w-10 h-10 border-4 border-[#FF1744] border-t-transparent rounded-full animate-spin mx-auto mb-3 shadow-[0_0_15px_#FF1744]" />
+        <p className="text-sm font-black text-white">Loading 30 squad players...</p>
       </div>
     );
   }
 
+  const roleFilteredPlayers = players.filter((p) => p.role === selectedRole);
+
   return (
-    <div className="px-4 sm:px-8 py-6 max-w-7xl mx-auto w-full space-y-6">
-      {/* 3D Draft Controls Bar */}
-      <TiltCard3D intensity={6} className="p-5 border border-cyan-400/40">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-mono uppercase text-cyan-400">3D HOLOGRAPHIC DRAFT</span>
-              <span className="text-xs text-slate-400">• {tournament?.name}</span>
-            </div>
-            <h1 className="text-2xl sm:text-3xl font-black mt-1 text-white">Assemble Your 11-Creator 3D Lineup</h1>
-            <p className="text-xs sm:text-sm text-slate-300">
-              Draft <strong className="text-cyan-300">11 YouTube Stars</strong> (3+2+2+2+2) within{' '}
-              <strong className="text-amber-300">{maxCredits} Credits</strong>. Assign{' '}
-              <strong className="text-amber-300">Captain (2.0x)</strong> & <strong className="text-purple-300">Vice-Captain (1.5x)</strong>.
-            </p>
-            {error && <p className="text-xs font-bold text-amber-300 mt-1">{error}</p>}
-          </div>
+    <div className="px-3 sm:px-6 py-6 max-w-4xl mx-auto w-full space-y-6 bg-[#000000]">
+      {/* Top Header */}
+      <div className="flex items-center justify-between">
+        <Link
+          href={`/match/${matchId}`}
+          className="inline-flex items-center gap-2 text-xs font-black text-[#D4D4D4] hover:text-[#FFD700] transition group"
+        >
+          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+          <span>Exit Builder</span>
+        </Link>
+        {match && <CategoryBadge category={match.category} size="xs" />}
+      </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="px-3.5 py-1.5 rounded-xl bg-black/50 border border-white/10 text-center">
-              <div className="text-[10px] uppercase text-slate-400">Creators</div>
-              <div className="text-base font-black font-mono text-cyan-300">{selected.size} / 11</div>
-            </div>
-            <div className="px-3.5 py-1.5 rounded-xl bg-black/50 border border-white/10 text-center">
-              <div className="text-[10px] uppercase text-slate-400">Credits Left</div>
-              <div className={`text-base font-black font-mono ${creditsUsed > maxCredits ? 'text-rose-400' : 'text-emerald-400'}`}>
-                {(maxCredits - creditsUsed).toFixed(1)} CR
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={autoDraftSmart11}
-              className="px-3.5 py-2 rounded-xl font-bold text-xs bg-purple-600/40 border border-purple-400/50 text-purple-100 hover:bg-purple-600/60 transition cursor-pointer"
-            >
-              🤖 Smart Auto-Draft 11
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                playSpatialSFX('click');
-                setSelected(new Set());
-                setCaptainId(null);
-                setViceCaptainId(null);
-              }}
-              className="px-3 py-2 rounded-xl font-semibold text-xs bg-white/5 border border-white/10 text-slate-300 hover:text-white transition cursor-pointer"
-            >
-              Reset
-            </button>
-                        {isLocked ? (
-              <button
-                type="button"
-                disabled
-                className="px-5 py-2 rounded-xl font-black text-xs sm:text-sm bg-white/10 text-slate-400 border border-white/10 cursor-not-allowed flex items-center gap-1.5"
-              >
-                🔒 Contest Locked
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className={`px-5 py-2 rounded-xl font-black text-xs sm:text-sm transition cursor-pointer ${
-                  isReadyToSave
-                    ? 'bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 shadow-lg hover:opacity-95'
-                    : 'bg-white/10 text-slate-400 border border-white/10'
-                }`}
-              >
-                {saving ? 'Saving...' : existingTeam ? 'Update Team' : '🔒 Lock & Save 3D Team'}
-              </button>
-            )}
-          </div>
-        </div>
-            </TiltCard3D>
-
-      {isLocked && (
-        <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 flex-shrink-0 text-amber-400" />
+      {/* Match & Squad Meter Card (3D Elevated) */}
+      {match && (
+        <div className="prime-card-3d p-5 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#222222]">
             <div>
-              <div className="font-black text-sm text-white">Contest Locked (Entries Closed)</div>
-              <div className="text-xs text-amber-200/80">This tournament is locked or live. Roster drafting and edits are closed.</div>
+              <h2 className="font-black text-white text-base sm:text-xl">
+                {match.team_a} vs {match.team_b}
+              </h2>
+              <p className="text-xs text-[#A3A3A3] font-bold">Max 7 players from any single team</p>
+            </div>
+            <div className="text-right">
+              <span className="text-[10px] text-[#A3A3A3] uppercase font-black block">Credits Left</span>
+              <span className={`text-xl font-black font-mono ${creditsLeft < 9 ? 'text-[#FF1744]' : 'text-[#FFD700] drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]'}`}>
+                {creditsLeft} / 100
+              </span>
             </div>
           </div>
-          <Link
-            href={`/leaderboard/${tournamentId}`}
-            className="px-3.5 py-1.5 rounded-xl font-bold text-xs bg-amber-400 text-black hover:bg-amber-300 transition text-center whitespace-nowrap"
-          >
-            View Live Standings →
-          </Link>
+
+          {/* 11 Players Count Meter */}
+          <div className="grid grid-cols-4 gap-2 pt-1 text-center text-xs">
+            <div className="p-2.5 rounded-xl bg-[#000000] border border-[#2A2A2A]">
+              <span className="text-[10px] text-[#A3A3A3] font-bold block">Selected</span>
+              <span className="font-black text-base text-[#FFD700] font-mono">
+                {selectedPlayerIds.length} / 11
+              </span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-[#000000] border border-[#2A2A2A]">
+              <span className="text-[10px] text-[#A3A3A3] font-bold block truncate">{match.team_a}</span>
+              <span className="font-black text-base text-white font-mono">
+                {teamCounts[match.team_a] || 0} / 7
+              </span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-[#000000] border border-[#2A2A2A]">
+              <span className="text-[10px] text-[#A3A3A3] font-bold block truncate">{match.team_b}</span>
+              <span className="font-black text-base text-white font-mono">
+                {teamCounts[match.team_b] || 0} / 7
+              </span>
+            </div>
+            <div className="p-2.5 rounded-xl bg-[#000000] border border-[#2A2A2A]">
+              <span className="text-[10px] text-[#A3A3A3] font-bold block">Squad Pool</span>
+              <span className="font-black text-base text-white font-mono">30 Total</span>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Mobile Segmented Switcher */}
-      <div className="lg:hidden flex items-center p-1.5 rounded-2xl bg-slate-900/90 border border-white/10 sticky top-[62px] z-20 backdrop-blur-xl shadow-lg">
-        <button
-          type="button"
-          onClick={() => {
-            playSpatialSFX('click');
-            setMobileTab('pitch');
-          }}
-          className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
-            mobileTab === 'pitch'
-              ? 'bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 shadow-md font-extrabold'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <span>🏟️ 3D Arena Pitch</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
-            selected.size === 11 ? 'bg-emerald-400 text-black font-black' : 'bg-white/10 text-cyan-300'
-          }`}>
-            {selected.size}/11
+      {/* Role Navigation Tabs (3D Buttons) */}
+      <div className="grid grid-cols-4 gap-2.5">
+        {(['WK', 'BAT', 'AR', 'BOWL'] as const).map((role) => {
+          const isSelected = selectedRole === role;
+          const count = roleCounts[role];
+
+          return (
+            <button
+              key={role}
+              onClick={() => setSelectedRole(role)}
+              className={`p-3 rounded-xl border text-center transition cursor-pointer ${
+                isSelected
+                  ? 'prime-btn-3d !p-3 shadow-[0_0_15px_rgba(255,23,68,0.5)]'
+                  : 'prime-btn-dark-3d !p-3 !text-[#A3A3A3]'
+              }`}
+            >
+              <div className="font-black text-sm">{role}</div>
+              <div className="text-[11px] font-black mt-0.5">
+                ({count})
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {error && (
+        <div className="p-3.5 rounded-xl bg-red-950/80 border-2 border-red-500/60 text-red-200 text-xs font-black flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Players List for Selected Role */}
+      <div className="space-y-2.5">
+        {roleFilteredPlayers.map((p) => {
+          const isSelected = selectedPlayerIds.includes(p.id);
+
+          return (
+            <div
+              key={p.id}
+              onClick={() => togglePlayer(p)}
+              className={`p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all select-none border-2 ${
+                isSelected
+                  ? 'bg-gradient-to-r from-[#FF1744]/25 to-[#000000] border-[#FF1744] shadow-[0_0_15px_rgba(255,23,68,0.4)]'
+                  : 'bg-[#121212] border-[#222222] hover:border-[#FFD700]/50 hover:bg-[#181818]'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-xs border-2 ${
+                  isSelected ? 'bg-[#FF1744] text-white border-[#FF8095] shadow-[0_0_8px_#FF1744]' : 'bg-[#000000] text-[#FFD700] border-[#333333]'
+                }`}>
+                  {p.role}
+                </div>
+                <div>
+                  <h4 className="font-black text-sm text-white">{p.name}</h4>
+                  <p className="text-xs text-[#A3A3A3] font-bold">
+                    {p.team_name} • <span className="text-[#FFD700]">{p.points || 0} pts</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="font-mono font-black text-sm text-[#FFD700]">
+                  {p.credits} CR
+                </span>
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 font-black ${
+                  isSelected
+                    ? 'bg-[#FF1744] text-white border-white shadow-[0_0_6px_#FF1744]'
+                    : 'bg-[#000000] border-[#333333] text-[#A3A3A3]'
+                }`}>
+                  {isSelected ? <Check className="w-4 h-4" /> : '+'}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Bottom Floating Bar */}
+      <div className="sticky bottom-4 z-20 p-4 bg-[#0A0A0A]/95 backdrop-blur-xl rounded-2xl border-2 border-[#2A2A2A] flex items-center justify-between shadow-[0_10px_30px_rgba(0,0,0,1)]">
+        <div>
+          <span className="text-xs font-black text-white block">
+            {selectedPlayerIds.length}/11 Players Picked
           </span>
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            playSpatialSFX('click');
-            setMobileTab('creators');
-          }}
-          className={`flex-1 py-2.5 rounded-xl text-xs font-black transition-all flex items-center justify-center gap-1.5 ${
-            mobileTab === 'creators'
-              ? 'bg-gradient-to-r from-purple-500 to-pink-600 text-white shadow-md font-extrabold'
-              : 'text-slate-400 hover:text-white'
-          }`}
-        >
-          <span>👥 Draft Creators</span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-white/10 text-slate-300">
-            {creators.length}
+          <span className="text-xs text-[#FFD700] font-mono font-black">
+            {creditsLeft} CR left
           </span>
+        </div>
+
+        <button
+          onClick={handleProceedToCaptain}
+          disabled={selectedPlayerIds.length !== 11}
+          className="prime-btn-3d !py-2.5 !px-6 text-xs font-black uppercase tracking-wider disabled:opacity-40"
+        >
+          <span>Choose C / VC</span>
+          <ChevronRight className="w-4 h-4" />
         </button>
       </div>
 
-      <div className="grid lg:grid-cols-12 gap-6 items-start">
-        {/* Left 7 Cols: 3D Holographic Stadium Pitch */}
-        <div className={`lg:col-span-7 space-y-3 ${mobileTab === 'pitch' ? 'block' : 'hidden lg:block'}`}>
-          <div className="flex items-center justify-between px-1">
-            <div className="text-xs font-bold text-cyan-300">
-              🏟️ 3D Holographic Arena Pitch <span className="text-slate-400 font-normal">(1-2-4-4 Tactical Formation)</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-slate-400">3D Tilt:</span>
-              <input
-                type="range"
-                min={0}
-                max={34}
-                value={pitchTilt}
-                onChange={(e) => setPitchTilt(Number(e.target.value))}
-                className="w-24 accent-cyan-400"
-              />
-            </div>
-          </div>
-
-          <div className="stadium-pitch-wrapper py-2">
-            <div
-              style={{ ['--pitch-angle' as any]: `${pitchTilt}deg` }}
-              className="stadium-pitch-surface rounded-3xl p-5 sm:p-7 min-h-[500px] flex flex-col justify-between relative overflow-hidden"
-            >
-              <div className="space-y-4 relative z-10">
-                {formationRows.map((rowIndices, rIdx) => (
-                  <div key={rIdx} className="space-y-1.5">
-                    <div className="text-center text-[10px] font-mono uppercase tracking-widest text-cyan-300/70">
-                      {rowLabels[rIdx]}
-                    </div>
-                    <div className="flex flex-wrap items-center justify-center gap-1.5 sm:gap-3">
-                      {rowIndices.map((slotIndex) => {
-                        const player = selectedCreators[slotIndex];
-                        if (!player) {
-                          return (
-                            <div
-                              key={slotIndex}
-                              className="pedestal-slot flex flex-col items-center justify-center p-1.5 sm:p-2 rounded-2xl border border-dashed border-cyan-400/35 bg-slate-950/60 w-[68px] sm:w-28 h-[76px] sm:h-26 text-center"
-                            >
-                              <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/5 border border-white/15 flex items-center justify-center text-[10px] sm:text-[11px] text-slate-400 font-mono">
-                                #{slotIndex + 1}
-                              </div>
-                              <div className="text-[10px] text-slate-400 mt-1">Open Slot</div>
-                            </div>
-                          );
-                        }
-
-                        const isCap = captainId === player.id;
-                        const isVC = viceCaptainId === player.id;
-                        const initials = player.name
-                          .split(' ')
-                          .map((w) => w[0])
-                          .join('')
-                          .slice(0, 2)
-                          .toUpperCase();
-
-                        return (
-                          <div
-                            key={slotIndex}
-                            className={`pedestal-slot pedestal-ring flex flex-col items-center justify-between p-1.5 sm:p-2 rounded-2xl bg-gradient-to-b from-slate-900/95 to-purple-950/85 border ${
-                              isCap ? 'border-amber-400' : isVC ? 'border-purple-400' : 'border-cyan-400/50'
-                            } w-[68px] sm:w-28 h-[76px] sm:h-26 text-center relative group`}
-                          >
-                            <div className="flex items-center justify-between w-full">
-                              {isCap ? (
-                                <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-amber-400 text-slate-950">
-                                  👑 2x
-                                </span>
-                              ) : isVC ? (
-                                <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-purple-400 text-slate-950">
-                                  ⚡ 1.5x
-                                </span>
-                              ) : (
-                                <span className="px-1 py-0.5 rounded text-[8px] font-mono bg-white/10 text-cyan-200">
-                                  {player.credit_cost}
-                                </span>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => toggleCreator(player)}
-                                className="text-slate-400 hover:text-rose-400 text-[10px] font-bold"
-                              >
-                                ✕
-                              </button>
-                            </div>
-
-                            <div
-                              onClick={() => setModalCreator(player)}
-                              className="w-6 h-6 sm:w-8 sm:h-8 rounded-lg sm:rounded-xl bg-gradient-to-tr from-purple-500 to-cyan-400 flex items-center justify-center font-black text-[10px] sm:text-xs text-slate-950 cursor-pointer shadow"
-                            >
-                              {initials}
-                            </div>
-
-                            <div className="w-full truncate text-[10px] font-bold text-white px-0.5">
-                              {player.name}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
+      {/* Captain & Vice-Captain Selection Modal (§4: C 2.0x, VC 1.5x) */}
+      {showCapModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-lg prime-card-3d p-6 space-y-5 border-2 border-[#FF1744] max-h-[90vh] flex flex-col shadow-[0_0_50px_rgba(255,23,68,0.5)] animate-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-[#222222] pb-3">
+              <div>
+                <h3 className="font-black text-white text-base">Assign Multipliers</h3>
+                <p className="text-xs text-[#FFD700] font-bold">Captain gets 2× Points • Vice-Captain gets 1.5× Points</p>
               </div>
-
-              {/* Captain / VC Quick Assignment Bar */}
-              {selectedCreators.length > 0 && (
-                <div className="relative z-10 pt-3 border-t border-white/10 grid grid-cols-2 gap-3 bg-black/60 p-3 rounded-2xl backdrop-blur-md">
-                  <div>
-                    <label className="text-[10px] uppercase font-bold text-amber-300 block mb-1">
-                      👑 Captain (2.0x Boost)
-                    </label>
-                    <select
-                      value={captainId || ''}
-                      onChange={(e) => {
-                        setCaptainId(e.target.value);
-                        if (e.target.value === viceCaptainId) setViceCaptainId(null);
-                      }}
-                      aria-label="Assign Captain (2.0x Boost)"
-                      className="w-full bg-slate-900 border border-white/20 rounded-xl px-2 py-1 text-xs text-white"
-                    >
-                      <option value="">Choose Captain</option>
-                      {selectedCreators.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.credit_cost} CR)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] uppercase font-bold text-purple-300 block mb-1">
-                      ⚡ Vice-Captain (1.5x Boost)
-                    </label>
-                    <select
-                      value={viceCaptainId || ''}
-                      onChange={(e) => {
-                        setViceCaptainId(e.target.value);
-                        if (e.target.value === captainId) setCaptainId(null);
-                      }}
-                      aria-label="Assign Vice-Captain (1.5x Boost)"
-                      className="w-full bg-slate-900 border border-white/20 rounded-xl px-2 py-1 text-xs text-white"
-                    >
-                      <option value="">Choose Vice-Captain</option>
-                      {selectedCreators.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name} ({c.credit_cost} CR)
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              )}
+              <button
+                onClick={() => setShowCapModal(false)}
+                className="text-[#A3A3A3] hover:text-white"
+              >
+                ✕
+              </button>
             </div>
-          </div>
-        </div>
 
-        {/* Right 5 Cols: Filterable Creator Selection Pool */}
-        <div className={`lg:col-span-5 holo-card p-3.5 sm:p-5 rounded-3xl space-y-4 ${mobileTab === 'creators' ? 'block' : 'hidden lg:block'}`}>
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-extrabold text-white">YouTube Draft Pool ({creators.length})</h2>
-            <span className="text-xs font-mono text-cyan-300">Verified Stats</span>
-          </div>
-
-          <div className="space-y-2">
-            <div className="relative">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+            <div>
+              <label className="block text-xs font-black text-[#FFD700] uppercase mb-1.5">
+                Team Name
+              </label>
               <input
                 type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search creator name or category..."
-                className="w-full pl-9 pr-3 py-2 bg-slate-900/90 border border-white/15 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none focus:border-cyan-400"
+                value={teamName}
+                onChange={(e) => setTeamName(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl bg-[#000000] border-2 border-[#333333] text-white text-sm focus:border-[#FF1744] outline-none font-black"
+                placeholder="My Prime XI"
               />
             </div>
 
-            <div className="flex flex-wrap gap-1.5">
-              {['All', 'Gaming', 'Vlogging', 'Comedy', 'Tech', 'Lifestyle'].map((cat) => {
-                const count = categoryCounts[cat] || 0;
-                const catMax = getCategoryMax(cat);
-                const isLocked = count >= catMax;
-                const isActive = activeCategory === cat;
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+              {selectedPlayers.map((p) => {
+                const isC = captainId === p.id;
+                const isVC = viceCaptainId === p.id;
 
                 return (
-                  <button
-                    key={cat}
-                    type="button"
-                    onClick={() => {
-                      playSpatialSFX('click');
-                      setActiveCategory(cat);
-                    }}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer ${
-                      isActive
-                        ? 'bg-cyan-500/25 border border-cyan-400/50 text-cyan-200'
-                        : 'bg-white/5 border border-white/10 text-slate-300 hover:text-white'
-                    }`}
+                  <div
+                    key={p.id}
+                    className="p-3 rounded-xl bg-[#000000] border border-[#222222] flex items-center justify-between"
                   >
-                    <span>{cat}</span>
-                    {cat !== 'All' && (
-                      <span className="ml-1 text-[10px] opacity-75">
-                        ({count}/{catMax})
-                      </span>
-                    )}
-                  </button>
+                    <div>
+                      <p className="font-black text-sm text-white">{p.name}</p>
+                      <p className="text-xs text-[#A3A3A3] font-bold">{p.team_name} • {p.role}</p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => {
+                          setCaptainId(p.id);
+                          if (viceCaptainId === p.id) setViceCaptainId(null);
+                        }}
+                        className={`w-10 h-10 rounded-xl font-black text-xs border-2 transition cursor-pointer ${
+                          isC
+                            ? 'bg-[#FF1744] text-white border-[#FF8095] shadow-[0_0_12px_#FF1744]'
+                            : 'bg-[#141414] text-[#A3A3A3] border-[#333333] hover:text-[#FFD700]'
+                        }`}
+                        title="2x Multiplier"
+                      >
+                        2×
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setViceCaptainId(p.id);
+                          if (captainId === p.id) setCaptainId(null);
+                        }}
+                        className={`w-10 h-10 rounded-xl font-black text-xs border-2 transition cursor-pointer ${
+                          isVC
+                            ? 'bg-[#FFD700] text-black border-white shadow-[0_0_12px_#FFD700]'
+                            : 'bg-[#141414] text-[#A3A3A3] border-[#333333] hover:text-[#FFD700]'
+                        }`}
+                        title="1.5x Multiplier"
+                      >
+                        1.5×
+                      </button>
+                    </div>
+                  </div>
                 );
               })}
             </div>
-          </div>
 
-          <div className="space-y-2 max-h-[520px] overflow-y-auto pr-1">
-            {filteredCreators.map((creator) => {
-              const isSelected = selected.has(creator.id);
-              const isCap = captainId === creator.id;
-              const isVC = viceCaptainId === creator.id;
-
-              return (
-                <div
-                  key={creator.id}
-                  className={`p-3 rounded-2xl border transition flex items-center justify-between gap-3 ${
-                    isSelected
-                      ? 'bg-purple-950/40 border-cyan-400/50'
-                      : 'bg-black/40 border-white/10 hover:border-white/20'
-                  }`}
-                >
-                  <div
-                    onClick={() => setModalCreator(creator)}
-                    className="flex items-center gap-3 min-w-0 cursor-pointer flex-1"
-                  >
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-purple-500 to-cyan-400 flex items-center justify-center font-black text-slate-950 text-xs shrink-0">
-                      {creator.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs font-bold text-white truncate">{creator.name}</span>
-                        {isCap && <span className="text-[9px] px-1 bg-amber-400 text-slate-950 font-bold rounded">C</span>}
-                        {isVC && <span className="text-[9px] px-1 bg-purple-400 text-slate-950 font-bold rounded">VC</span>}
-                      </div>
-                      <div className="text-[10px] text-slate-400 font-mono">
-                        {creator.category} • {Number(creator.base_views || 0).toLocaleString('en-IN')} Views
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-mono text-xs font-black text-amber-300 bg-black/50 px-2 py-1 rounded-lg border border-white/10">
-                      {creator.credit_cost} CR
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => toggleCreator(creator)}
-                      className={`w-8 h-8 rounded-xl font-black text-xs transition cursor-pointer flex items-center justify-center ${
-                        isSelected
-                          ? 'bg-cyan-400 text-slate-950'
-                          : 'bg-white/10 text-white hover:bg-cyan-500 hover:text-slate-950'
-                      }`}
-                    >
-                      {isSelected ? '✓' : '+'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-
-      {/* Insufficient Balance Popup Modal */}
-      {insufficientModal.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-          <div className="bg-slate-900 border border-cyan-500/30 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center gap-3 text-amber-400">
-              <div className="w-12 h-12 rounded-2xl bg-amber-400/10 border border-amber-400/30 flex items-center justify-center text-2xl">
-                ⚠️
+            {error && (
+              <div className="p-3 rounded-xl bg-red-950/80 border border-red-500/60 text-red-200 text-xs font-black">
+                {error}
               </div>
-              <div>
-                <h3 className="text-lg font-black text-white">Insufficient Wallet Balance</h3>
-                <p className="text-xs text-slate-400">Add funds to join this Battle League</p>
-              </div>
-            </div>
+            )}
 
-            <div className="bg-black/50 border border-white/10 rounded-2xl p-4 space-y-2.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-slate-400">Contest Entry Fee:</span>
-                <span className="font-mono font-bold text-white">₹{insufficientModal.required.toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-400">Current Wallet Balance:</span>
-                <span className="font-mono font-bold text-cyan-300">₹{insufficientModal.balance.toFixed(2)}</span>
-              </div>
-              <div className="h-px bg-white/10 my-1" />
-              <div className="flex justify-between text-sm">
-                <span className="text-amber-300 font-semibold">Amount Needed:</span>
-                <span className="font-mono font-black text-amber-400">₹{insufficientModal.needed.toFixed(2)}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 pt-2">
+            <div className="pt-3 border-t border-[#222222] flex items-center justify-between">
               <button
                 type="button"
-                onClick={() => setInsufficientModal(prev => ({ ...prev, isOpen: false }))}
-                className="py-3 rounded-xl font-bold text-xs bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition"
+                onClick={() => setShowCapModal(false)}
+                className="prime-btn-dark-3d text-xs !py-2 !px-4"
               >
-                Cancel
+                Back to XI
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  router.push(`/wallet?required=${Math.ceil(insufficientModal.needed)}&reason=contest_entry&tournamentId=${tournamentId}`);
-                }}
-                className="py-3 rounded-xl font-black text-xs bg-gradient-to-r from-amber-400 to-amber-500 text-black shadow-lg shadow-amber-500/20 hover:opacity-95 transition"
+                onClick={handleSubmitTeam}
+                disabled={submitting || !captainId || !viceCaptainId}
+                className="prime-btn-3d text-xs !py-2 !px-5 font-black disabled:opacity-40"
               >
-                Add ₹{Math.ceil(insufficientModal.needed)} to Wallet
+                {submitting ? 'Saving...' : 'Submit Team'}
               </button>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* Profile Detail 3D Modal */}
-      {modalCreator && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-3 sm:p-4">
-          <TiltCard3D intensity={8} className="max-w-md w-full p-6 border border-cyan-400/50 space-y-4">
-            <div className="flex items-center justify-between border-b border-white/10 pb-3">
-              <h3 className="text-lg font-black text-white">{modalCreator.name}</h3>
-              <button
-                type="button"
-                onClick={() => setModalCreator(null)}
-                className="w-7 h-7 rounded-lg bg-white/10 text-slate-300 hover:text-white font-bold"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-center">
-              <div className="p-3 rounded-xl bg-black/50 border border-white/10">
-                <div className="text-[10px] text-slate-400 uppercase">Category</div>
-                <div className="text-sm font-bold text-white mt-0.5">{modalCreator.category}</div>
-              </div>
-              <div className="p-3 rounded-xl bg-black/50 border border-white/10">
-                <div className="text-[10px] text-slate-400 uppercase">Credit Cost</div>
-                <div className="text-sm font-bold text-amber-300 mt-0.5">{modalCreator.credit_cost} CR</div>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => {
-                toggleCreator(modalCreator);
-                setModalCreator(null);
-              }}
-              className="w-full py-2.5 rounded-xl font-extrabold text-xs bg-gradient-to-r from-purple-600 to-cyan-500 text-white"
-            >
-              {selected.has(modalCreator.id) ? 'Remove from Squad' : 'Draft to 3D Lineup'}
-            </button>
-          </TiltCard3D>
-        </div>
-      )}
-
-      {/* ★★★ YA TOH SUBSCRIPTION LO YA FIR SHARE KARO MODAL ★★★ */}
-      {accessModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="max-w-xl w-full max-h-[90vh] overflow-y-auto glass-card p-4 sm:p-6 md:p-8 border border-white/20 space-y-5 shadow-2xl relative rounded-3xl"
-          >
-            <div className="flex items-start justify-between border-b border-white/10 pb-4">
-              <div>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 mb-2">
-                  <Lock size={12} /> Entry Locked
-                </span>
-                <h3 className="text-xl md:text-2xl font-black text-white">
-                  Ya toh Subscription lo ya fir Share karo!
-                </h3>
-                <p className="text-xs text-text-secondary mt-1">
-                  Iss league me team enter karne ke liye VIP pass lein ya fir <b>{userShareData.targetShares} doston</b> ke saath website share karke 100% Free unlock karein!
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setAccessModalOpen(false)}
-                className="w-8 h-8 rounded-xl bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center font-bold text-sm"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Sharing Live Progress Tracker */}
-            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-2">
-              <div className="flex justify-between text-xs font-bold">
-                <span className="text-white flex items-center gap-1.5">
-                  <Share2 size={14} className="text-emerald-400" /> Free Sharing Progress:
-                </span>
-                <span className="text-emerald-400 font-mono font-black text-sm">
-                  {Math.max(userShareData.totalShares, userShareData.totalReferrals)} / {userShareData.targetShares}
-                </span>
-              </div>
-              <div className="w-full h-2.5 bg-black/60 rounded-full overflow-hidden border border-white/10">
-                <div
-                  className="h-full bg-gradient-to-r from-emerald-500 to-neon-cyan transition-all duration-500"
-                  style={{
-                    width: `${Math.min(100, Math.round((Math.max(userShareData.totalShares, userShareData.totalReferrals) / userShareData.targetShares) * 100))}%`
-                  }}
-                />
-              </div>
-              <p className="text-[11px] text-text-secondary">
-                {Math.max(userShareData.totalShares, userShareData.totalReferrals) >= userShareData.targetShares
-                  ? '🎉 Requirement Complete! You can enter tournaments for FREE.'
-                  : `Share with ${Math.max(0, userShareData.targetShares - Math.max(userShareData.totalShares, userShareData.totalReferrals))} more friends to unlock free access.`}
-              </p>
-            </div>
-
-            {/* Two Action Columns */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Option 1: Share to Play Free */}
-              <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-3 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-7 h-7 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs font-black">
-                      1
-                    </div>
-                    <h4 className="font-bold text-sm text-white">Share Kar Ke Free Kholo</h4>
-                  </div>
-                  <p className="text-[11px] text-text-secondary">
-                    WhatsApp ya Telegram pe share karein:
-                  </p>
-                </div>
-
-                <div className="space-y-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await apiPost('/subscription/record-share', { platform: 'whatsapp' }, token);
-                        setUserShareData(prev => ({ ...prev, totalShares: prev.totalShares + 1 }));
-                        if (Math.max(userShareData.totalShares + 1, userShareData.totalReferrals) >= userShareData.targetShares) {
-                          setHasActivePass(true);
-                        }
-                      } catch (e) {}
-                      const msg = `🔥 Join Creator11 (Creator Entertainment League)! Use my promo code: *${userShareData.code}*\n\nSign up: ${userShareData.shareUrl}`;
-                      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(msg)}`, '_blank');
-                    }}
-                    className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-600/20"
-                  >
-                    <MessageCircle size={14} /> Share on WhatsApp
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await apiPost('/subscription/record-share', { platform: 'telegram' }, token);
-                        setUserShareData(prev => ({ ...prev, totalShares: prev.totalShares + 1 }));
-                        if (Math.max(userShareData.totalShares + 1, userShareData.totalReferrals) >= userShareData.targetShares) {
-                          setHasActivePass(true);
-                        }
-                      } catch (e) {}
-                      const msg = `🔥 Join Creator11! Code: ${userShareData.code}`;
-                      window.open(`https://t.me/share/url?url=${encodeURIComponent(userShareData.shareUrl)}&text=${encodeURIComponent(msg)}`, '_blank');
-                    }}
-                    className="w-full py-2 px-3 bg-[#229ED9] hover:bg-[#229ED9]/80 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#229ED9]/20"
-                  >
-                    <Send size={14} /> Share on Telegram
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await apiPost('/subscription/record-share', { platform: 'copy_link' }, token);
-                        setUserShareData(prev => ({ ...prev, totalShares: prev.totalShares + 1 }));
-                        if (Math.max(userShareData.totalShares + 1, userShareData.totalReferrals) >= userShareData.targetShares) {
-                          setHasActivePass(true);
-                        }
-                      } catch (e) {}
-                      navigator.clipboard.writeText(userShareData.shareUrl);
-                      setCopiedLink(true);
-                      setTimeout(() => setCopiedLink(false), 2000);
-                    }}
-                    className="w-full py-2 px-3 bg-white/5 hover:bg-white/10 text-text-secondary hover:text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all border border-white/5"
-                  >
-                    {copiedLink ? <Check size={14} className="text-emerald-400" /> : <Copy size={14} />}
-                    {copiedLink ? 'Link Copied!' : 'Copy Invite Link'}
-                  </button>
-                </div>
-              </div>
-
-              {/* Option 2: Buy VIP Monthly Pass */}
-              <div className="p-4 rounded-xl bg-neon-gold/5 border border-neon-gold/20 space-y-3 flex flex-col justify-between">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <div className="w-7 h-7 rounded-lg bg-neon-gold/20 text-neon-gold flex items-center justify-center text-xs font-black">
-                      2
-                    </div>
-                    <h4 className="font-bold text-sm text-white">VIP Monthly Pass</h4>
-                  </div>
-                  <p className="text-[11px] text-text-secondary">
-                    Bina kisi share ke turant 30 days ke liye unlocked:
-                  </p>
-                  <div className="mt-2 text-2xl font-black text-neon-gold">
-                    ₹{userShareData.monthlyPrice}
-                    <span className="text-[10px] text-text-muted font-normal"> / 30 din</span>
-                  </div>
-                </div>
-
-                <div className="pt-2">
-                  <button
-                    type="button"
-                    disabled={purchasingPass}
-                    onClick={async () => {
-                      setPurchasingPass(true);
-                      try {
-                        const res = await apiPost('/subscription/purchase', {}, token);
-                        if (res && res.success) {
-                          setHasActivePass(true);
-                          setAccessModalOpen(false);
-                          // Auto trigger save
-                          setTimeout(() => {
-                            handleSave();
-                          }, 300);
-                        }
-                      } catch (err: any) {
-                        if (err.message?.toLowerCase().includes('insufficient')) {
-                          router.push(`/wallet?required=${userShareData.monthlyPrice}`);
-                        } else {
-                          alert(err.message || 'Purchase failed');
-                        }
-                      } finally {
-                        setPurchasingPass(false);
-                      }
-                    }}
-                    className="w-full py-2.5 px-3 bg-gradient-to-r from-neon-gold to-amber-500 text-black font-extrabold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-all shadow-md shadow-neon-gold/20 disabled:opacity-50"
-                  >
-                    <Crown size={14} />
-                    {purchasingPass ? 'Activating Pass...' : `Buy Pass (₹${userShareData.monthlyPrice})`}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Bottom Actions */}
-            <div className="flex items-center justify-between pt-2 border-t border-white/5">
-              <button
-                type="button"
-                onClick={() => setAccessModalOpen(false)}
-                className="text-xs text-text-muted hover:text-white transition-colors"
-              >
-                Back to Team Lineup
-              </button>
-
-              {Math.max(userShareData.totalShares, userShareData.totalReferrals) >= userShareData.targetShares ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setHasActivePass(true);
-                    setAccessModalOpen(false);
-                    setTimeout(() => handleSave(), 200);
-                  }}
-                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-neon-cyan text-black font-extrabold rounded-xl text-xs flex items-center gap-1.5 shadow-lg shadow-emerald-500/20"
-                >
-                  <CheckCircle2 size={14} /> Continue &amp; Save Team Now
-                </button>
-              ) : (
-                <Link
-                  href="/subscription"
-                  className="text-xs text-neon-cyan hover:underline font-bold flex items-center gap-1"
-                >
-                  View Full Pass Hub &rarr;
-                </Link>
-              )}
-            </div>
-          </motion.div>
         </div>
       )}
     </div>

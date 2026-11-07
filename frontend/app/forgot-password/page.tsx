@@ -6,6 +6,7 @@ import { apiPost } from '../lib/api';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { Mail, Lock, ShieldCheck, KeyRound, RefreshCw, CheckCircle2 } from 'lucide-react';
+import PrimeLogo from '../components/ui/PrimeLogo';
 
 export default function ForgotPasswordPage() {
   const router = useRouter();
@@ -80,6 +81,10 @@ export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen flex items-center justify-center px-6 py-12">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
+        
+        <div className="flex justify-center mb-6">
+          <PrimeLogo size="md" />
+        </div>
         
         <div className="glass p-8 glow-cyan">
           <div className="w-12 h-12 rounded-full bg-neon-cyan/20 text-neon-cyan flex items-center justify-center mb-6 mx-auto">

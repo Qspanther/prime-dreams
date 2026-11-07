@@ -1,4 +1,4 @@
-﻿'use client';
+'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
@@ -30,20 +30,30 @@ const AuthContext = createContext<AuthContextType>({
 
 function getApiBase() {
   if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
-  if (typeof window !== 'undefined' && window.location.hostname.includes('onrender.com')) {
-    return 'https://creator11-backend.onrender.com';
-  }
   return '/api-backend';
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const cached = localStorage.getItem('prime_dreems_user');
+        if (cached) return JSON.parse(cached);
+      } catch (_) {}
+    }
+    return null;
+  });
+  const [token, setToken] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('prime_dreems_token') || null;
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     // Check for stored token on mount
-    const stored = localStorage.getItem('creator11_token');
+    const stored = localStorage.getItem('prime_dreems_token');
     if (stored) {
       setToken(stored);
       // Verify token
@@ -54,12 +64,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .then(data => {
           if (data.id) {
             setUser(data);
+            localStorage.setItem('prime_dreems_user', JSON.stringify(data));
           } else {
-            localStorage.removeItem('creator11_token');
+            localStorage.removeItem('prime_dreems_token');
+            localStorage.removeItem('prime_dreems_user');
+            setUser(null);
+            setToken(null);
           }
         })
         .catch(() => {
-          localStorage.removeItem('creator11_token');
+          // Keep cached user if offline, or don't flush immediately unless invalid
         })
         .finally(() => setLoading(false));
     } else {
@@ -70,12 +84,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = (newToken: string, newUser: User) => {
     setToken(newToken);
     setUser(newUser);
-    localStorage.setItem('creator11_token', newToken);
+    try {
+      localStorage.setItem('prime_dreems_token', newToken);
+      localStorage.setItem('prime_dreems_user', JSON.stringify(newUser));
+    } catch (_) {}
   };
 
   const logout = () => {
     try {
-      localStorage.removeItem('creator11_token');
+      localStorage.removeItem('prime_dreems_token');
+      localStorage.removeItem('prime_dreems_user');
       if (typeof sessionStorage !== 'undefined') {
         sessionStorage.clear();
       }

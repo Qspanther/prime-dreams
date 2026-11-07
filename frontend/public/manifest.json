@@ -1,11 +1,11 @@
 {
-  "name": "Creator11 Entertainment League",
-  "short_name": "Creator11",
-  "description": "Entertainment League for Content Creators",
-  "start_url": "/dashboard",
+  "name": "Prime Dreems — Cricket Fantasy Platform",
+  "short_name": "Prime Dreems",
+  "description": "Cricket Fantasy Sports Platform for World Cup, T20, League & Women's Matches",
+  "start_url": "/",
   "display": "standalone",
-  "background_color": "#09090d",
-  "theme_color": "#09090d",
+  "background_color": "#1C1A17",
+  "theme_color": "#1C1A17",
   "orientation": "portrait-primary",
   "icons": [
     {

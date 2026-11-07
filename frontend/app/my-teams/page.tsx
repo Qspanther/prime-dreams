@@ -2,219 +2,148 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Shield, Crown, Star, Trophy, Clock, Users, ArrowRight, Plus } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
-import TiltCard3D from '../components/ui/TiltCard3D';
-import ScorecardModal from '../components/ScorecardModal';
-import { playSpatialSFX } from '../components/ui/StageControls3D';
-import { Shield, Crown, Star, Trophy, Clock, Edit, BarChart3, Users } from 'lucide-react';
-import { CardSkeleton } from '../components/ui/Skeleton';
+import CategoryFilterTabs from '../components/ui/CategoryFilterTabs';
+import CategoryBadge from '../components/ui/CategoryBadge';
 
-function CountdownTimer({ targetDate, startTime }: { targetDate: string; startTime?: string }) {
-  const [timeLeft, setTimeLeft] = useState('');
-
-  useEffect(() => {
-    const update = () => {
-      const now = Date.now();
-      const lockMs = new Date(targetDate).getTime();
-      const startMs = startTime ? new Date(startTime).getTime() : lockMs;
-
-      if (now < lockMs) {
-        const diff = lockMs - now;
-        const h = Math.floor(diff / 3600000);
-        const m = Math.floor((diff % 3600000) / 60000);
-        const s = Math.floor((diff % 60000) / 1000);
-        setTimeLeft(`Lock in ${h}h ${m}m ${s}s`);
-      } else if (now < startMs) {
-        const diff = startMs - now;
-        const h = Math.floor(diff / 3600000);
-        const m = Math.floor((diff % 3600000) / 60000);
-        const s = Math.floor((diff % 60000) / 1000);
-        setTimeLeft(`Starts in ${h}h ${m}m ${s}s`);
-      } else {
-        setTimeLeft('Live / Scoring');
-      }
-    };
-    update();
-    const interval = setInterval(update, 1000);
-    return () => clearInterval(interval);
-  }, [targetDate, startTime]);
-
-  return <span className="font-mono text-cyan-300">{timeLeft}</span>;
-}
-
-export default function MyTeamsPage3D() {
-  const { token } = useAuth();
+export default function MyTeamsPage() {
+  const { token, isAuthenticated } = useAuth();
   const [teams, setTeams] = useState<any[]>([]);
-  const [selectedTeam, setSelectedTeam] = useState<any>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!token) return;
-    apiGet('/teams', token)
+    apiGet('/my-teams', token)
       .then((res) => {
-        const list = Array.isArray(res) ? res : res?.teams;
-        if (Array.isArray(list)) setTeams(list);
+        if (res?.teams) {
+          setTeams(res.teams);
+        }
       })
-      .catch(() => {})
+      .catch((err) => console.error(err))
       .finally(() => setLoading(false));
   }, [token]);
 
+  const filteredTeams = teams.filter((t) => {
+    if (selectedCategory === 'All') return true;
+    return t.match?.category === selectedCategory;
+  });
+
   return (
-    <div className="px-4 sm:px-8 py-8 max-w-7xl mx-auto w-full space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="px-3 sm:px-6 py-6 max-w-7xl mx-auto w-full space-y-6 bg-[#000000]">
+      {/* Page Title */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="text-xs font-mono uppercase text-cyan-400">ROSTER TELEMETRY • /my-teams</div>
-          <h1 className="text-3xl sm:text-4xl font-black mt-1">My 3D Creator Teams & Live Scorecards</h1>
-          <p className="text-sm text-slate-400">
-            Track real-time points, Captain (2x) & Vice-Captain (1.5x) multipliers, and live tournament standings.
+          <h1 className="text-xl sm:text-3xl font-black text-white flex items-center gap-2.5">
+            <Shield className="w-7 h-7 text-[#FF1744] drop-shadow-[0_0_10px_#FF1744]" />
+            <span>My Cricket Fantasy Teams</span>
+          </h1>
+          <p className="text-xs sm:text-sm text-[#A3A3A3] font-bold mt-1">
+            Track your 11-player lineups, live points, multipliers, and contest ranks
           </p>
         </div>
-        <Link
-          href="/tournaments"
-          onClick={() => playSpatialSFX('power')}
-          className="px-5 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-purple-600 to-cyan-500 text-white shadow-lg shadow-purple-600/30 hover:opacity-90 transition self-start sm:self-auto"
-        >
-          + Draft Another Team
+        <Link href="/" className="prime-btn-3d text-xs !py-2.5 !px-5 font-black uppercase tracking-wider flex items-center gap-2">
+          <Plus className="w-4 h-4" />
+          <span>Create New Team</span>
         </Link>
       </div>
 
+      {/* Section 5.4: User-Side Category Filter Tabs */}
+      <div className="space-y-2">
+        <CategoryFilterTabs
+          selectedCategory={selectedCategory}
+          onSelect={(cat) => setSelectedCategory(cat)}
+        />
+      </div>
+
+      {/* Teams Grid (3 Columns on Desktop) */}
       {loading ? (
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <CardSkeleton key={i} />
-          ))}
+        <div className="py-24 text-center text-[#A3A3A3] bg-[#000000]">
+          <div className="w-10 h-10 border-4 border-[#FF1744] border-t-transparent rounded-full animate-spin mx-auto mb-3 shadow-[0_0_15px_#FF1744]" />
+          <p className="text-sm font-black text-white">Loading your teams...</p>
         </div>
-      ) : teams.length === 0 ? (
-        <TiltCard3D className="p-12 text-center max-w-lg mx-auto space-y-4 border border-white/10">
-          <div className="w-16 h-16 rounded-3xl bg-cyan-500/20 text-cyan-300 flex items-center justify-center mx-auto text-2xl">
-            🛡️
+      ) : filteredTeams.length === 0 ? (
+        <div className="p-12 text-center prime-card-3d space-y-4">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-b from-[#FF1744] to-[#800018] flex items-center justify-center text-3xl shadow-[0_0_20px_#FF1744] border-2 border-[#FF8095]">
+            🏏
           </div>
-          <h2 className="text-xl font-black text-white">No 3D Rosters Drafted Yet</h2>
-          <p className="text-xs sm:text-sm text-slate-300">
-            Select a Creator Tournament and assemble your 11-creator entertainment team on the 3D stadium pitch.
+          <h3 className="text-xl font-black text-white">No teams created yet</h3>
+          <p className="text-xs text-[#A3A3A3] font-bold max-w-sm mx-auto">
+            Pick a match from the home arena, select your 11 players, and enter standard or H2H contests.
           </p>
-          <Link
-            href="/tournaments"
-            onClick={() => playSpatialSFX('power')}
-            className="inline-block px-6 py-3 rounded-xl font-bold text-xs bg-gradient-to-r from-purple-600 to-cyan-500 text-white"
-          >
-            Explore Active Leagues →
+          <Link href="/" className="prime-btn-3d inline-flex text-xs !py-2.5 !px-5 mt-2 font-black uppercase">
+            Explore Matches
           </Link>
-        </TiltCard3D>
+        </div>
       ) : (
-        <div className="grid md:grid-cols-2 gap-6">
-          {teams.map((t) => {
-            const tournamentName = t.Tournament?.name || t.tournamentName || 'Creator Cup';
-            const creators = t.teamCreators?.map((tc: any) => tc.creator) || t.creators || [];
-            const cap = creators.find((c: any) => c.id === t.captain_creator_id || c.id === t.captainId);
-            const vc = creators.find((c: any) => c.id === t.vice_captain_creator_id || c.id === t.viceCaptainId);
-            const isLocked = t.is_locked || (t.Tournament?.status !== 'upcoming');
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredTeams.map((team) => {
+            const match = team.match;
+            const contest = team.contest;
 
             return (
-              <TiltCard3D key={t.id} className="p-6 border border-white/15 space-y-4">
-                <div className="flex items-center justify-between depth-layer-10">
-                  <div>
-                    <span className="text-[10px] font-mono uppercase text-cyan-400">
-                      {t.Tournament?.platform || 'YouTube'} • {t.Tournament?.duration_type || '24h'}
+              <div
+                key={team.id}
+                className="prime-card-3d p-5 flex flex-col justify-between group"
+              >
+                <div>
+                  {/* Top Bar: Category & Status */}
+                  <div className="flex items-center justify-between mb-3">
+                    {match && <CategoryBadge category={match.category} size="xs" />}
+                    <span className="font-mono text-xs font-black text-[#FFD700] px-2.5 py-0.5 rounded-lg bg-[#000000] border border-[#FFD700]/40">
+                      {match?.status === 'live' ? '⚡ LIVE' : match?.match_date}
                     </span>
-                    <h3 className="text-xl font-black text-white mt-0.5">{t.name || '3D Cyber Squad'}</h3>
-                    <div className="text-xs text-slate-400">{tournamentName}</div>
                   </div>
 
-                  <div className="text-right">
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${
-                        isLocked
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-400/40'
-                          : 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
-                      }`}
-                    >
-                      {isLocked ? '🔒 Locked' : '🟢 Editable'}
-                    </span>
-                    <div className="text-xs text-slate-400 mt-1">
-                      {t.Tournament?.lock_time ? (
-                        <CountdownTimer targetDate={t.Tournament.lock_time} startTime={t.Tournament.start_time} />
-                      ) : (
-                        <span className="text-slate-400">Active</span>
-                      )}
+                  <h3 className="font-black text-white text-base mb-1">{team.team_name}</h3>
+                  <p className="text-xs text-[#A3A3A3] font-bold">
+                    {match?.title || 'Cricket Match'}
+                  </p>
+
+                  {/* Multipliers & Points Box */}
+                  <div className="mt-4 p-3 rounded-xl bg-[#000000] border border-[#262626] grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <span className="text-[10px] text-[#A3A3A3] uppercase font-black block">Cap (2×)</span>
+                      <span className="text-xs font-black text-white truncate block mt-0.5">
+                        {team.captain?.name || 'Assigned'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[#A3A3A3] uppercase font-black block">VC (1.5×)</span>
+                      <span className="text-xs font-black text-white truncate block mt-0.5">
+                        {team.viceCaptain?.name || 'Assigned'}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-[#A3A3A3] uppercase font-black block">Total Pts</span>
+                      <span className="text-base font-black text-[#FFD700] font-mono block mt-0.5 drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]">
+                        {team.total_points || 0}
+                      </span>
                     </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 p-3.5 rounded-2xl bg-black/45 border border-white/10 depth-layer-20">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center shrink-0">
-                      C
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] text-amber-300 font-bold uppercase">Captain (2.0x)</div>
-                      <div className="text-xs font-bold text-white truncate">{cap?.name || 'Assigned'}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-purple-400 text-slate-950 font-black text-xs flex items-center justify-center shrink-0">
-                      VC
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-[10px] text-purple-300 font-bold uppercase">Vice-Cap (1.5x)</div>
-                      <div className="text-xs font-bold text-white truncate">{vc?.name || 'Assigned'}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-white/10">
-                  <div className="text-xs text-slate-400 flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-cyan-400" />
-                    <span>{creators.length || 11} Creators Drafted</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {!isLocked && (
-                      <Link
-                        href={`/team-builder/${t.tournament_id}`}
-                        onClick={() => playSpatialSFX('click')}
-                        className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-xs font-bold text-white transition flex items-center gap-1"
-                      >
-                        <Edit className="w-3 h-3" /> Edit
-                      </Link>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        playSpatialSFX('power');
-                        setSelectedTeam({
-                          ...t,
-                          Creators: creators,
-                          total_score: t.total_score || 0,
-                          rank: t.Tournament?.status === 'completed' && t.Tournament?.rankings_finalized ? t.rank : null,
-                        });
-                      }}
-                      className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-purple-600 to-cyan-500 text-white text-xs font-extrabold shadow hover:opacity-90 transition flex items-center gap-1"
-                    >
-                      <BarChart3 className="w-3 h-3" /> Live Scorecard
-                    </button>
+                {/* Contest & Rank Footer */}
+                <div className="mt-4 pt-3 border-t border-[#222222] flex items-center justify-between text-xs">
+                  <span className="text-[#A3A3A3] font-bold">
+                    Contest: <strong className="text-white">{contest?.title || 'Open Contest'}</strong>
+                  </span>
+                  {match && (
                     <Link
-                      href={`/leaderboard/${t.tournament_id}`}
-                      onClick={() => playSpatialSFX('click')}
-                      className="px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-400/30 text-amber-300 hover:bg-amber-500/25 text-xs font-bold transition flex items-center gap-1"
+                      href={`/match/${match.id}`}
+                      className="text-[#FFD700] font-black hover:underline flex items-center gap-1 group"
                     >
-                      <Trophy className="w-3 h-3" /> Standings
+                      <span>View</span>
+                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
                     </Link>
-                  </div>
+                  )}
                 </div>
-              </TiltCard3D>
+              </div>
             );
           })}
         </div>
-      )}
-
-      {selectedTeam && (
-        <ScorecardModal
-          isOpen={Boolean(selectedTeam)}
-          onClose={() => setSelectedTeam(null)}
-          team={selectedTeam}
-        />
       )}
     </div>
   );

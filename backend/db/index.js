@@ -58,18 +58,16 @@ sequelize.authenticate().then(async () => {
     await sequelize.query('PRAGMA mmap_size = 268435456;'); // 256MB memory-mapped I/O
     await sequelize.query('PRAGMA wal_autocheckpoint = 1000;'); // Auto-checkpoint every 1000 pages (~4MB)
 
-    // Essential high-speed compound and foreign key indexes
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_team_creators_team_id ON team_creators(team_id);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_team_creators_creator_id ON team_creators(creator_id);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_teams_tournament_id ON teams(tournament_id);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_teams_user_id ON teams(user_id);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_teams_user_tourn ON teams(user_id, tournament_id);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_scores_team_id ON scores(team_id);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_leaderboard_tournament_id ON leaderboard(tournament_id);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_creators_platform ON creators(platform);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_tournaments_status ON tournaments(status);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_users_is_bot ON users(is_bot);');
-    console.log('⚡ Ultra high-performance SQLite engine & indexes active.');
+    // Essential high-speed compound and foreign key indexes for Cricket
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_matches_category ON cricket_matches(category);');
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_matches_status ON cricket_matches(status);');
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_players_match_id ON cricket_players(match_id);');
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_match_contests_match_id ON match_contests(match_id);');
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_match_id ON cricket_teams(match_id);');
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_user_id ON cricket_teams(user_id);');
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_h2h_challenges_match_id ON h2h_challenges(match_id);');
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_h2h_challenges_receiver_id ON h2h_challenges(receiver_id);');
+    console.log('⚡ Ultra high-performance SQLite engine & cricket indexes active.');
   } catch (err) {
     console.warn('SQLite PRAGMA tuning notice:', err.message);
   }

@@ -1,684 +1,903 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/auth-context';
-import { apiGet, apiPut, apiPost, apiDelete } from '../../lib/api';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Edit2, Check, X, Clock, Plus, LayoutDashboard, Trash2, Loader2, Bot, Users, Zap, Sparkles, Calendar, Timer } from 'lucide-react';
-import DateTimePicker12h from '../../components/ui/DateTimePicker12h';
+import { apiGet, apiPost } from '../../lib/api';
+import {
+  Trophy, Plus, ChevronDown, ChevronUp, AlertCircle,
+  Check, X, Shield, Clock, Users, ArrowRight, Layers,
+  Radio, RefreshCw, Activity, Calendar, MapPin
+} from 'lucide-react';
+import CategoryFilterTabs from '../../components/ui/CategoryFilterTabs';
+import CategoryBadge from '../../components/ui/CategoryBadge';
 
-interface Tournament {
-  id: string;
-  name: string;
-  status: string;
-  start_time: string;
-  lock_time: string;
-  end_time: string;
-  entry_fee: string | number;
-  prize_pool: string | number;
-  platform: string;
-  duration_type: string;
-  current_participants?: number;
-  max_participants?: number;
-}
-
-export default function AdminTournamentsPage() {
+export default function AdminCricketMatchesPage() {
   const { token } = useAuth();
-  const [tournaments, setTournaments] = useState<Tournament[]>([]);
+  const [activeTab, setActiveTab] = useState<'matches' | 'telemetry' | 'squads'>('matches');
+  const [matches, setMatches] = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<Tournament>>({});
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deployingBotId, setDeployingBotId] = useState<string | null>(null);
-    const defaultStart = new Date(Date.now() + 2 * 3600000);
-  const defaultLock = new Date(Date.now() + 1.5 * 3600000);
+  const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
 
-  const [addForm, setAddForm] = useState<{
-    name: string;
-    platform: string;
-    entry_fee: number;
-    prize_pool: number;
-    start_time: string;
-    lock_time: string;
-    duration_hours: number;
-    status: string;
-  }>({
-    name: '',
-    platform: 'youtube',
-    entry_fee: 99,
-    prize_pool: 50000,
-    start_time: defaultStart.toISOString(),
-    lock_time: defaultLock.toISOString(),
-    duration_hours: 6,
-    status: 'upcoming'
+  // Telemetry Inspector State
+  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
+  const [telemetry, setTelemetry] = useState<any>(null);
+  const [telemetryLoading, setTelemetryLoading] = useState(false);
+  const [syncingLive, setSyncingLive] = useState(false);
+
+  // 6-Step Match Creation Modal State
+  const [showModal, setShowModal] = useState(false);
+  const [currentStep, setCurrentStep] = useState(1);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Form State
+  const [teamA, setTeamA] = useState('India');
+  const [teamB, setTeamB] = useState('South Africa');
+  const [category, setCategory] = useState<'World Cup' | 'T20' | 'League' | "Women's">('World Cup');
+  const [matchDate, setMatchDate] = useState('2026-11-15');
+  const [matchTime, setMatchTime] = useState('19:30');
+  const [venue, setVenue] = useState('Wankhede Stadium, Mumbai');
+  const [teamALogo, setTeamALogo] = useState('/cricket/team_a.png');
+  const [teamBLogo, setTeamBLogo] = useState('/cricket/team_b.png');
+  const [matchPoster, setMatchPoster] = useState('/cricket/poster.png');
+  const [lockMinutes, setLockMinutes] = useState(15);
+
+  const [players, setPlayers] = useState<any[]>(() => {
+    const roles: ('WK' | 'BAT' | 'AR' | 'BOWL')[] = ['WK', 'BAT', 'BAT', 'BAT', 'BAT', 'AR', 'AR', 'AR', 'BOWL', 'BOWL', 'BOWL', 'BOWL', 'WK', 'BAT', 'BOWL'];
+    const list: any[] = [];
+    for (let i = 1; i <= 15; i++) {
+      list.push({ team_name: 'India', name: i === 1 ? 'Rohit Sharma' : i === 2 ? 'Virat Kohli' : `IND Player ${i}`, role: roles[i - 1], credits: 9.0 });
+    }
+    for (let i = 1; i <= 15; i++) {
+      list.push({ team_name: 'South Africa', name: i === 1 ? 'Quinton de Kock' : i === 2 ? 'Kagiso Rabada' : `SA Player ${i}`, role: roles[i - 1], credits: 9.0 });
+    }
+    return list;
   });
 
-  const format12h = (dateStr?: string | Date) => {
-    if (!dateStr) return 'N/A';
+  const [contests, setContests] = useState<any[]>([
+    { type: 'standard', title: 'Mega Grand Contest ₹1,00,000', prize_pool: 100000, entry_fee: 49, total_spots: 2500 },
+    { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 99, total_spots: 25 },
+    { type: 'h2h', title: 'H2H Custom Duel', prize_pool: 0, entry_fee: 0, total_spots: 2 },
+  ]);
+
+  const fetchMatches = async () => {
+    if (!token) return;
     try {
-      const d = new Date(dateStr);
-      if (isNaN(d.getTime())) return 'N/A';
-      return d.toLocaleDateString('en-IN', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: true,
-      });
-    } catch {
-      return String(dateStr);
+      const url = selectedCategory === 'All' ? '/admin/cricket/matches' : `/admin/cricket/matches?category=${encodeURIComponent(selectedCategory)}`;
+      const res = await apiGet(url, token);
+      if (res?.matches) {
+        setMatches(res.matches);
+        if (!selectedMatchId && res.matches.length > 0) setSelectedMatchId(res.matches[0].id);
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const getCalculatedEndTime = () => {
+  useEffect(() => { fetchMatches(); }, [token, selectedCategory]);
+
+  const fetchTelemetry = async (id: string) => {
+    if (!id) return;
+    setTelemetryLoading(true);
     try {
-      const s = addForm.start_time ? new Date(addForm.start_time) : new Date();
-      const hrs = Number(addForm.duration_hours) || 6;
-      return new Date(s.getTime() + hrs * 3600000);
-    } catch {
-      return new Date();
+      const res = await apiGet(`/matches/${id}/telemetry`);
+      if (res?.success) setTelemetry(res);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setTelemetryLoading(false);
     }
   };
-
-  const [showContestModal, setShowContestModal] = useState(false);
-  const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
-  const [contestForm, setContestForm] = useState({
-    name: 'Mega Contest',
-    type: 'mega',
-    entry_fee: 49,
-    prize_pool: 100000,
-    max_participants: 10000
-  });
 
   useEffect(() => {
-    if (token) {
-      fetchTournaments();
-      const pollInterval = setInterval(() => {
-        apiGet('/admin/tournaments', token).then(data => {
-          if (Array.isArray(data)) setTournaments(data);
-        }).catch(() => {});
-      }, 4000);
-      return () => clearInterval(pollInterval);
-    }
-  }, [token]);
+    if (selectedMatchId) fetchTelemetry(selectedMatchId);
+  }, [selectedMatchId]);
 
-  const fetchTournaments = () => {
-    apiGet('/admin/tournaments', token)
-      .then(data => setTournaments(data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  };
-
-  const toLocalInput = (iso?: string | Date) => {
-    if (!iso) return '';
-    const d = new Date(iso);
-    if (isNaN(d.getTime())) return '';
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  };
-
-  const handleEdit = (t: Tournament) => {
-    setEditingId(t.id);
-    setEditForm({
-      ...t,
-      start_time: toLocalInput(t.start_time),
-      lock_time: toLocalInput(t.lock_time),
-      end_time: toLocalInput(t.end_time)
-    } as any);
-  };
-
-  const handleCancel = () => {
-    setEditingId(null);
-    setEditForm({});
-  };
-
-  const handleSave = async (id: string) => {
+  const handleSyncLive = async () => {
+    if (!selectedMatchId || !token) return;
+    setSyncingLive(true);
     try {
-      const payload: any = { ...editForm };
-      if (payload.start_time) payload.start_time = new Date(payload.start_time).toISOString();
-      if (payload.lock_time) payload.lock_time = new Date(payload.lock_time).toISOString();
-      if (payload.end_time) payload.end_time = new Date(payload.end_time).toISOString();
-      await apiPut(`/admin/tournaments/${id}`, payload, token);
-      setEditingId(null);
-      fetchTournaments();
-    } catch (err) {
-      console.error('Failed to update tournament', err);
-    }
-  };
-
-    const handleAddLeague = async () => {
-    if (isSubmitting) return;
-    if (!addForm.name || !addForm.name.trim()) {
-      alert('Please enter a league name');
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      const durationHours = Number(addForm.duration_hours) || 6;
-      const startDate = addForm.start_time ? new Date(addForm.start_time) : new Date(Date.now() + 2 * 3600000);
-      const lockDate = addForm.lock_time ? new Date(addForm.lock_time) : new Date(startDate.getTime() - 30 * 60000);
-      const calculatedEndDate = new Date(startDate.getTime() + durationHours * 3600000);
-
-      const payload = {
-        name: addForm.name.trim(),
-        platform: addForm.platform,
-        duration_type: `${durationHours}h`,
-        duration_hours: durationHours,
-        entry_fee: Number(addForm.entry_fee) || 99,
-        prize_pool: Number(addForm.prize_pool) || 50000,
-        start_time: startDate.toISOString(),
-        lock_time: lockDate.toISOString(),
-        end_time: calculatedEndDate.toISOString(),
-        status: 'upcoming'
-      };
-
-      await apiPost('/admin/tournaments', payload, token);
-      setShowAddModal(false);
-      setAddForm({
-        name: '',
-        platform: 'youtube',
-        entry_fee: 99,
-        prize_pool: 50000,
-        start_time: new Date(Date.now() + 2 * 3600000).toISOString(),
-        lock_time: new Date(Date.now() + 1.5 * 3600000).toISOString(),
-        duration_hours: 6,
-        status: 'upcoming'
-      });
-      fetchTournaments();
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'Failed to create tournament');
+      await apiPost(`/admin/cricket/matches/${selectedMatchId}/sync-live`, {}, token);
+      await fetchTelemetry(selectedMatchId);
+      await fetchMatches();
+    } catch (e) {
+      console.error(e);
     } finally {
-      setIsSubmitting(false);
+      setSyncingLive(false);
     }
   };
 
-  const handleDeleteTournament = async (t: Tournament) => {
-    if (!confirm(`Are you sure you want to delete league "${t.name}"?\nThis will permanently delete the league and all associated teams, contests, and scores.`)) {
-      return;
-    }
-    setDeletingId(t.id);
+  const handleCreateSubmit = async () => {
+    setSubmitting(true);
+    setFieldErrors({});
+    setSuccessMsg(null);
     try {
-      await apiDelete(`/admin/tournaments/${t.id}`, token);
-      setTournaments(prev => prev.filter(item => item.id !== t.id));
+      const res = await apiPost('/admin/cricket/matches/verify-and-create', {
+        team_a: teamA, team_b: teamB, category, match_date: matchDate, match_time: matchTime,
+        venue, team_a_logo: teamALogo, team_b_logo: teamBLogo, match_poster: matchPoster,
+        players, contests, lock_time_minutes: lockMinutes,
+      }, token);
+
+      if (res?.success) {
+        setSuccessMsg('✅ Match verified against live DB & published successfully!');
+        setTimeout(() => { setShowModal(false); setCurrentStep(1); fetchMatches(); }, 1200);
+      } else {
+        const errors = res?.field_errors || { general: res?.error || 'Verification failed' };
+        setFieldErrors(errors);
+        const keys = Object.keys(errors);
+        if (keys.some(k => ['team_a', 'team_b', 'category', 'match_date', 'match_time', 'venue'].includes(k))) setCurrentStep(1);
+        else if (keys.some(k => ['team_a_logo', 'team_b_logo', 'match_poster'].includes(k))) setCurrentStep(2);
+        else if (keys.some(k => k === 'players' || k.startsWith('player_'))) setCurrentStep(3);
+        else if (keys.some(k => k === 'contests')) setCurrentStep(4);
+        else if (keys.some(k => k === 'lock_time_minutes')) setCurrentStep(5);
+      }
     } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'Failed to delete tournament');
+      setFieldErrors({ general: err?.message || 'Database rejected verification.' });
     } finally {
-      setDeletingId(null);
+      setSubmitting(false);
     }
   };
-
-  const handleDeployBots = async (t: Tournament) => {
-    setDeployingBotId(t.id);
-    try {
-      const res = await apiPost(`/admin/tournaments/${t.id}/deploy-bots`, {}, token);
-      alert(res.message || '1100 Bots registered successfully!');
-      fetchTournaments();
-    } catch (err: any) {
-      console.error(err);
-      alert(err.message || 'Failed to deploy bots');
-    } finally {
-      setDeployingBotId(null);
-    }
-  };
-
-  const handleCreateContest = async () => {
-    if (!selectedTournament) return;
-    try {
-      await apiPost(`/admin/tournaments/${selectedTournament.id}/contests`, [contestForm], token);
-      setShowContestModal(false);
-      alert('Contest added successfully!');
-    } catch (err) {
-      console.error(err);
-      alert('Failed to add contest');
-    }
-  };
-
-  if (loading) return <div>Loading tournaments...</div>;
 
   return (
-    <div className="max-w-7xl mx-auto">
-      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-8 flex justify-between items-end">
+    <div className="px-3 sm:px-6 py-6 max-w-7xl mx-auto w-full space-y-6 bg-[#000000] text-white">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#222222] pb-4">
         <div>
-          <div className="flex items-center gap-3 mb-2">
-            <Trophy size={28} className="text-neon-purple" />
-            <h1 className="text-3xl font-bold">Manage Tournaments</h1>
-          </div>
-          <p className="text-text-secondary">Control schedules, timings, and status for {tournaments.length} leagues</p>
+          <h1 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
+            <Trophy className="w-6 h-6 text-[#FF1744]" />
+            <span>Cricket Match Operations &amp; Database</span>
+          </h1>
+          <p className="text-xs text-[#A3A3A3] font-bold mt-0.5">
+            Real-time cricket telemetry, squad verification, fixtures schedule, and Cricbuzz live sync
+          </p>
         </div>
-        <button 
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center gap-2 bg-neon-purple text-white px-4 py-2 rounded-lg font-bold shadow-[0_0_15px_rgba(176,38,255,0.4)] hover:shadow-[0_0_25px_rgba(176,38,255,0.6)] transition-all"
+        <button
+          onClick={() => { setShowModal(true); setCurrentStep(1); setFieldErrors({}); }}
+          className="prime-btn-3d text-xs !py-2.5 !px-5 font-black uppercase tracking-wider flex items-center gap-2"
         >
-          <Plus size={18} /> Add League
+          <Plus className="w-4 h-4" />
+          <span>Create Match (6-Step)</span>
         </button>
-      </motion.div>
+      </div>
 
-      {/* Add League Modal with 12h Clock & Auto-calculated End Time */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-3 sm:p-4 overflow-y-auto">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }} 
-            animate={{ opacity: 1, scale: 1 }} 
-            className="bg-[#0e1322] border border-neon-cyan/40 rounded-3xl p-5 sm:p-6 w-full max-w-xl shadow-[0_0_50px_rgba(0,240,255,0.15)] my-auto max-h-[92vh] overflow-y-auto"
+      {/* Tabs */}
+      <div className="flex items-center gap-3">
+        {(['matches', 'telemetry', 'squads'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+              activeTab === tab ? 'prime-btn-gold-3d' : 'prime-btn-dark-3d !text-[#A3A3A3]'
+            }`}
           >
-            <div className="flex items-center justify-between pb-3 mb-4 border-b border-white/10">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-neon-cyan/15 border border-neon-cyan/30 flex items-center justify-center text-neon-cyan">
-                  <Trophy size={18} />
-                </div>
-                <div>
-                  <h2 className="text-xl font-black text-white">Create Battle League</h2>
-                  <p className="text-[11px] text-text-muted">12-Hour AM/PM schedule with automatic end time calculation</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowAddModal(false)}
-                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-text-muted hover:text-white flex items-center justify-center transition"
-              >
-                ✕
-              </button>
+            {tab === 'matches' && 'Matches & Contests'}
+            {tab === 'telemetry' && 'Live In-Play Telemetry'}
+            {tab === 'squads' && '30-Player Squads'}
+          </button>
+        ))}
+      </div>
+
+      {/* TAB 1: MATCHES & CONTESTS */}
+      {activeTab === 'matches' && (
+        <div className="space-y-6">
+          <CategoryFilterTabs selectedCategory={selectedCategory} onSelect={setSelectedCategory} />
+
+          {/* 🔴 Table 1: Live In-Play Matches */}
+          <div className="prime-card-3d overflow-hidden border-2 border-[#FF1744]/40">
+            <div className="p-4 border-b border-[#222222] flex items-center justify-between bg-[#000000]">
+              <span className="font-black text-xs text-[#FF1744] uppercase tracking-wider flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#FF1744] animate-ping" />
+                Live In-Play Matches ({matches.filter(m => m.status === 'live').length})
+              </span>
+              <span className="text-[11px] text-[#A3A3A3] font-bold">Real-time live telemetry active</span>
             </div>
 
-            <div className="space-y-4">
-              {/* League Name & Platform */}
-              <div>
-                <label className="block text-xs font-semibold text-text-primary mb-1">League Name</label>
-                <input 
-                  type="text" 
-                  disabled={isSubmitting}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-white outline-none focus:border-neon-cyan transition-colors disabled:opacity-50" 
-                  value={addForm.name} 
-                  onChange={e => setAddForm({...addForm, name: e.target.value})} 
-                  placeholder="e.g. YouTube 6-Hour Mega Blitz" 
-                />
-              </div>
+            {matches.filter(m => m.status === 'live').length === 0 ? (
+              <div className="p-6 text-center text-[#A3A3A3] text-xs font-bold">No matches currently LIVE.</div>
+            ) : (
+              <div className="divide-y divide-[#1A1A1A]">
+                {matches.filter(m => m.status === 'live').map((m) => {
+                  const isExp = expandedMatchId === m.id;
+                  const tA = (m.players || []).filter((p: any) => p.team_name === m.team_a);
+                  const tB = (m.players || []).filter((p: any) => p.team_name === m.team_b);
+                  return (
+                    <div key={m.id} className="bg-[#0A0A0A] hover:bg-[#111111] transition">
+                      <div
+                        onClick={() => setExpandedMatchId(isExp ? null : m.id)}
+                        className="p-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3">
+                          <CategoryBadge category={m.category} size="xs" />
+                          <div>
+                            <h4 className="font-black text-white text-sm sm:text-base">{m.title}</h4>
+                            <p className="text-xs text-[#FFD700] font-mono font-bold mt-0.5">
+                              🔴 LIVE INNINGS • {m.score_summary?.team_a ? `${m.score_summary.team_a.runs}/${m.score_summary.team_a.wickets} (${m.score_summary.team_a.overs} ov)` : 'In Progress'} • 📍 {m.venue || 'Stadium'}
+                            </p>
+                          </div>
+                        </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-text-primary mb-1">Platform</label>
-                  <select 
-                    disabled={isSubmitting}
-                    className="w-full bg-[#121624] border border-white/10 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white outline-none focus:border-neon-cyan disabled:opacity-50" 
-                    value={addForm.platform} 
-                    onChange={e => setAddForm({...addForm, platform: e.target.value})}
-                  >
-                    <option value="youtube">YouTube (Active League)</option>
-                    <option value="instagram">Instagram</option>
-                  </select>
+                        <div className="flex items-center gap-3">
+                          <span className="neon-badge-red px-2.5 py-1 rounded-full text-xs font-black uppercase">
+                            🔴 LIVE
+                          </span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedMatchId(m.id);
+                              setActiveTab('telemetry');
+                            }}
+                            className="prime-btn-3d text-[11px] !py-1 !px-3 font-black"
+                          >
+                            Live Telemetry Deck &rarr;
+                          </button>
+                          {isExp ? <ChevronUp className="w-4 h-4 text-[#FFD700]" /> : <ChevronDown className="w-4 h-4 text-[#A3A3A3]" />}
+                        </div>
+                      </div>
+
+                      {isExp && (
+                        <div className="p-4 bg-[#000000] border-t border-[#222222] space-y-4">
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div className="p-3 rounded-xl bg-[#0A0A0A] border border-[#FF1744]/40 space-y-2">
+                              <h5 className="text-xs font-black text-[#FF8095] uppercase">{m.team_a} (15 Players)</h5>
+                              <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
+                                {(tA.length > 0 ? tA : Array.from({ length: 15 }, (_, i) => ({ id: `a-${i}`, name: `${m.team_a} #${i + 1}`, role: 'BAT' }))).map((p: any) => (
+                                  <div key={p.id} className="p-1.5 rounded bg-[#000000] border border-[#222222] flex justify-between text-[11px]">
+                                    <span className="truncate text-white font-bold">{p.name}</span>
+                                    <span className="text-[#FFD700] font-black">{p.role}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="p-3 rounded-xl bg-[#0A0A0A] border border-[#FFD700]/40 space-y-2">
+                              <h5 className="text-xs font-black text-[#FFD700] uppercase">{m.team_b} (15 Players)</h5>
+                              <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
+                                {(tB.length > 0 ? tB : Array.from({ length: 15 }, (_, i) => ({ id: `b-${i}`, name: `${m.team_b} #${i + 1}`, role: 'BAT' }))).map((p: any) => (
+                                  <div key={p.id} className="p-1.5 rounded bg-[#000000] border border-[#222222] flex justify-between text-[11px]">
+                                    <span className="truncate text-white font-bold">{p.name}</span>
+                                    <span className="text-[#FFD700] font-black">{p.role}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* ⚡ Table 2: All Upcoming Matches Master Database */}
+          <div className="prime-card-3d overflow-hidden border border-[#222222]">
+            <div className="p-4 border-b border-[#222222] flex items-center justify-between bg-[#000000]">
+              <span className="font-black text-xs text-[#FFD700] uppercase tracking-wider flex items-center gap-2">
+                <Clock className="w-4 h-4 text-[#FFD700]" />
+                All Upcoming Matches Database ({matches.filter(m => m.status === 'upcoming').length})
+              </span>
+              <span className="text-[11px] text-[#A3A3A3] font-bold">Click match row to inspect schedule &amp; 15+15 squad roster</span>
+            </div>
+
+            {loading ? (
+              <div className="p-12 text-center text-[#A3A3A3] font-bold">Loading cricket database...</div>
+            ) : matches.filter(m => m.status === 'upcoming').length === 0 ? (
+              <div className="p-12 text-center text-[#A3A3A3] font-bold">No upcoming matches found in this category.</div>
+            ) : (
+              <div className="divide-y divide-[#1A1A1A]">
+                {matches.filter(m => m.status === 'upcoming').map((m) => {
+                  const isExp = expandedMatchId === m.id;
+                  const tA = (m.players || []).filter((p: any) => p.team_name === m.team_a);
+                  const tB = (m.players || []).filter((p: any) => p.team_name === m.team_b);
+                  return (
+                    <div key={m.id} className="bg-[#0A0A0A] hover:bg-[#111111] transition">
+                      <div
+                        onClick={() => setExpandedMatchId(isExp ? null : m.id)}
+                        className="p-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer"
+                      >
+                        <div className="flex items-center gap-3">
+                          <CategoryBadge category={m.category} size="xs" />
+                          <div>
+                            <h4 className="font-black text-white text-sm sm:text-base">{m.title}</h4>
+                            <p className="text-xs text-[#A3A3A3] font-bold mt-0.5">
+                              📅 Date: <span className="text-white">{m.match_date}</span> • ⏰ Time: <span className="text-[#FFD700] font-mono">{m.match_time}</span> • 📍 Venue: <span className="text-white">{m.venue || 'Stadium'}</span>
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-[#000000] border border-[#FF1744]/40 text-xs font-mono font-bold text-[#FF8095]">
+                            {m.team_a}: {tA.length || 15}
+                          </span>
+                          <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-[#000000] border border-[#FFD700]/40 text-xs font-mono font-bold text-[#FFE082]">
+                            {m.team_b}: {tB.length || 15}
+                          </span>
+                          <span className="bg-[#141414] text-[#D4D4D4] border border-[#262626] px-2.5 py-1 rounded-full text-xs font-black">
+                            UPCOMING
+                          </span>
+                          <span className="text-xs font-black text-[#FFD700]">{(m.contests || []).length} Contests</span>
+                          {isExp ? <ChevronUp className="w-4 h-4 text-[#FFD700]" /> : <ChevronDown className="w-4 h-4 text-[#A3A3A3]" />}
+                        </div>
+                      </div>
+
+                      {isExp && (
+                        <div className="p-4 bg-[#000000] border-t border-[#222222] space-y-4">
+                          <div className="p-3 rounded-xl bg-[#0D0D0D] border border-[#262626] flex flex-wrap items-center justify-between gap-3 text-xs text-[#A3A3A3]">
+                            <span>📅 Match Date: <strong className="text-white">{m.match_date}</strong></span>
+                            <span>⏰ Start Time: <strong className="text-[#FFD700]">{m.match_time}</strong></span>
+                            <span>📍 Venue: <strong className="text-white">{m.venue || 'Stadium'}</strong></span>
+                            <span>🔒 Contest Lock: <strong className="text-white">{m.lock_time_minutes || 15}m before match</strong></span>
+                          </div>
+
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div className="p-3 rounded-xl bg-[#0A0A0A] border border-[#FF1744]/40 space-y-2">
+                              <h5 className="text-xs font-black text-[#FF8095] uppercase">{m.team_a} (15 Players)</h5>
+                              <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
+                                {(tA.length > 0 ? tA : Array.from({ length: 15 }, (_, i) => ({ id: `a-${i}`, name: `${m.team_a} #${i + 1}`, role: 'BAT' }))).map((p: any) => (
+                                  <div key={p.id} className="p-1.5 rounded bg-[#000000] border border-[#222222] flex justify-between text-[11px]">
+                                    <span className="truncate text-white font-bold">{p.name}</span>
+                                    <span className="text-[#FFD700] font-black">{p.role}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="p-3 rounded-xl bg-[#0A0A0A] border border-[#FFD700]/40 space-y-2">
+                              <h5 className="text-xs font-black text-[#FFD700] uppercase">{m.team_b} (15 Players)</h5>
+                              <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
+                                {(tB.length > 0 ? tB : Array.from({ length: 15 }, (_, i) => ({ id: `b-${i}`, name: `${m.team_b} #${i + 1}`, role: 'BAT' }))).map((p: any) => (
+                                  <div key={p.id} className="p-1.5 rounded bg-[#000000] border border-[#222222] flex justify-between text-[11px]">
+                                    <span className="truncate text-white font-bold">{p.name}</span>
+                                    <span className="text-[#FFD700] font-black">{p.role}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="grid sm:grid-cols-4 gap-2">
+                            {(m.contests || []).map((c: any) => (
+                              <div key={c.id} className="p-2.5 rounded-xl bg-[#0A0A0A] border border-[#262626] text-xs">
+                                <span className="font-black text-white block truncate">{c.title}</span>
+                                <span className="text-[#FFD700] text-[10px] font-mono block">
+                                  {c.type === 'h2h' ? 'H2H Duel (User Fee)' : `Fee: ₹${c.entry_fee} • Pool: ₹${c.prize_pool}`}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: LIVE TELEMETRY */}
+      {activeTab === 'telemetry' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-[#0A0A0A] border border-[#222222]">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black text-[#FFD700] uppercase">Live Match:</span>
+              <select
+                value={selectedMatchId || ''}
+                onChange={(e) => setSelectedMatchId(e.target.value)}
+                className="px-3 py-1.5 rounded-lg bg-[#000000] border border-[#333333] text-white text-xs font-black outline-none"
+              >
+                {matches.map((m) => (
+                  <option key={m.id} value={m.id}>{m.team_a} vs {m.team_b} ({m.status.toUpperCase()})</option>
+                ))}
+              </select>
+            </div>
+            <button
+              onClick={handleSyncLive}
+              disabled={syncingLive}
+              className="prime-btn-3d text-xs !py-1.5 !px-3 flex items-center gap-1.5"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncingLive ? 'animate-spin' : ''}`} />
+              <span>Advance Ball / Sync</span>
+            </button>
+          </div>
+
+          {telemetryLoading ? (
+            <div className="p-12 text-center text-[#A3A3A3] font-bold">Streaming live telemetry...</div>
+          ) : telemetry?.match ? (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+              <div className="lg:col-span-8 prime-card-3d p-5 space-y-4">
+                <div className="flex justify-between items-center pb-2 border-b border-[#222222]">
+                  <h3 className="text-xs font-black text-[#FFD700] uppercase flex items-center gap-2">
+                    <Radio className="w-3.5 h-3.5 text-[#FF1744] animate-pulse" />
+                    <span>In-Play Live Stream</span>
+                  </h3>
+                  <span className="text-[10px] text-emerald-400 font-mono font-bold">Cricbuzz Active</span>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-text-primary mb-1">Entry Fee (₹ INR)</label>
-                  <input 
-                    type="number" 
-                    disabled={isSubmitting}
-                    className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white font-mono outline-none focus:border-neon-cyan disabled:opacity-50" 
-                    value={addForm.entry_fee} 
-                    onChange={e => setAddForm({...addForm, entry_fee: Number(e.target.value)})} 
-                  />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="text-lg font-black text-white">{telemetry.match.team_a}</h4>
+                    <p className="text-2xl font-black text-[#FFD700]">
+                      {telemetry.match.score_summary?.team_a?.runs || 146}/{telemetry.match.score_summary?.team_a?.wickets || 3}
+                      <span className="text-xs font-normal text-[#A3A3A3] ml-1">
+                        ({telemetry.match.score_summary?.team_a?.overs || 16.4} ov)
+                      </span>
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <h4 className="text-lg font-black text-white">{telemetry.match.team_b}</h4>
+                    <p className="text-xs font-bold text-[#A3A3A3]">Yet to bat</p>
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-text-primary mb-1">Prize Pool (₹ INR)</label>
-                <input 
-                  type="number" 
-                  disabled={isSubmitting}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-xs sm:text-sm text-white font-mono outline-none focus:border-neon-cyan disabled:opacity-50" 
-                  value={addForm.prize_pool} 
-                  onChange={e => setAddForm({...addForm, prize_pool: Number(e.target.value)})} 
-                />
-              </div>
-
-              {/* 12-Hour Start Time (FIRST) */}
-              <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2">
-                <DateTimePicker12h
-                  label="1. League Start Time (Match / Contest Begins & Live Scoring Starts)"
-                  sublabel="12-Hour AM/PM format (Select exact start time, e.g. 11:30 AM)"
-                  value={addForm.start_time}
-                  disabled={isSubmitting}
-                  onChange={(iso) => {
-                    setAddForm(prev => {
-                      // If lock_time is not yet set, default it to 30 mins before new start
-                      const newStart = new Date(iso);
-                      const currentLock = prev.lock_time ? new Date(prev.lock_time) : null;
-                      if (!currentLock || currentLock.getTime() > newStart.getTime()) {
-                        const newLock = new Date(newStart.getTime() - 30 * 60000);
-                        return { ...prev, start_time: iso, lock_time: newLock.toISOString() };
-                      }
-                      return { ...prev, start_time: iso };
-                    });
-                  }}
-                />
-              </div>
-
-              {/* 12-Hour Lock Time (SECOND) */}
-              <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2">
-                <DateTimePicker12h
-                  label="2. League Lock Time (Team Editing & New Entries Close)"
-                  sublabel="12-Hour AM/PM format (e.g. 11:00 AM)"
-                  value={addForm.lock_time}
-                  disabled={isSubmitting}
-                  onChange={(iso) => setAddForm(prev => ({ ...prev, lock_time: iso }))}
-                />
-                <div className="flex items-center gap-2 pt-1 text-[11px] text-text-muted">
-                  <span>Quick Lock Presets:</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const start = new Date(addForm.start_time);
-                      const lock = new Date(start.getTime() - 15 * 60000);
-                      setAddForm(prev => ({ ...prev, lock_time: lock.toISOString() }));
-                    }}
-                    className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-cyan-300 font-medium"
-                  >
-                    15m Before Start
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const start = new Date(addForm.start_time);
-                      const lock = new Date(start.getTime() - 30 * 60000);
-                      setAddForm(prev => ({ ...prev, lock_time: lock.toISOString() }));
-                    }}
-                    className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-cyan-300 font-medium"
-                  >
-                    30m Before Start
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAddForm(prev => ({ ...prev, lock_time: prev.start_time }));
-                    }}
-                    className="px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-amber-300 font-medium"
-                  >
-                    Same as Start
-                  </button>
-                </div>
-              </div>
-
-              {/* Duration in Hours (kitne ghante chalegi ye league) */}
-              <div className="p-3.5 rounded-2xl bg-white/[0.02] border border-white/10 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-text-primary flex items-center gap-1.5">
-                    <Timer size={14} className="text-amber-400" />
-                    <span>3. League Duration (Kitne Ghante Chalegi Ye League?)</span>
-                  </label>
-                  <span className="text-xs font-black text-amber-300 font-mono">
-                    {addForm.duration_hours} Hours
+                <div className="pt-2 border-t border-[#222222] flex items-center gap-2">
+                  <span className="text-[10px] text-[#A3A3A3] font-bold uppercase">This Over:</span>
+                  <div className="flex gap-1.5">
+                    {(telemetry.match.live_data?.recent_balls || ['1', '0', '4', '2', 'W', '1']).map((token: string, i: number) => (
+                      <span key={i} className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs ${
+                        token === 'W' ? 'bg-[#FF1744] text-white' : token === '4' || token === '6' ? 'bg-[#FFD700] text-black' : 'bg-[#141414] text-white border border-[#333333]'
+                      }`}>
+                        {token}
+                      </span>
+                    ))}
+                  </div>
+                  <span className="text-xs font-mono font-bold text-[#A3A3A3] ml-auto">
+                    CRR: {telemetry.match.live_data?.current_rate || '8.76'}
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <input
-                    type="number"
-                    min="1"
-                    max="168"
-                    disabled={isSubmitting}
-                    value={addForm.duration_hours}
-                    onChange={(e) => setAddForm(prev => ({ ...prev, duration_hours: Math.max(1, parseInt(e.target.value, 10) || 1) }))}
-                    className="w-24 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white font-mono font-bold outline-none focus:border-amber-400 disabled:opacity-50"
-                  />
-                  <span className="text-xs text-text-muted">hours</span>
+                <div className="grid sm:grid-cols-2 gap-3 pt-2">
+                  <div className="p-3 rounded-xl bg-[#000000] border border-[#FFD700]/40 space-y-1">
+                    <span className="text-[10px] text-[#FFD700] font-black uppercase block">Active Striker</span>
+                    <p className="font-black text-white text-sm">
+                      🏏 {telemetry.match.live_data?.current_striker?.name || 'Striker'} *
+                    </p>
+                    <p className="text-xs font-mono text-[#FFD700]">
+                      {telemetry.match.live_data?.current_striker?.runs || 48} runs ({telemetry.match.live_data?.current_striker?.balls || 32}b)
+                    </p>
+                  </div>
 
-                  {/* Preset Duration Buttons */}
-                  <div className="flex items-center gap-1.5 flex-wrap ml-auto">
-                    {[6, 12, 24, 48, 72].map((hrs) => (
+                  <div className="p-3 rounded-xl bg-[#000000] border border-[#FF1744]/40 space-y-1">
+                    <span className="text-[10px] text-[#FF1744] font-black uppercase block">Active Bowler</span>
+                    <p className="font-black text-white text-sm">
+                      ⚾ {telemetry.match.live_data?.current_bowler?.name || 'Bowler'}
+                    </p>
+                    <p className="text-xs font-mono text-[#FF1744]">
+                      {telemetry.match.live_data?.current_bowler?.wickets || 2} wkts / {telemetry.match.live_data?.current_bowler?.runs || 28} runs
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="lg:col-span-4 prime-card-3d p-4 flex flex-col h-[360px]">
+                <h4 className="text-xs font-black text-[#FFD700] uppercase mb-2 flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-[#FF1744]" />
+                  <span>Live Commentary</span>
+                </h4>
+                <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+                  {(telemetry.match.live_data?.commentary || [
+                    '⚡ FOUR! Beautiful cover drive!',
+                    'Single pushed towards long-off.',
+                    'Dot ball, good length.',
+                    '🔴 WICKET! Clean bowled!',
+                  ]).map((line: string, i: number) => (
+                    <div key={i} className="p-2 rounded-lg bg-[#000000] border border-[#222222] text-xs font-bold text-white">
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {/* TAB 3: SQUADS EXPLORER */}
+      {activeTab === 'squads' && (
+        <div className="space-y-4">
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-[#0A0A0A] border border-[#222222]">
+            <span className="text-xs font-black text-[#FFD700] uppercase">Inspect Roster:</span>
+            <select
+              value={selectedMatchId || ''}
+              onChange={(e) => setSelectedMatchId(e.target.value)}
+              className="px-3 py-1.5 rounded-lg bg-[#000000] border border-[#333333] text-white text-xs font-black outline-none"
+            >
+              {matches.map((m) => (
+                <option key={m.id} value={m.id}>{m.team_a} vs {m.team_b}</option>
+              ))}
+            </select>
+            <span className="neon-badge-gold px-2.5 py-0.5 rounded-full text-[10px] font-black ml-auto">
+              30/30 Players Pool
+            </span>
+          </div>
+
+          {telemetry?.match && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              {[
+                { team: telemetry.match.team_a, border: 'border-[#FF1744]/40', badge: 'text-[#FF8095]' },
+                { team: telemetry.match.team_b, border: 'border-[#FFD700]/40', badge: 'text-[#FFD700]' }
+              ].map(({ team, border, badge }) => {
+                const teamPlayers = (telemetry.players || []).filter((p: any) => p.team_name === team);
+                return (
+                  <div key={team} className={`prime-card-3d p-4 space-y-3 border-2 ${border}`}>
+                    <div className="flex justify-between items-center pb-2 border-b border-[#222222]">
+                      <h4 className={`font-black text-sm uppercase ${badge}`}>{team} Squad</h4>
+                      <span className="text-xs font-mono font-bold text-white">{teamPlayers.length || 15} Players</span>
+                    </div>
+                    <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
+                      {(teamPlayers.length > 0 ? teamPlayers : Array.from({ length: 15 }, (_, i) => ({ id: `${team}-${i}`, name: `${team} Player ${i + 1}`, role: 'BAT', credits: 9.0 }))).map((p: any, i: number) => (
+                        <div key={p.id || i} className="p-2 rounded-lg bg-[#000000] border border-[#222222] flex justify-between items-center text-xs">
+                          <span className="font-bold text-white truncate">#{i + 1} {p.name}</span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-[#141414] text-[#FFD700] border border-[#FFD700]/30">{p.role}</span>
+                            <span className="font-mono text-[11px] text-[#A3A3A3]">{p.credits || 9.0} Cr</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 6-Step Match Creation Modal */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3">
+          <div className="w-full max-w-2xl bg-[#0A0A0A] border-2 border-[#FF1744] rounded-2xl shadow-2xl p-5 space-y-4 max-h-[90vh] flex flex-col">
+            <div className="flex justify-between items-center border-b border-[#222222] pb-3">
+              <div>
+                <h3 className="font-black text-white text-base">Create Match (Step {currentStep} of 6)</h3>
+                <span className="text-xs text-[#FFD700] font-bold">
+                  {currentStep === 1 && 'Match Details & Category Selector'}
+                  {currentStep === 2 && 'Team Logos & Poster'}
+                  {currentStep === 3 && '30 Squad Players (15 + 15)'}
+                  {currentStep === 4 && 'Contests Configuration'}
+                  {currentStep === 5 && 'Lock Time Window'}
+                  {currentStep === 6 && 'DB Verification & Publish'}
+                </span>
+              </div>
+              <button onClick={() => setShowModal(false)} className="text-[#A3A3A3] hover:text-white">✕</button>
+            </div>
+
+            {fieldErrors.general && (
+              <div className="p-2.5 rounded-lg bg-red-950/80 border border-red-500/50 text-red-200 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#FF1744]" />
+                <span>{fieldErrors.general}</span>
+              </div>
+            )}
+            {successMsg && (
+              <div className="p-2.5 rounded-lg bg-green-950/80 border border-green-500/50 text-green-200 text-xs flex items-center gap-2">
+                <Check className="w-4 h-4 shrink-0 text-emerald-400" />
+                <span>{successMsg}</span>
+              </div>
+            )}
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs">
+              {currentStep === 1 && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Team A Name *</label>
+                      <input
+                        type="text"
+                        value={teamA}
+                        onChange={(e) => {
+                          setTeamA(e.target.value);
+                          setPlayers(prev => prev.map((p, idx) => idx < 15 ? { ...p, team_name: e.target.value } : p));
+                        }}
+                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white font-bold outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Team B Name *</label>
+                      <input
+                        type="text"
+                        value={teamB}
+                        onChange={(e) => {
+                          setTeamB(e.target.value);
+                          setPlayers(prev => prev.map((p, idx) => idx >= 15 ? { ...p, team_name: e.target.value } : p));
+                        }}
+                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white font-bold outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-[#FFD700] font-black uppercase">Category * (Mandatory 1 of 4)</label>
+                    <div className="grid grid-cols-4 gap-2 mt-1">
+                      {(['World Cup', 'T20', 'League', "Women's"] as const).map((cat) => (
+                        <button
+                          key={cat}
+                          type="button"
+                          onClick={() => setCategory(cat)}
+                          className={`p-2 rounded-lg border text-xs font-bold ${
+                            category === cat ? 'bg-[#FF1744] text-white border-[#FF1744]' : 'bg-[#000000] text-[#A3A3A3] border-[#262626]'
+                          }`}
+                        >
+                          <CategoryBadge category={cat} size="xs" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Match Date *</label>
+                      <input
+                        type="date"
+                        value={matchDate}
+                        onChange={(e) => setMatchDate(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Match Time *</label>
+                      <input
+                        type="time"
+                        value={matchTime}
+                        onChange={(e) => setMatchTime(e.target.value)}
+                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Venue / Stadium</label>
+                    <input
+                      type="text"
+                      value={venue}
+                      onChange={(e) => setVenue(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white outline-none"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {currentStep === 2 && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[10px] text-[#A3A3A3] font-black uppercase">{teamA} Logo URL</label>
+                    <input
+                      type="text"
+                      value={teamALogo}
+                      onChange={(e) => setTeamALogo(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white outline-none font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[#A3A3A3] font-black uppercase">{teamB} Logo URL</label>
+                    <input
+                      type="text"
+                      value={teamBLogo}
+                      onChange={(e) => setTeamBLogo(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white outline-none font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Match Poster URL</label>
+                    <input
+                      type="text"
+                      value={matchPoster}
+                      onChange={(e) => setMatchPoster(e.target.value)}
+                      className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white outline-none font-mono"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {currentStep === 3 && (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-black text-[#FFD700] uppercase">30 Players Pool</span>
+                    <span className="text-[#A3A3A3]">15 {teamA} + 15 {teamB}</span>
+                  </div>
+                  <div className="grid md:grid-cols-2 gap-3">
+                    {[
+                      { team: teamA, start: 0, end: 15, labelColor: 'text-[#FF8095]' },
+                      { team: teamB, start: 15, end: 30, labelColor: 'text-[#FFD700]' }
+                    ].map(({ team, start, end, labelColor }) => (
+                      <div key={team} className="space-y-1.5">
+                        <span className={`font-black text-xs uppercase ${labelColor}`}>{team}</span>
+                        <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+                          {players.slice(start, end).map((p, idx) => {
+                            const realIdx = start + idx;
+                            return (
+                              <div key={realIdx} className="p-1.5 rounded bg-[#000000] border border-[#222222] flex items-center gap-1.5">
+                                <span className="text-[10px] text-[#A3A3A3] w-4">{idx + 1}</span>
+                                <input
+                                  type="text"
+                                  value={p.name}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setPlayers(prev => prev.map((item, i) => i === realIdx ? { ...item, name: val } : item));
+                                  }}
+                                  className="flex-1 px-2 py-0.5 rounded bg-[#111111] border border-[#333333] text-white text-xs outline-none"
+                                />
+                                <select
+                                  value={p.role}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setPlayers(prev => prev.map((item, i) => i === realIdx ? { ...item, role: val } : item));
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-[#111111] border border-[#333333] text-[#FFD700] text-[10px] font-bold outline-none"
+                                >
+                                  <option value="WK">WK</option>
+                                  <option value="BAT">BAT</option>
+                                  <option value="AR">AR</option>
+                                  <option value="BOWL">BOWL</option>
+                                </select>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {currentStep === 4 && (
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-black text-[#FFD700] uppercase">Contests Configuration</span>
+                    <button
+                      type="button"
+                      onClick={() => setContests(prev => [...prev, { type: 'standard', title: `Contest #${prev.length + 1}`, prize_pool: 10000, entry_fee: 25, total_spots: 500 }])}
+                      className="text-xs font-black text-[#FFD700] hover:underline"
+                    >
+                      + Add Contest
+                    </button>
+                  </div>
+
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {contests.map((c, idx) => (
+                      <div key={idx} className="p-2.5 rounded-xl bg-[#000000] border border-[#222222] space-y-2">
+                        <div className="flex justify-between items-center">
+                          <input
+                            type="text"
+                            value={c.title}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setContests(prev => prev.map((item, i) => i === idx ? { ...item, title: val } : item));
+                            }}
+                            className="font-bold text-xs bg-transparent text-white border-b border-[#333333] outline-none w-2/3"
+                          />
+                          {contests.length > 1 && (
+                            <button type="button" onClick={() => setContests(prev => prev.filter((_, i) => i !== idx))} className="text-[#A3A3A3] hover:text-[#FF1744] text-xs">
+                              ✕
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-3 gap-2">
+                          <select
+                            value={c.type}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setContests(prev => prev.map((item, i) => i === idx ? { ...item, type: val } : item));
+                            }}
+                            className="px-2 py-1 rounded bg-[#111111] border border-[#333333] text-[#FFD700] font-bold text-xs"
+                          >
+                            <option value="standard">Standard</option>
+                            <option value="multi_battlefield">Battlefield</option>
+                            <option value="h2h">H2H</option>
+                          </select>
+
+                          {c.type === 'h2h' ? (
+                            <div className="col-span-2 text-[10px] text-[#FFD700] flex items-center font-bold">
+                              User specifies entry fee on challenge (85% win split)
+                            </div>
+                          ) : (
+                            <>
+                              <input
+                                type="number"
+                                placeholder="Fee"
+                                value={c.entry_fee}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setContests(prev => prev.map((item, i) => i === idx ? { ...item, entry_fee: val } : item));
+                                }}
+                                className="px-2 py-1 rounded bg-[#111111] border border-[#333333] text-white text-xs"
+                              />
+                              <input
+                                type="number"
+                                placeholder="Pool"
+                                value={c.prize_pool}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  setContests(prev => prev.map((item, i) => i === idx ? { ...item, prize_pool: val } : item));
+                                }}
+                                className="px-2 py-1 rounded bg-[#111111] border border-[#333333] text-white text-xs"
+                              />
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {currentStep === 5 && (
+                <div className="space-y-3 p-4 rounded-xl bg-[#000000] border border-[#222222]">
+                  <h4 className="font-black text-xs text-[#FFD700] uppercase">Contest Lock Timing</h4>
+                  <p className="text-xs text-[#A3A3A3]">
+                    Contests automatically lock X minutes before start time.
+                  </p>
+                  <div className="flex gap-2">
+                    {[5, 10, 15, 30].map((mins) => (
                       <button
-                        key={hrs}
+                        key={mins}
                         type="button"
-                        onClick={() => setAddForm(prev => ({ ...prev, duration_hours: hrs }))}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-bold transition ${
-                          addForm.duration_hours === hrs
-                            ? 'bg-amber-400 text-black shadow-md'
-                            : 'bg-white/5 text-text-muted hover:bg-white/10 hover:text-white'
+                        onClick={() => setLockMinutes(mins)}
+                        className={`px-4 py-2 rounded-xl text-xs font-black ${
+                          lockMinutes === mins ? 'prime-btn-3d' : 'prime-btn-dark-3d'
                         }`}
                       >
-                        {hrs}h
+                        {mins} Mins
                       </button>
                     ))}
                   </div>
                 </div>
-              </div>
+              )}
 
-              {/* Auto-Calculated End Time Display (End time ka manual input khatam) */}
-              <div className="p-4 rounded-2xl bg-gradient-to-r from-emerald-500/15 via-cyan-500/10 to-transparent border border-emerald-400/40 space-y-1">
-                <div className="flex items-center gap-2 text-xs font-bold text-emerald-300">
-                  <Sparkles size={14} className="text-emerald-400" />
-                  <span>Calculated League End Time (Auto-Calculated)</span>
-                </div>
-                <div className="text-base font-extrabold text-white">
-                  {format12h(getCalculatedEndTime())}
-                </div>
-                <p className="text-[10px] text-text-muted">
-                  ✓ End time is computed automatically as <strong>Start Time + {addForm.duration_hours} Hours</strong>. You do not need to enter end time manually.
-                </p>
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button 
-                type="button"
-                disabled={isSubmitting} 
-                onClick={() => setShowAddModal(false)} 
-                className="flex-1 py-2.5 rounded-xl bg-white/10 text-white font-medium hover:bg-white/20 transition-colors disabled:opacity-50 text-xs sm:text-sm"
-              >
-                Cancel
-              </button>
-              <button 
-                type="button"
-                disabled={isSubmitting} 
-                onClick={handleAddLeague} 
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-bold shadow-[0_0_20px_rgba(176,38,255,0.4)] hover:shadow-[0_0_30px_rgba(176,38,255,0.6)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm"
-              >
-                {isSubmitting ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" /> Creating League...
-                  </>
-                ) : (
-                  'Create League Now'
-                )}
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      {/* Add Contest Modal */}
-      {showContestModal && selectedTournament && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            className="w-full max-w-md bg-dark-bg border border-white/10 rounded-2xl p-6 shadow-2xl"
-          >
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold">Add Contest to {selectedTournament.name}</h2>
-              <button onClick={() => setShowContestModal(false)} className="text-text-muted hover:text-white"><X size={20}/></button>
-            </div>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs text-text-muted mb-1">Contest Name</label>
-                <input type="text" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple" value={contestForm.name} onChange={e => setContestForm({...contestForm, name: e.target.value})} />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-text-muted mb-1">Type</label>
-                  <select className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none" value={contestForm.type} onChange={e => setContestForm({...contestForm, type: e.target.value})}>
-                    <option value="mega">Mega</option>
-                    <option value="h2h">Head-to-Head</option>
-                    <option value="mini">Mini</option>
-                    <option value="winner_takes_all">Winner Takes All</option>
-                    <option value="practice">Practice</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs text-text-muted mb-1">Entry Fee (₹ INR)</label>
-                  <input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple" value={contestForm.entry_fee} onChange={e => setContestForm({...contestForm, entry_fee: Number(e.target.value)})} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs text-text-muted mb-1">Prize Pool (₹ INR)</label>
-                  <input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple" value={contestForm.prize_pool} onChange={e => setContestForm({...contestForm, prize_pool: Number(e.target.value)})} />
-                </div>
-                <div>
-                  <label className="block text-xs text-text-muted mb-1">Max Users</label>
-                  <input type="number" className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm outline-none focus:border-neon-purple" value={contestForm.max_participants} onChange={e => setContestForm({...contestForm, max_participants: Number(e.target.value)})} />
-                </div>
-              </div>
-            </div>
-            
-            <div className="flex gap-3 mt-6">
-              <button onClick={() => setShowContestModal(false)} className="flex-1 py-2 rounded-lg bg-white/10 text-white font-medium hover:bg-white/20 transition-colors">Cancel</button>
-              <button onClick={handleCreateContest} className="flex-1 py-2 rounded-lg bg-neon-cyan text-black font-bold hover:shadow-[0_0_20px_rgba(0,255,255,0.4)] transition-all">Add Contest</button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-
-      <div className="glass-card overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="border-b border-white/10 bg-white/5">
-              <th className="p-4 font-semibold text-text-secondary">Name</th>
-              <th className="p-4 font-semibold text-text-secondary">Status</th>
-              <th className="p-4 font-semibold text-text-secondary">Teams / Bots</th>
-              <th className="p-4 font-semibold text-text-secondary">Start Time</th>
-              <th className="p-4 font-semibold text-text-secondary">Fee / Prize</th>
-              <th className="p-4 font-semibold text-text-secondary">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tournaments.map((t) => (
-              <tr key={t.id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                <td className="p-4 font-medium">
-                  <div>{t.name}</div>
-                  <div className="text-[11px] text-text-muted uppercase">{t.platform} • {t.duration_type || '24h'}</div>
-                </td>
-                <td className="p-4">
-                  {editingId === t.id ? (
-                    <select
-                      value={editForm.status}
-                      onChange={e => setEditForm({...editForm, status: e.target.value as any})}
-                      className="bg-dark-bg border border-white/20 rounded px-2 py-1 outline-none"
-                    >
-                      <option value="upcoming">Upcoming</option>
-                      <option value="live">Live</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                  ) : (
-                    <span className={`px-2 py-1 rounded text-xs ${t.status === 'live' ? 'bg-neon-green/20 text-neon-green' : t.status === 'completed' ? 'bg-white/10' : 'bg-neon-gold/20 text-neon-gold'}`}>
-                      {t.status.toUpperCase()}
-                    </span>
-                  )}
-                </td>
-                <td className="p-4">
-                  <div className="flex items-center gap-2">
-                    <span className="font-mono font-bold text-neon-cyan text-sm">
-                      {t.current_participants ?? 0}
-                    </span>
-                    <span className="text-xs text-text-muted">/ 1100</span>
-                    {(t.current_participants ?? 0) < 1100 && (
-                      <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping" title="Bots actively joining in real time" />
-                    )}
+              {currentStep === 6 && (
+                <div className="space-y-3 p-4 rounded-xl bg-[#000000] border border-[#222222]">
+                  <h4 className="font-black text-xs text-[#FFD700] uppercase">Ready for DB Verification</h4>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div><span className="text-[#A3A3A3]">Match:</span> <strong className="text-white ml-1">{teamA} vs {teamB}</strong></div>
+                    <div><span className="text-[#A3A3A3]">Category:</span> <strong className="text-[#FFD700] ml-1">{category}</strong></div>
+                    <div><span className="text-[#A3A3A3]">Squad:</span> <strong className="text-white ml-1">{players.length} Players</strong></div>
+                    <div><span className="text-[#A3A3A3]">Lock Time:</span> <strong className="text-white ml-1">{lockMinutes}m before start</strong></div>
                   </div>
-                </td>
-                <td className="p-4">
-                  {editingId === t.id ? (
-                    <input 
-                      type="datetime-local" 
-                      value={(editForm as any).start_time || ''} 
-                      onChange={e => setEditForm({...editForm, start_time: e.target.value} as any)}
-                      className="bg-dark-bg border border-white/20 rounded px-2 py-1 text-sm outline-none"
-                    />
-                  ) : (
-                    <span className="text-sm flex items-center gap-2"><Clock size={14} className="text-text-muted"/> {format12h(t.start_time)}</span>
-                  )}
-                </td>
-                <td className="p-4">
-                  {editingId === t.id ? (
-                    <div className="flex flex-col gap-2">
-                      <input 
-                        type="number" 
-                        placeholder="Fee"
-                        value={(editForm as any).entry_fee || ''} 
-                        onChange={e => setEditForm({...editForm, entry_fee: e.target.value} as any)}
-                        className="bg-dark-bg border border-white/20 rounded px-2 py-1 text-sm outline-none w-24"
-                      />
-                      <input 
-                        type="number" 
-                        placeholder="Prize"
-                        value={(editForm as any).prize_pool || ''} 
-                        onChange={e => setEditForm({...editForm, prize_pool: e.target.value} as any)}
-                        className="bg-dark-bg border border-white/20 rounded px-2 py-1 text-sm outline-none w-24"
-                      />
-                    </div>
-                  ) : (
-                    <div className="text-sm">
-                      <p className="text-text-primary">Fee: <span className="font-bold text-neon-cyan">₹{t.entry_fee}</span></p>
-                      <p className="text-text-muted">Prize: <span className="font-bold text-neon-gold">₹{t.prize_pool}</span></p>
-                    </div>
-                  )}
-                </td>
-                <td className="p-4">
-                  {editingId === t.id ? (
-                    <div className="flex gap-2">
-                      <button onClick={() => handleSave(t.id)} className="p-2 bg-neon-green/20 text-neon-green rounded hover:bg-neon-green/30" title="Save">
-                        <Check size={16} />
-                      </button>
-                      <button onClick={handleCancel} className="p-2 bg-red-500/20 text-red-500 rounded hover:bg-red-500/30" title="Cancel">
-                        <X size={16} />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex gap-2">
-                      <button 
-                        disabled={deployingBotId === t.id}
-                        onClick={() => handleDeployBots(t)} 
-                        className="p-2 bg-purple-500/20 text-purple-300 rounded hover:bg-purple-500/30 transition-colors disabled:opacity-50 flex items-center gap-1 text-xs font-bold" 
-                        title="Instantly deploy remaining bots up to 1100"
-                      >
-                        {deployingBotId === t.id ? (
-                          <Loader2 size={16} className="animate-spin" />
-                        ) : (
-                          <>
-                            <Zap size={14} className="text-amber-400" />
-                            <span>Fill Bots</span>
-                          </>
-                        )}
-                      </button>
-                      <button onClick={() => handleEdit(t)} className="p-2 bg-white/5 text-text-secondary rounded hover:bg-white/10 hover:text-white transition-colors" title="Edit League">
-                        <Edit2 size={16} />
-                      </button>
-                      <button onClick={() => { setSelectedTournament(t); setShowContestModal(true); }} className="p-2 bg-neon-cyan/10 text-neon-cyan rounded hover:bg-neon-cyan/20 transition-colors" title="Add Contest">
-                        <Trophy size={16} />
-                      </button>
-                      <button 
-                        disabled={deletingId === t.id}
-                        onClick={() => handleDeleteTournament(t)} 
-                        className="p-2 bg-red-500/10 text-red-400 rounded hover:bg-red-500/20 hover:text-red-300 transition-colors disabled:opacity-50" 
-                        title="Delete League"
-                      >
-                        {deletingId === t.id ? (
-                          <Loader2 size={16} className="animate-spin" />
-                        ) : (
-                          <Trash2 size={16} />
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                </div>
+              )}
+            </div>
+
+            {/* Controls */}
+            <div className="pt-3 border-t border-[#222222] flex justify-between">
+              {currentStep > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(prev => prev - 1)}
+                  className="prime-btn-dark-3d !py-1.5 !px-4 text-xs font-black"
+                >
+                  &larr; Back
+                </button>
+              ) : <div />}
+
+              {currentStep < 6 ? (
+                <button
+                  type="button"
+                  onClick={() => setCurrentStep(prev => prev + 1)}
+                  className="prime-btn-3d !py-1.5 !px-5 text-xs font-black uppercase tracking-wider"
+                >
+                  Next &rarr;
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleCreateSubmit}
+                  disabled={submitting}
+                  className="prime-btn-gold-3d !py-2 !px-6 text-xs font-black uppercase tracking-wider"
+                >
+                  {submitting ? 'Verifying with DB...' : 'Verify & Publish'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

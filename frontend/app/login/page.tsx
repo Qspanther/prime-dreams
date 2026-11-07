@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
-import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { apiPost } from '../lib/api';
-import { Mail, Lock, Zap, ArrowRight } from 'lucide-react';
+import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import PrimeLogo from '../components/ui/PrimeLogo';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,89 +21,117 @@ export default function LoginPage() {
     setError('');
     try {
       const data = await apiPost('/auth/login', form);
-
-
-
       login(data.token, data.user);
-      router.push('/dashboard');
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Login failed');
+      if (data.user?.role === 'admin') {
+        router.push('/admin/tournaments');
+      } else {
+        router.push('/');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Invalid username/email or password');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-6">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md"
-      >
-        <div className="flex items-center gap-2 mb-8 justify-center">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center">
-            <Zap size={20} className="text-white" />
-          </div>
-          <span className="text-2xl font-bold">Creator11</span>
+    <div className="w-full max-w-md mx-auto p-4 sm:p-6 space-y-6">
+      <div className="flex justify-center mb-4">
+        <PrimeLogo size="lg" />
+      </div>
+
+      <div className="prime-card p-6 sm:p-8 space-y-5 bg-[#26221B] border-2 border-[#3D352A]">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-black text-white">Welcome Back</h2>
+          <p className="text-xs text-[#8C8273] mt-1">Log in with your Email or Username</p>
         </div>
 
-        <div className="glass p-8 glow-purple">
-          <h2 className="text-2xl font-bold mb-2">Welcome Back</h2>
-          <p className="text-sm text-text-secondary mb-6">Log in to your account</p>
+        {error && (
+          <div className="p-3 rounded-lg bg-red-950/60 border border-red-500/50 text-red-200 text-xs flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+            <span>{error}</span>
+          </div>
+        )}
 
-          {error && (
-            <div className="mb-4 p-3 rounded-xl bg-danger/10 border border-danger/20 text-sm text-danger">
-              {error}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs font-bold text-[#FFC107] uppercase mb-1">
+              Email or Username
+            </label>
             <div className="relative">
-              <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted z-10" />
+              <Mail className="absolute left-3 top-2.5 w-4 h-4 text-[#8C8273]" />
               <input
-                type="email"
-                placeholder="Email Address"
+                type="text"
+                placeholder="you@domain.com or username"
                 value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
                 required
-                className="w-full !pl-10"
+                className="w-full pl-9 pr-3 py-2 rounded-lg bg-[#1C1A17] border border-[#3D352A] text-white text-sm focus:border-[#E53935] outline-none"
               />
             </div>
-            <div className="relative">
-              <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted z-10" />
-              <input
-                type="password"
-                placeholder="Password"
-                value={form.password}
-                onChange={e => setForm({ ...form, password: e.target.value })}
-                required
-                className="w-full !pl-10"
-              />
-            </div>
-            
-            <div className="flex justify-end">
-              <Link href="/forgot-password" className="text-xs text-text-muted hover:text-white transition-colors">
-                Forgot Password?
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-[#FFC107] uppercase">
+                Password
+              </label>
+              <Link href="/forgot-password" className="text-[11px] text-[#D1C7B7] hover:text-[#FFC107]">
+                Forgot?
               </Link>
             </div>
+            <div className="relative">
+              <Lock className="absolute left-3 top-2.5 w-4 h-4 text-[#8C8273]" />
+              <input
+                type="password"
+                placeholder="••••••••"
+                value={form.password}
+                onChange={(e) => setForm({ ...form, password: e.target.value })}
+                required
+                className="w-full pl-9 pr-3 py-2 rounded-lg bg-[#1C1A17] border border-[#3D352A] text-white text-sm focus:border-[#E53935] outline-none"
+              />
+            </div>
+          </div>
 
-            <motion.button
-              type="submit"
-              disabled={loading}
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              className="w-full py-3 text-sm font-bold bg-gradient-to-r from-neon-purple to-neon-purple/80 text-white rounded-xl flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              {loading ? 'Logging in...' : 'Log In'} {!loading && <ArrowRight size={16} />}
-            </motion.button>
-          </form>
+          <button
+            type="submit"
+            disabled={loading}
+            className="prime-btn w-full py-2.5 text-xs font-bold uppercase tracking-wider"
+          >
+            {loading ? 'Logging in...' : 'Sign In to Prime Dreems'}
+          </button>
+        </form>
 
-          <p className="text-center text-sm text-text-secondary mt-6">
-            Don&apos;t have an account?{' '}
-            <Link href="/signup" className="text-neon-purple hover:underline font-medium">Sign Up</Link>
+        {/* Quick Demo Access Helpers */}
+        <div className="pt-2 border-t border-[#3D352A]/80">
+          <p className="text-[11px] font-bold text-[#8C8273] uppercase mb-2 text-center tracking-wider">
+            Quick Fill Access
           </p>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setForm({ email: 'admin@primedreems.com', password: 'Admin@123' })}
+              className="py-1.5 px-2 rounded-lg bg-[#1C1A17] border border-[#E53935]/40 hover:border-[#E53935] text-[11px] font-bold text-[#FFC107] transition text-center"
+            >
+              👑 Fill Admin
+            </button>
+            <button
+              type="button"
+              onClick={() => setForm({ email: 'user@primedreems.com', password: 'User@123' })}
+              className="py-1.5 px-2 rounded-lg bg-[#1C1A17] border border-[#3D352A] hover:border-[#FFC107]/60 text-[11px] font-bold text-[#D1C7B7] hover:text-white transition text-center"
+            >
+              🏏 Fill User
+            </button>
+          </div>
         </div>
-      </motion.div>
+
+        <p className="text-center text-xs text-[#8C8273] pt-2">
+          New to Prime Dreems?{' '}
+          <Link href="/signup" className="text-[#FFC107] font-bold hover:underline">
+            Create an Account
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

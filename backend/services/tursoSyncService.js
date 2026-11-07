@@ -1,5 +1,5 @@
 // ─── Turso Cloud SQLite Sync Service ───
-// Connects Creator11 to https://app.turso.tech/ via libSQL.
+// Connects Prime Dreems to https://app.turso.tech/ via libSQL.
 // Prevents data loss on Render ephemeral disk redeploys by continuously syncing
 // the local SQLite state with your permanent Turso Cloud Database!
 
@@ -39,21 +39,16 @@ function getTursoClient() {
 
 const SYNC_TABLES = [
   'users',
-  'creators',
-  'tournaments',
-  'contests',
   'wallets',
   'transactions',
-  'teams',
-  'team_creators',
-  'scores',
-  'leaderboard',
-  'creator_stats_snapshots',
-  'user_streaks',
+  'cricket_matches',
+  'cricket_players',
+  'match_contests',
+  'cricket_teams',
+  'cricket_team_players',
+  'h2h_challenges',
   'notifications',
-  'contest_participants',
   'system_settings',
-  'bot_win_history',
   'referral_logs',
   'share_logs'
 ];
@@ -82,16 +77,18 @@ async function pullFromTurso() {
 
       await sequelize.query('PRAGMA foreign_keys = OFF;');
       
-      const chunkSize = 200;
+      const chunkSize = 500;
       for (let i = 0; i < rows.length; i += chunkSize) {
         const chunk = rows.slice(i, i + chunkSize);
         const placeholders = columns.map(() => '?').join(', ');
         const insertSql = `INSERT OR REPLACE INTO ${table} (${columns.join(', ')}) VALUES (${placeholders});`;
 
+        await sequelize.query('BEGIN TRANSACTION;');
         for (const row of chunk) {
           const values = columns.map(c => row[c]);
           await sequelize.query(insertSql, { replacements: values });
         }
+        await sequelize.query('COMMIT;');
       }
       pulledCount += rows.length;
       console.log(`   ⬇️ Restored ${rows.length} rows for "${table}" from Turso Cloud.`);

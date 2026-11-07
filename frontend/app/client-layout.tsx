@@ -1,21 +1,16 @@
 'use client';
 
-import React, { ReactNode, Suspense, useEffect } from 'react';
-import dynamic from 'next/dynamic';
+import React, { ReactNode, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import Sidebar from './components/layout/Sidebar';
 import AdminSidebar from './components/layout/AdminSidebar';
 import TopBar from './components/layout/TopBar';
 import MobileBottomNav from './components/layout/MobileBottomNav';
-import StageControls3D from './components/ui/StageControls3D';
+import H2HChallengePopup from './components/ui/H2HChallengePopup';
 import NetworkStatus from './components/ui/NetworkStatus';
 
-const ParticleBackground = dynamic(() => import('./components/three/ParticleBackground'), {
-  ssr: false,
-});
-
-const publicPaths = ['/', '/login', '/signup', '/verify-otp', '/forgot-password', '/tournaments', '/creators'];
+const publicPaths = ['/', '/login', '/signup', '/verify-otp', '/forgot-password'];
 const authOnlyPaths = ['/login', '/signup', '/verify-otp', '/forgot-password'];
 
 function AppShell({ children }: { children: ReactNode }) {
@@ -32,37 +27,28 @@ function AppShell({ children }: { children: ReactNode }) {
       if (!isAuthenticated && !isPublicPage) {
         router.push('/login');
       } else if (isAuthenticated && isAuthPage) {
-        router.push('/dashboard');
+        if (user?.role === 'admin') {
+          router.push('/admin/tournaments');
+        } else {
+          router.push('/');
+        }
       }
       if (isAdminRoute && user?.role !== 'admin') {
-        router.push('/dashboard');
+        router.push('/');
       }
-    }
-
-    // Register PWA Service Worker
-    if (typeof window !== 'undefined' && 'serviceWorker' in navigator && process.env.NODE_ENV === 'production') {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
   }, [loading, isAuthenticated, isPublicPage, isAuthPage, isAdminRoute, user, router]);
 
   if (loading && !isPublicPage) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#06060b]">
-        <div className="w-10 h-10 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+      <div className="flex items-center justify-center min-h-screen bg-[#000000]">
+        <div className="w-12 h-12 border-4 border-[#FF1744] border-t-transparent rounded-full animate-spin shadow-[0_0_20px_#FF1744]" />
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen bg-[#06060b] text-slate-100 overflow-x-hidden">
-      {/* 3D WebGL Particle Arena Background */}
-      <Suspense fallback={null}>
-        <ParticleBackground />
-      </Suspense>
-
-      {/* 3D Stage Preset Switcher & SFX */}
-      <StageControls3D />
-
+    <div className="relative min-h-screen bg-[#000000] text-[#FFFFFF] overflow-x-hidden font-['Montserrat',sans-serif]">
       {isAuthPage ? (
         <main className="relative z-10 min-h-screen flex items-center justify-center p-4">
           {children}
@@ -81,6 +67,9 @@ function AppShell({ children }: { children: ReactNode }) {
           <MobileBottomNav />
         </div>
       )}
+
+      {/* H2H Challenge Modal Popup (§7: Pop-up on login / screen with [Accept] and [Give Up]) */}
+      <H2HChallengePopup />
 
       {/* Soft Offline & Reconnection Alert */}
       <NetworkStatus />

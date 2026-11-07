@@ -3,7 +3,7 @@ const multer = require('multer');
 const path = require('path');
 const { authenticate, isAdmin } = require('../middleware/auth');
 const { purgeCache } = require('../middleware/cache');
-const { User, Creator, Tournament, Team, Wallet, Transaction, Notification, SystemSetting, ReferralLog } = require('../db/models');
+const { User, Creator, Tournament, Team, Wallet, Transaction, Notification, SystemSetting, ReferralLog, CricketMatch, CricketPlayer, MatchContest, ScoreAuditLog, PlayerPointsLog } = require('../db/models');
 const config = require('../config');
 const sequelize = require('../db/index');
 
@@ -914,6 +914,460 @@ router.put('/subscription-settings', authenticate, isAdmin, async (req, res) => 
   } catch (error) {
     console.error('Error updating subscription settings:', error);
     res.status(500).json({ error: 'Failed to update subscription settings' });
+  }
+});
+
+// ─── CRICKET ADMIN ENDPOINTS (Prime Dreems v2.1) ───
+
+// GET /admin/cricket/matches (Category filter tabs: All, World Cup, T20, League, Women's) (§5.3, §13)
+router.get('/cricket/matches', async (req, res) => {
+  try {
+    const { category } = req.query;
+    const where = {};
+    if (category && config.VALID_CATEGORIES.includes(category)) {
+      where.category = category;
+    }
+
+    const matches = await CricketMatch.findAll({
+      where,
+      include: [
+        { model: CricketPlayer, as: 'players' },
+        { model: MatchContest, as: 'contests' },
+      ],
+      order: [['start_time', 'DESC']],
+    });
+
+    res.json({ success: true, matches });
+  } catch (error) {
+    console.error('Admin cricket matches error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /admin/cricket/matches/verify-and-create (6-Step Match Creation Flow §6, §14)
+router.post('/cricket/matches/verify-and-create', async (req, res) => {
+  try {
+    const {
+      team_a, team_b, team_a_logo, team_b_logo, match_poster,
+      category, match_date, match_time, venue, lock_time_minutes,
+      players, contests
+    } = req.body;
+
+    const errors = {};
+
+    // Step 1: Match Details & Category validation (Mandatory 1 of 4)
+    if (!team_a || !team_a.trim()) errors.team_a = 'Team A name is required';
+    if (!team_b || !team_b.trim()) errors.team_b = 'Team B name is required';
+    if (team_a && team_b && team_a.trim().toLowerCase() === team_b.trim().toLowerCase()) {
+      errors.team_b = 'Team A and Team B cannot be the same';
+    }
+
+    if (!category || !config.VALID_CATEGORIES.includes(category)) {
+      errors.category = `Category is mandatory and must be one of: ${config.VALID_CATEGORIES.join(', ')}`;
+    }
+
+    if (!match_date) errors.match_date = 'Match date is required';
+    if (!match_time) errors.match_time = 'Match start time is required';
+
+    // Step 3: 30 Players validation (15 Team A + 15 Team B mandatory §6)
+    if (!Array.isArray(players) || players.length !== 30) {
+      errors.players = `Exactly 30 players are mandatory (15 for ${team_a || 'Team A'} and 15 for ${team_b || 'Team B'}). Received ${Array.isArray(players) ? players.length : 0}.`;
+    } else {
+      const teamAPlayers = players.filter(p => p.team_name === team_a);
+      const teamBPlayers = players.filter(p => p.team_name === team_b);
+
+      if (teamAPlayers.length !== 15) {
+        errors.team_a_players = `${team_a} must have exactly 15 squad players (got ${teamAPlayers.length})`;
+      }
+      if (teamBPlayers.length !== 15) {
+        errors.team_b_players = `${team_b} must have exactly 15 squad players (got ${teamBPlayers.length})`;
+      }
+
+      const validRoles = ['WK', 'BAT', 'AR', 'BOWL'];
+      for (let i = 0; i < players.length; i++) {
+        const p = players[i];
+        if (!p.name || !p.name.trim()) {
+          errors[`player_${i}_name`] = `Player #${i + 1} name is missing`;
+        }
+        if (!p.role || !validRoles.includes(p.role)) {
+          errors[`player_${i}_role`] = `Player "${p.name || i}" has invalid role. Must be WK, BAT, AR, or BOWL`;
+        }
+      }
+    }
+
+    // Step 5: Lock time validation (§15)
+    const lockMinutes = parseInt(lock_time_minutes, 10);
+    if (isNaN(lockMinutes) || lockMinutes < 1) {
+      errors.lock_time_minutes = 'Lock time must be at least 1 minute before start';
+    }
+
+    // Step 6: DB Verification - if any field mismatch, block with field-level errors (§6)
+    if (Object.keys(errors).length > 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Database verification failed. Please correct the highlighted errors.',
+        field_errors: errors,
+      });
+    }
+
+    // Parse start datetime
+    const startDateTime = new Date(`${match_date}T${match_time}:00`);
+
+    // Verification passed! Create Match
+    const newMatch = await CricketMatch.create({
+      title: `${team_a} vs ${team_b} (${category})`,
+      category,
+      team_a: team_a.trim(),
+      team_a_code: team_a.trim().substring(0, 3).toUpperCase(),
+      team_a_logo: team_a_logo || '/cricket/team_a.png',
+      team_b: team_b.trim(),
+      team_b_code: team_b.trim().substring(0, 3).toUpperCase(),
+      team_b_logo: team_b_logo || '/cricket/team_b.png',
+      match_poster: match_poster || '/cricket/poster.png',
+      venue: venue || 'International Cricket Stadium',
+      match_date,
+      match_time,
+      start_time: isNaN(startDateTime.getTime()) ? new Date() : startDateTime,
+      lock_time_minutes: lockMinutes || 15,
+      status: 'upcoming',
+      score_summary: {},
+      live_data: {},
+    });
+
+    // Create 30 Squad Players
+    for (const p of players) {
+      await CricketPlayer.create({
+        match_id: newMatch.id,
+        name: p.name.trim(),
+        team_name: p.team_name.trim(),
+        role: p.role,
+        photo_url: p.photo_url || '/cricket/player_avatar.png',
+        credits: parseFloat(p.credits) || 9.0,
+        points: 0,
+      });
+    }
+
+    // Step 4: Create Contests (Standard, Multi-Battlefield, H2H) (§7)
+    if (Array.isArray(contests) && contests.length > 0) {
+      for (const c of contests) {
+        const isH2H = c.type === 'h2h';
+        await MatchContest.create({
+          match_id: newMatch.id,
+          type: c.type || 'standard',
+          title: c.title || (isH2H ? 'Head-to-Head Custom Challenge' : `${newMatch.team_a} vs ${newMatch.team_b} Mega Contest`),
+          prize_pool: isH2H ? 0 : (parseFloat(c.prize_pool) || 10000),
+          entry_fee: isH2H ? 0 : (parseFloat(c.entry_fee) || 49),
+          total_spots: isH2H ? 2 : (parseInt(c.total_spots, 10) || 250),
+          filled_spots: 0,
+          spots_per_battlefield: c.type === 'multi_battlefield' ? (parseInt(c.spots_per_battlefield, 10) || 25) : null,
+          battlefield_number: 1,
+          is_active: true,
+          status: 'open',
+        });
+      }
+    } else {
+      // Default 3 standard contests if none supplied
+      await MatchContest.create({
+        match_id: newMatch.id,
+        type: 'standard',
+        title: `Mega Contest ₹50,000 (${category})`,
+        prize_pool: 50000,
+        entry_fee: 49,
+        total_spots: 1200,
+        filled_spots: 0,
+        status: 'open',
+      });
+      await MatchContest.create({
+        match_id: newMatch.id,
+        type: 'multi_battlefield',
+        title: `PUBG Battlefield Room #1 (${category})`,
+        prize_pool: 2500,
+        entry_fee: 99,
+        total_spots: 30,
+        spots_per_battlefield: 30,
+        battlefield_number: 1,
+        status: 'open',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Match verified against live DB and created successfully!',
+      match_id: newMatch.id,
+    });
+  } catch (error) {
+    console.error('Match creation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /admin/cricket/matches/:id/status
+router.put('/cricket/matches/:id/status', async (req, res) => {
+  try {
+    const { status } = req.body;
+    const match = await CricketMatch.findByPk(req.params.id);
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+
+    await match.update({ status });
+    res.json({ success: true, message: `Match status updated to ${status}` });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /admin/cricket/matches/:id/sync-live
+router.post('/cricket/matches/:id/sync-live', async (req, res) => {
+  try {
+    const { syncLiveMatch } = require('../services/cricbuzzService');
+    const updated = await syncLiveMatch(req.params.id);
+    res.json({ success: true, message: 'Live match score synced with Cricbuzz pipeline', snapshot: updated });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ─── CRICBUZZ LIVE EXTRACTOR DATABASE ROUTES ───
+
+// GET /admin/cricket/cricbuzz-feed
+router.get(['/cricket/cricbuzz-feed', '/cricbuzz/feed'], async (req, res) => {
+  try {
+    const { getCricbuzzLiveFeed } = require('../services/cricbuzzAdapter');
+    const feed = getCricbuzzLiveFeed();
+
+    // Cross-reference with Prime Dreems DB to see which matches are already imported
+    const dbMatches = await CricketMatch.findAll({ attributes: ['team_a', 'team_b'] });
+    const existingPairs = new Set(dbMatches.map(m => `${m.team_a.toLowerCase()}_vs_${m.team_b.toLowerCase()}`));
+
+    const liveMatchesWithImportStatus = feed.liveMatches.map(m => ({
+      ...m,
+      is_imported: existingPairs.has(`${m.team_a.toLowerCase()}_vs_${m.team_b.toLowerCase()}`)
+    }));
+
+    const upcomingMatchesWithImportStatus = feed.upcomingMatches.map(m => ({
+      ...m,
+      is_imported: existingPairs.has(`${m.team_a.toLowerCase()}_vs_${m.team_b.toLowerCase()}`)
+    }));
+
+    res.json({
+      success: true,
+      source: feed.source,
+      timestamp: feed.timestamp,
+      liveCount: liveMatchesWithImportStatus.length,
+      upcomingCount: upcomingMatchesWithImportStatus.length,
+      liveMatches: liveMatchesWithImportStatus,
+      upcomingMatches: upcomingMatchesWithImportStatus,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /admin/cricket/cricbuzz-import
+router.post(['/cricket/cricbuzz-import', '/cricbuzz/import'], async (req, res) => {
+  try {
+    const { importCricbuzzMatchToDatabase } = require('../services/cricbuzzAdapter');
+    const { cricbuzz_id } = req.body;
+    if (!cricbuzz_id) {
+      return res.status(400).json({ error: 'cricbuzz_id is required' });
+    }
+    const result = await importCricbuzzMatchToDatabase(cricbuzz_id);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// ─── DATA HEALTH & ZERO-MISTAKE AUDIT ROUTES (Section 4) ───
+
+// GET /admin/data-health
+router.get('/data-health', async (req, res) => {
+  try {
+    const hotStore = require('../services/ingestion/hotStore');
+    const wsGateway = require('../services/websocket/wsGateway');
+    const report = hotStore.getHealthReport();
+    const wsStats = wsGateway.getStats();
+
+    // Fetch active matches from DB to complement snapshot list
+    const liveMatches = await CricketMatch.findAll({
+      where: { status: 'live' },
+      attributes: ['id', 'title', 'team_a', 'team_b', 'category', 'cricbuzz_id', 'last_live_poll_at'],
+    });
+
+    res.json({
+      success: true,
+      report: {
+        ...report,
+        websocket_gateway: wsStats,
+        database_live_matches_count: liveMatches.length,
+        database_live_matches: liveMatches,
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /admin/matches/:id/override-score (Section 4.2: Manual Override Tool)
+router.post('/matches/:id/override-score', async (req, res) => {
+  try {
+    const { match_id } = req.params;
+    const { team, runs, wickets, overs, reason } = req.body;
+
+    if (!reason || String(reason).trim().length < 5) {
+      return res.status(400).json({ error: 'A valid audit reason (minimum 5 chars) is mandatory for manual score override.' });
+    }
+
+    const match = await CricketMatch.findByPk(req.params.id);
+    if (!match) {
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    const oldSummary = JSON.parse(JSON.stringify(match.score_summary || {}));
+    const newSummary = { ...oldSummary };
+    const targetKey = team === 'team_b' ? 'team_b' : 'team_a';
+
+    newSummary[targetKey] = {
+      runs: parseInt(runs, 10) || 0,
+      wickets: Math.min(10, Math.max(0, parseInt(wickets, 10) || 0)),
+      overs: parseFloat(overs) || 0.0,
+    };
+
+    await match.update({ score_summary: newSummary });
+
+    // Update HotStore snapshot
+    const hotStore = require('../services/ingestion/hotStore');
+    hotStore.setSnapshot(match.id, {
+      ...newSummary,
+      current_innings: targetKey,
+      last_ball_event: `Manual Override by ${req.user.name || 'Admin'}: ${reason}`,
+    }, {
+      source: 'Admin Manual Override',
+      cross_check_status: 'MANUAL_VERIFIED',
+    });
+
+    // Record audit log
+    await ScoreAuditLog.create({
+      match_id: match.id,
+      admin_id: req.user.id,
+      admin_username: req.user.name || req.user.username || 'Admin',
+      action: 'score_override',
+      old_value: oldSummary,
+      new_value: newSummary,
+      reason: String(reason).trim(),
+    });
+
+    // Broadcast delta update to connected WebSocket clients
+    const wsGateway = require('../services/websocket/wsGateway');
+    wsGateway.broadcastDelta(match.id, {
+      over: newSummary[targetKey].overs,
+      runs: newSummary[targetKey].runs,
+      wickets: newSummary[targetKey].wickets,
+      current_innings: targetKey,
+      event: 'MANUAL_OVERRIDE',
+      commentary: `[Official Override] Score adjusted: ${runs}/${wickets} (${overs} ov). Reason: ${reason}`,
+      score_summary: newSummary,
+    });
+
+    res.json({
+      success: true,
+      message: 'Score successfully updated and broadcast to all live clients with audit log.',
+      score_summary: newSummary,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /admin/matches/:id/override-points (Section 4.2: Player Points Override)
+router.post('/matches/:id/override-points', async (req, res) => {
+  try {
+    const { player_id, new_points, reason } = req.body;
+    if (!player_id || new_points === undefined || !reason || String(reason).trim().length < 5) {
+      return res.status(400).json({ error: 'player_id, new_points, and audit reason (min 5 chars) are required.' });
+    }
+
+    const player = await CricketPlayer.findByPk(player_id);
+    if (!player || player.match_id !== req.params.id) {
+      return res.status(404).json({ error: 'Player not found in this match' });
+    }
+
+    const oldPoints = Number(player.points) || 0;
+    const targetPoints = Math.round(Number(new_points) * 10) / 10;
+
+    await player.update({ points: targetPoints });
+
+    // Record audit log
+    await ScoreAuditLog.create({
+      match_id: req.params.id,
+      admin_id: req.user.id,
+      admin_username: req.user.name || req.user.username || 'Admin',
+      action: 'points_override',
+      old_value: { player_id, name: player.name, points: oldPoints },
+      new_value: { player_id, name: player.name, points: targetPoints },
+      reason: String(reason).trim(),
+    });
+
+    const { auditPointsChange } = require('../services/scoring/scoringEngine');
+    await auditPointsChange(req.params.id, player.id, player.name, 'admin_manual_override', oldPoints, targetPoints, 'ADMIN_OVERRIDE');
+
+    // Recalculate fantasy user teams in this match
+    const { processLiveIngestionTick } = require('../services/ingestion/ingestionWorker');
+    processLiveIngestionTick();
+
+    res.json({
+      success: true,
+      message: `Points for ${player.name} updated from ${oldPoints} to ${targetPoints}. Audit trail recorded.`,
+      player: { id: player.id, name: player.name, points: targetPoints },
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /admin/matches/:id/toggle-ingestion (Section 4.2: Ingestion Pause/Resume)
+router.post('/matches/:id/toggle-ingestion', async (req, res) => {
+  try {
+    const { paused } = req.body;
+    const hotStore = require('../services/ingestion/hotStore');
+
+    if (paused) {
+      hotStore.pauseMatch(req.params.id);
+    } else {
+      hotStore.resumeMatch(req.params.id);
+    }
+
+    await ScoreAuditLog.create({
+      match_id: req.params.id,
+      admin_id: req.user.id,
+      admin_username: req.user.name || 'Admin',
+      action: paused ? 'pause_ingestion' : 'resume_ingestion',
+      old_value: { paused: !paused },
+      new_value: { paused: Boolean(paused) },
+      reason: `Ingestion stream ${paused ? 'paused' : 'resumed'} by admin`,
+    });
+
+    res.json({
+      success: true,
+      match_id: req.params.id,
+      is_paused: hotStore.isMatchPaused(req.params.id),
+      message: `Ingestion for match ${req.params.id} is now ${paused ? 'PAUSED' : 'ACTIVE'}.`,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /admin/matches/:id/audit-logs
+router.get('/matches/:id/audit-logs', async (req, res) => {
+  try {
+    const logs = await ScoreAuditLog.findAll({
+      where: { match_id: req.params.id },
+      order: [['created_at', 'DESC']],
+      limit: 50,
+    });
+    res.json({ success: true, logs });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 

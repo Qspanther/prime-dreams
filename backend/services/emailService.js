@@ -140,7 +140,7 @@ async function tryBrevo({ toEmail, subject, text, html }) {
           'accept': 'application/json',
         },
         body: JSON.stringify({
-          sender: { name: 'Creator11', email: mailUser || 'qspanther@gmail.com' },
+          sender: { name: 'Prime Dreems', email: mailUser || 'qspanther@gmail.com' },
           to: [{ email: toEmail }],
           subject,
           htmlContent: html,
@@ -168,9 +168,9 @@ function buildOtpEmailHtml({ recipientName, otp, purpose, expiryMinutes = 10 }) 
   const isReset = purpose === 'reset';
   const heading = isReset ? 'Reset Your Password' : 'Verify Your Email';
   const subtext = isReset
-    ? 'Use the verification code below to reset your Creator11 password.'
-    : 'Welcome to Creator11 — Creator Entertainment League! Enter the code below to complete your registration.';
-  const accentColor = isReset ? '#00D4FF' : '#A855F7';
+    ? 'Use the verification code below to reset your Prime Dreems password.'
+    : 'Welcome to Prime Dreems — Cricket Fantasy Colosseum! Enter the code below to complete your registration.';
+  const accentColor = isReset ? '#FFD700' : '#FF1744';
 
   return `<!DOCTYPE html>
 <html>
@@ -178,41 +178,41 @@ function buildOtpEmailHtml({ recipientName, otp, purpose, expiryMinutes = 10 }) 
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 </head>
-<body style="margin:0;padding:0;background-color:#0a0a0f;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#ffffff;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:40px 0;">
+<body style="margin:0;padding:0;background-color:#000000;font-family:'Segoe UI',Helvetica,Arial,sans-serif;color:#ffffff;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#000000;padding:40px 0;">
     <tr>
       <td align="center">
-        <table width="520" cellpadding="0" cellspacing="0" style="background:#13131a;border-radius:16px;overflow:hidden;border:1px solid #ffffff18;">
+        <table width="520" cellpadding="0" cellspacing="0" style="background:#0D0D0D;border-radius:16px;overflow:hidden;border:2px solid #FF1744;">
           <tr>
-            <td style="background:linear-gradient(135deg,#A855F7,#00D4FF);padding:32px;text-align:center;">
-              <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:800;letter-spacing:2px;">⚡ CREATOR11</h1>
-              <p style="margin:6px 0 0;color:rgba(255,255,255,0.9);font-size:13px;">Creator Entertainment League</p>
+            <td style="background:linear-gradient(135deg,#FF1744,#800018);padding:32px;text-align:center;">
+              <h1 style="margin:0;color:#ffffff;font-size:26px;font-weight:900;letter-spacing:2px;">🏏 PRIME DREEMS</h1>
+              <p style="margin:6px 0 0;color:#FFD700;font-size:13px;font-weight:bold;">Cricket Fantasy Colosseum</p>
             </td>
           </tr>
           <tr>
             <td style="padding:36px 40px;">
               <h2 style="margin:0 0 10px;color:#ffffff;font-size:20px;">${heading}</h2>
-              <p style="margin:0 0 24px;color:#a0a0b5;font-size:14px;line-height:1.6;">
-                Hi ${recipientName || 'Creator'},<br/>
+              <p style="margin:0 0 24px;color:#A3A3A3;font-size:14px;line-height:1.6;">
+                Hi ${recipientName || 'Player'},<br/>
                 ${subtext}
               </p>
-              <div style="background:#0a0a0f;border:2px solid ${accentColor};border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
-                <p style="margin:0 0 8px;color:#8b8ba0;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:600;">Your Verification Code</p>
+              <div style="background:#000000;border:2px solid ${accentColor};border-radius:12px;padding:24px;text-align:center;margin-bottom:24px;">
+                <p style="margin:0 0 8px;color:#A3A3A3;font-size:12px;letter-spacing:2px;text-transform:uppercase;font-weight:bold;">Your Verification Code</p>
                 <p style="margin:0;font-size:42px;font-weight:900;letter-spacing:12px;color:${accentColor};font-family:Consolas,monaco,monospace;">${otp}</p>
               </div>
-              <p style="margin:0 0 8px;color:#a0a0b5;font-size:13px;text-align:center;">
+              <p style="margin:0 0 8px;color:#FFD700;font-size:13px;text-align:center;font-weight:bold;">
                 ⏱️ Valid for <strong>${expiryMinutes} minutes</strong> only.
               </p>
-              <p style="margin:0;color:#717182;font-size:12px;text-align:center;">
+              <p style="margin:0;color:#737373;font-size:12px;text-align:center;">
                 If you did not request this code, please ignore this email.
               </p>
             </td>
           </tr>
           <tr>
-            <td style="padding:20px 40px 28px;border-top:1px solid #ffffff10;background:#0d0d12;">
-              <p style="margin:0;color:#5a5a6e;font-size:12px;text-align:center;line-height:1.6;">
-                Need help? Email <a href="mailto:support@creator11.in" style="color:#00D4FF;text-decoration:none;">support@creator11.in</a><br/>
-                © 2026 Creator11. All rights reserved.
+            <td style="padding:20px 40px 28px;border-top:1px solid #222222;background:#050505;">
+              <p style="margin:0;color:#737373;font-size:12px;text-align:center;line-height:1.6;">
+                Need help? Email <a href="mailto:support@primedreems.com" style="color:#FFD700;text-decoration:none;">support@primedreems.com</a><br/>
+                © 2026 Prime Dreems. All rights reserved.
               </p>
             </td>
           </tr>
@@ -227,8 +227,8 @@ function buildOtpEmailHtml({ recipientName, otp, purpose, expiryMinutes = 10 }) 
 // ─── Master Delivery Function ──────────────────────────────────────────────
 async function executeSendMail({ toEmail, name, otp, purpose, expiryMinutes = 10 }) {
   const isReset = purpose === 'reset';
-  const subject = isReset ? `Creator11 Password Reset Code: ${otp}` : `Your Creator11 Verification Code: ${otp}`;
-  const plainText = `Hi ${name || 'Creator'},\n\nYour Creator11 verification code is: ${otp}\n\nValid for ${expiryMinutes} minutes.\n\n— Team Creator11`;
+  const subject = isReset ? `Prime Dreems Password Reset Code: ${otp}` : `Your Prime Dreems Verification Code: ${otp}`;
+  const plainText = `Hi ${name || 'Player'},\n\nYour Prime Dreems verification code is: ${otp}\n\nValid for ${expiryMinutes} minutes.\n\n— Team Prime Dreems`;
   const html = buildOtpEmailHtml({ recipientName: name, otp, purpose, expiryMinutes });
 
   console.log(`\n======================================================`);
@@ -248,7 +248,7 @@ async function executeSendMail({ toEmail, name, otp, purpose, expiryMinutes = 10
   if (brevoRes?.success) return brevoRes;
 
   const mailOptions = {
-    from: `"Creator11" <${mailUser}>`,
+    from: `"Prime Dreems" <${mailUser}>`,
     replyTo: mailUser,
     to: toEmail,
     subject,
