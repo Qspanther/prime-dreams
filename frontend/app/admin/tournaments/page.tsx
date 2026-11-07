@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../lib/auth-context';
-import { apiGet, apiPost } from '../../lib/api';
+import { apiGet, apiPost, apiPut, apiDelete, getApiBase } from '../../lib/api';
 import {
   Trophy, Plus, ChevronDown, ChevronUp, AlertCircle,
   Check, X, Shield, Clock, Users, ArrowRight, Layers,
-  Radio, RefreshCw, Activity, Calendar, MapPin
+  Radio, RefreshCw, Activity, Calendar, MapPin, Edit2, Trash2, Upload, ImageIcon
 } from 'lucide-react';
 import CategoryFilterTabs from '../../components/ui/CategoryFilterTabs';
 import CategoryBadge from '../../components/ui/CategoryBadge';
@@ -25,12 +25,14 @@ export default function AdminCricketMatchesPage() {
   const [telemetryLoading, setTelemetryLoading] = useState(false);
   const [syncingLive, setSyncingLive] = useState(false);
 
-  // 6-Step Match Creation Modal State
+  // 6-Step Match Creation & Edit Modal State
   const [showModal, setShowModal] = useState(false);
+  const [editingMatchId, setEditingMatchId] = useState<string | null>(null);
   const [currentStep, setCurrentStep] = useState(1);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
 
   // Form State
   const [teamA, setTeamA] = useState('India');
@@ -111,22 +113,167 @@ export default function AdminCricketMatchesPage() {
     }
   };
 
+  const handleStartCreate = () => {
+    setEditingMatchId(null);
+    setTeamA('India');
+    setTeamB('South Africa');
+    setCategory('World Cup');
+    setMatchDate('2026-11-15');
+    setMatchTime('19:30');
+    setVenue('Wankhede Stadium, Mumbai');
+    setTeamALogo('/cricket/team_a.png');
+    setTeamBLogo('/cricket/team_b.png');
+    setMatchPoster('/cricket/poster.png');
+    setLockMinutes(15);
+    const roles: ('WK' | 'BAT' | 'AR' | 'BOWL')[] = ['WK', 'BAT', 'BAT', 'BAT', 'BAT', 'AR', 'AR', 'AR', 'BOWL', 'BOWL', 'BOWL', 'BOWL', 'WK', 'BAT', 'BOWL'];
+    const list: any[] = [];
+    for (let i = 1; i <= 15; i++) {
+      list.push({ team_name: 'India', name: i === 1 ? 'Rohit Sharma' : i === 2 ? 'Virat Kohli' : `IND Player ${i}`, role: roles[i - 1], credits: 9.0 });
+    }
+    for (let i = 1; i <= 15; i++) {
+      list.push({ team_name: 'South Africa', name: i === 1 ? 'Quinton de Kock' : i === 2 ? 'Kagiso Rabada' : `SA Player ${i}`, role: roles[i - 1], credits: 9.0 });
+    }
+    setPlayers(list);
+    setContests([
+      { type: 'standard', title: 'Mega Grand Contest ₹1,00,000', prize_pool: 100000, entry_fee: 49, total_spots: 2500 },
+      { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 99, total_spots: 25 },
+      { type: 'h2h', title: 'H2H Custom Duel', prize_pool: 0, entry_fee: 0, total_spots: 2 },
+    ]);
+    setFieldErrors({});
+    setSuccessMsg(null);
+    setCurrentStep(1);
+    setShowModal(true);
+  };
+
+  const handleEditMatch = (m: any) => {
+    setEditingMatchId(m.id);
+    setTeamA(m.team_a || '');
+    setTeamB(m.team_b || '');
+    setCategory(m.category || 'World Cup');
+    setMatchDate(m.match_date || '');
+    setMatchTime(m.match_time || '');
+    setVenue(m.venue || '');
+    setTeamALogo(m.team_a_logo || '/cricket/team_a.png');
+    setTeamBLogo(m.team_b_logo || '/cricket/team_b.png');
+    setMatchPoster(m.match_poster || '/cricket/poster.png');
+    setLockMinutes(m.lock_time_minutes || 15);
+
+    if (m.players && m.players.length === 30) {
+      setPlayers(m.players.map((p: any) => ({
+        team_name: p.team_name,
+        name: p.name,
+        role: p.role || 'BAT',
+        credits: p.credits || 9.0
+      })));
+    } else {
+      const roles: ('WK' | 'BAT' | 'AR' | 'BOWL')[] = ['WK', 'BAT', 'BAT', 'BAT', 'BAT', 'AR', 'AR', 'AR', 'BOWL', 'BOWL', 'BOWL', 'BOWL', 'WK', 'BAT', 'BOWL'];
+      const list: any[] = [];
+      const tAName = m.team_a || 'Team A';
+      const tBName = m.team_b || 'Team B';
+      for (let i = 1; i <= 15; i++) {
+        list.push({ team_name: tAName, name: `${tAName} Player ${i}`, role: roles[i - 1], credits: 9.0 });
+      }
+      for (let i = 1; i <= 15; i++) {
+        list.push({ team_name: tBName, name: `${tBName} Player ${i}`, role: roles[i - 1], credits: 9.0 });
+      }
+      setPlayers(list);
+    }
+
+    if (m.contests && m.contests.length > 0) {
+      setContests(m.contests.map((c: any) => ({
+        type: c.type || 'standard',
+        title: c.title,
+        prize_pool: c.prize_pool,
+        entry_fee: c.entry_fee,
+        total_spots: c.total_spots
+      })));
+    } else {
+      setContests([
+        { type: 'standard', title: 'Mega Grand Contest ₹1,00,000', prize_pool: 100000, entry_fee: 49, total_spots: 2500 },
+        { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 99, total_spots: 25 },
+        { type: 'h2h', title: 'H2H Custom Duel', prize_pool: 0, entry_fee: 0, total_spots: 2 },
+      ]);
+    }
+
+    setFieldErrors({});
+    setSuccessMsg(null);
+    setCurrentStep(1);
+    setShowModal(true);
+  };
+
+  const handleDeleteMatch = async (m: any) => {
+    const ok = window.confirm(`Are you sure you want to permanently delete "${m.title}"?\n\nThis will remove the match, all associated contests, 30-player rosters, and contest records.`);
+    if (!ok) return;
+
+    try {
+      const res = await apiDelete(`/admin/cricket/matches/${m.id}`, token);
+      if (res?.success) {
+        alert(res.message || 'Match and contests deleted successfully.');
+        fetchMatches();
+      } else {
+        alert(res?.error || 'Failed to delete match');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Error deleting match');
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'team_a' | 'team_b' | 'poster') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    setUploadingField(field);
+    try {
+      const base = getApiBase();
+      const headers: Record<string, string> = {};
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      const res = await fetch(`${base}/admin/upload`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+      const data = await res.json();
+      if (data?.url) {
+        if (field === 'team_a') setTeamALogo(data.url);
+        else if (field === 'team_b') setTeamBLogo(data.url);
+        else if (field === 'poster') setMatchPoster(data.url);
+      } else {
+        alert(data?.error || 'Failed to upload image');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Error uploading file');
+    } finally {
+      setUploadingField(null);
+    }
+  };
+
   const handleCreateSubmit = async () => {
     setSubmitting(true);
     setFieldErrors({});
     setSuccessMsg(null);
     try {
-      const res = await apiPost('/admin/cricket/matches/verify-and-create', {
+      const payload = {
         team_a: teamA, team_b: teamB, category, match_date: matchDate, match_time: matchTime,
         venue, team_a_logo: teamALogo, team_b_logo: teamBLogo, match_poster: matchPoster,
         players, contests, lock_time_minutes: lockMinutes,
-      }, token);
+      };
+
+      let res;
+      if (editingMatchId) {
+        res = await apiPut(`/admin/cricket/matches/${editingMatchId}`, payload, token);
+      } else {
+        res = await apiPost('/admin/cricket/matches/verify-and-create', payload, token);
+      }
 
       if (res?.success) {
-        setSuccessMsg('✅ Match verified against live DB & published successfully!');
+        setSuccessMsg(editingMatchId ? '✅ Match & contests updated successfully in database!' : '✅ Match verified against live DB & published successfully!');
         setTimeout(() => { setShowModal(false); setCurrentStep(1); fetchMatches(); }, 1200);
       } else {
-        const errors = res?.field_errors || { general: res?.error || 'Verification failed' };
+        const errors = res?.field_errors || { general: res?.error || 'Verification/Update failed' };
         setFieldErrors(errors);
         const keys = Object.keys(errors);
         if (keys.some(k => ['team_a', 'team_b', 'category', 'match_date', 'match_time', 'venue'].includes(k))) setCurrentStep(1);
@@ -136,7 +283,7 @@ export default function AdminCricketMatchesPage() {
         else if (keys.some(k => k === 'lock_time_minutes')) setCurrentStep(5);
       }
     } catch (err: any) {
-      setFieldErrors({ general: err?.message || 'Database rejected verification.' });
+      setFieldErrors({ general: err?.message || 'Database rejected verification or update.' });
     } finally {
       setSubmitting(false);
     }
@@ -156,7 +303,7 @@ export default function AdminCricketMatchesPage() {
           </p>
         </div>
         <button
-          onClick={() => { setShowModal(true); setCurrentStep(1); setFieldErrors({}); }}
+          onClick={handleStartCreate}
           className="prime-btn-3d text-xs !py-2.5 !px-5 font-black uppercase tracking-wider flex items-center gap-2"
         >
           <Plus className="w-4 h-4" />
@@ -220,7 +367,7 @@ export default function AdminCricketMatchesPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           <span className="neon-badge-red px-2.5 py-1 rounded-full text-xs font-black uppercase">
                             🔴 LIVE
                           </span>
@@ -234,6 +381,30 @@ export default function AdminCricketMatchesPage() {
                             className="prime-btn-3d text-[11px] !py-1 !px-3 font-black"
                           >
                             Live Telemetry Deck &rarr;
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditMatch(m);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-[#1F1F1F] hover:bg-[#2A2A2A] border border-[#3A3A3A] text-xs font-black text-[#FFD700] flex items-center gap-1 transition"
+                            title="Edit match & contests"
+                          >
+                            <Edit2 className="w-3 h-3 text-[#FFD700]" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteMatch(m);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-red-950/60 hover:bg-red-900/80 border border-red-500/40 text-xs font-black text-[#FF8095] flex items-center gap-1 transition"
+                            title="Delete match and contests"
+                          >
+                            <Trash2 className="w-3 h-3 text-[#FF1744]" />
+                            <span>Delete</span>
                           </button>
                           {isExp ? <ChevronUp className="w-4 h-4 text-[#FFD700]" /> : <ChevronDown className="w-4 h-4 text-[#A3A3A3]" />}
                         </div>
@@ -311,7 +482,7 @@ export default function AdminCricketMatchesPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-[#000000] border border-[#FF1744]/40 text-xs font-mono font-bold text-[#FF8095]">
                             {m.team_a}: {tA.length || 15}
                           </span>
@@ -322,6 +493,30 @@ export default function AdminCricketMatchesPage() {
                             UPCOMING
                           </span>
                           <span className="text-xs font-black text-[#FFD700]">{(m.contests || []).length} Contests</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEditMatch(m);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-[#1F1F1F] hover:bg-[#2A2A2A] border border-[#3A3A3A] text-xs font-black text-[#FFD700] flex items-center gap-1 transition"
+                            title="Edit match & contests"
+                          >
+                            <Edit2 className="w-3 h-3 text-[#FFD700]" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteMatch(m);
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-red-950/60 hover:bg-red-900/80 border border-red-500/40 text-xs font-black text-[#FF8095] flex items-center gap-1 transition"
+                            title="Delete match and contests"
+                          >
+                            <Trash2 className="w-3 h-3 text-[#FF1744]" />
+                            <span>Delete</span>
+                          </button>
                           {isExp ? <ChevronUp className="w-4 h-4 text-[#FFD700]" /> : <ChevronDown className="w-4 h-4 text-[#A3A3A3]" />}
                         </div>
                       </div>
@@ -556,7 +751,9 @@ export default function AdminCricketMatchesPage() {
           <div className="w-full max-w-2xl bg-[#0A0A0A] border-2 border-[#FF1744] rounded-2xl shadow-2xl p-5 space-y-4 max-h-[90vh] flex flex-col">
             <div className="flex justify-between items-center border-b border-[#222222] pb-3">
               <div>
-                <h3 className="font-black text-white text-base">Create Match (Step {currentStep} of 6)</h3>
+                <h3 className="font-black text-white text-base">
+                  {editingMatchId ? '✏️ Edit Match & Contests' : '⚡ Create Match'} (Step {currentStep} of 6)
+                </h3>
                 <span className="text-xs text-[#FFD700] font-bold">
                   {currentStep === 1 && 'Match Details & Category Selector'}
                   {currentStep === 2 && 'Team Logos & Poster'}
@@ -664,33 +861,114 @@ export default function AdminCricketMatchesPage() {
               )}
 
               {currentStep === 2 && (
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-[10px] text-[#A3A3A3] font-black uppercase">{teamA} Logo URL</label>
-                    <input
-                      type="text"
-                      value={teamALogo}
-                      onChange={(e) => setTeamALogo(e.target.value)}
-                      className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white outline-none font-mono"
-                    />
+                <div className="space-y-4">
+                  <div className="p-3 rounded-xl bg-[#000000] border border-[#222222] text-[11px] text-[#A3A3A3] space-y-1">
+                    <p className="font-bold text-white flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-[#FFD700]" />
+                      <span>Image Guidelines &amp; Direct Upload</span>
+                    </p>
+                    <p>
+                      Aap direct Google Images / Cricbuzz / Web se kisi bhi image ka direct URL paste kar sakte hain, ya fir apne device (computer/phone) se <strong>Upload File</strong> button dabakar directly upload kar sakte hain. Dono tarike fully supported hain!
+                    </p>
                   </div>
-                  <div>
-                    <label className="text-[10px] text-[#A3A3A3] font-black uppercase">{teamB} Logo URL</label>
-                    <input
-                      type="text"
-                      value={teamBLogo}
-                      onChange={(e) => setTeamBLogo(e.target.value)}
-                      className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white outline-none font-mono"
-                    />
+
+                  {/* Team A Logo */}
+                  <div className="p-3 rounded-xl bg-[#000000] border border-[#222222] space-y-2">
+                    <label className="text-[10px] text-[#FF8095] font-black uppercase">{teamA} Logo (Web URL or Upload)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={teamALogo}
+                        onChange={(e) => setTeamALogo(e.target.value)}
+                        placeholder="https://... or /cricket/team_a.png"
+                        className="flex-1 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#333333] text-white outline-none font-mono text-xs"
+                      />
+                      <label className="cursor-pointer px-3 py-2 rounded-lg bg-[#1A1A1A] hover:bg-[#252525] border border-[#3A3A3A] text-xs font-black text-[#FFD700] flex items-center gap-1.5 transition shrink-0">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{uploadingField === 'team_a' ? 'Uploading...' : 'Upload File'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={uploadingField === 'team_a'}
+                          onChange={(e) => handleFileUpload(e, 'team_a')}
+                          className="hidden"
+                        />
+                      </label>
+                      {teamALogo && (
+                        <img
+                          src={teamALogo}
+                          alt="Team A"
+                          className="w-9 h-9 rounded-lg border border-[#333333] object-contain bg-[#111111] shrink-0"
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Match Poster URL</label>
-                    <input
-                      type="text"
-                      value={matchPoster}
-                      onChange={(e) => setMatchPoster(e.target.value)}
-                      className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white outline-none font-mono"
-                    />
+
+                  {/* Team B Logo */}
+                  <div className="p-3 rounded-xl bg-[#000000] border border-[#222222] space-y-2">
+                    <label className="text-[10px] text-[#FFD700] font-black uppercase">{teamB} Logo (Web URL or Upload)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={teamBLogo}
+                        onChange={(e) => setTeamBLogo(e.target.value)}
+                        placeholder="https://... or /cricket/team_b.png"
+                        className="flex-1 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#333333] text-white outline-none font-mono text-xs"
+                      />
+                      <label className="cursor-pointer px-3 py-2 rounded-lg bg-[#1A1A1A] hover:bg-[#252525] border border-[#3A3A3A] text-xs font-black text-[#FFD700] flex items-center gap-1.5 transition shrink-0">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{uploadingField === 'team_b' ? 'Uploading...' : 'Upload File'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={uploadingField === 'team_b'}
+                          onChange={(e) => handleFileUpload(e, 'team_b')}
+                          className="hidden"
+                        />
+                      </label>
+                      {teamBLogo && (
+                        <img
+                          src={teamBLogo}
+                          alt="Team B"
+                          className="w-9 h-9 rounded-lg border border-[#333333] object-contain bg-[#111111] shrink-0"
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Match Poster */}
+                  <div className="p-3 rounded-xl bg-[#000000] border border-[#222222] space-y-2">
+                    <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Match Poster / Banner (Web URL or Upload)</label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={matchPoster}
+                        onChange={(e) => setMatchPoster(e.target.value)}
+                        placeholder="https://... or /cricket/poster.png"
+                        className="flex-1 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#333333] text-white outline-none font-mono text-xs"
+                      />
+                      <label className="cursor-pointer px-3 py-2 rounded-lg bg-[#1A1A1A] hover:bg-[#252525] border border-[#3A3A3A] text-xs font-black text-[#FFD700] flex items-center gap-1.5 transition shrink-0">
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>{uploadingField === 'poster' ? 'Uploading...' : 'Upload File'}</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          disabled={uploadingField === 'poster'}
+                          onChange={(e) => handleFileUpload(e, 'poster')}
+                          className="hidden"
+                        />
+                      </label>
+                      {matchPoster && (
+                        <img
+                          src={matchPoster}
+                          alt="Poster"
+                          className="w-9 h-9 rounded-lg border border-[#333333] object-cover bg-[#111111] shrink-0"
+                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               )}
@@ -853,12 +1131,16 @@ export default function AdminCricketMatchesPage() {
 
               {currentStep === 6 && (
                 <div className="space-y-3 p-4 rounded-xl bg-[#000000] border border-[#222222]">
-                  <h4 className="font-black text-xs text-[#FFD700] uppercase">Ready for DB Verification</h4>
+                  <h4 className="font-black text-xs text-[#FFD700] uppercase">
+                    {editingMatchId ? 'Ready to Update Database' : 'Ready for DB Verification'}
+                  </h4>
                   <div className="grid grid-cols-2 gap-2 text-xs">
                     <div><span className="text-[#A3A3A3]">Match:</span> <strong className="text-white ml-1">{teamA} vs {teamB}</strong></div>
                     <div><span className="text-[#A3A3A3]">Category:</span> <strong className="text-[#FFD700] ml-1">{category}</strong></div>
                     <div><span className="text-[#A3A3A3]">Squad:</span> <strong className="text-white ml-1">{players.length} Players</strong></div>
+                    <div><span className="text-[#A3A3A3]">Contests:</span> <strong className="text-white ml-1">{contests.length} Configured</strong></div>
                     <div><span className="text-[#A3A3A3]">Lock Time:</span> <strong className="text-white ml-1">{lockMinutes}m before start</strong></div>
+                    <div><span className="text-[#A3A3A3]">Mode:</span> <strong className="text-[#FF8095] ml-1">{editingMatchId ? 'Update Existing' : 'New Creation'}</strong></div>
                   </div>
                 </div>
               )}
@@ -891,7 +1173,9 @@ export default function AdminCricketMatchesPage() {
                   disabled={submitting}
                   className="prime-btn-gold-3d !py-2 !px-6 text-xs font-black uppercase tracking-wider"
                 >
-                  {submitting ? 'Verifying with DB...' : 'Verify & Publish'}
+                  {submitting
+                    ? (editingMatchId ? 'Updating Database...' : 'Verifying with DB...')
+                    : (editingMatchId ? 'Update Match & Contests' : 'Verify & Publish')}
                 </button>
               )}
             </div>

@@ -651,7 +651,7 @@ export default function AdminDashboardPage() {
         <div className="space-y-6">
           <CategoryFilterTabs
             selectedCategory={selectedCategory}
-            onSelectCategory={setSelectedCategory}
+            onSelect={setSelectedCategory}
           />
 
           <div className="bg-[#0A0A0A] rounded-2xl border border-[#222222] p-5">

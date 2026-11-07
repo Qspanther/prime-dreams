@@ -768,8 +768,8 @@ router.post('/upload', upload.single('image'), (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
-    const imageUrl = `/api-backend/uploads/${req.file.filename}`;
-    res.json({ url: imageUrl });
+    const imageUrl = `/uploads/${req.file.filename}`;
+    res.json({ success: true, url: imageUrl, filename: req.file.filename });
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: 'Failed to upload image' });
@@ -1097,6 +1097,132 @@ router.post('/cricket/matches/verify-and-create', async (req, res) => {
     });
   } catch (error) {
     console.error('Match creation error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// PUT /admin/cricket/matches/:id (Edit Match, Squads & Contests)
+router.put('/cricket/matches/:id', async (req, res) => {
+  try {
+    const match = await CricketMatch.findByPk(req.params.id);
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+
+    const {
+      team_a,
+      team_b,
+      category,
+      match_date,
+      match_time,
+      venue,
+      team_a_logo,
+      team_b_logo,
+      match_poster,
+      lock_time_minutes,
+      players,
+      contests
+    } = req.body;
+
+    const title = `${team_a} vs ${team_b} — ${category} Clash`;
+
+    await match.update({
+      title,
+      team_a: team_a || match.team_a,
+      team_b: team_b || match.team_b,
+      category: category || match.category,
+      match_date: match_date || match.match_date,
+      match_time: match_time || match.match_time,
+      venue: venue !== undefined ? venue : match.venue,
+      team_a_logo: team_a_logo !== undefined ? team_a_logo : match.team_a_logo,
+      team_b_logo: team_b_logo !== undefined ? team_b_logo : match.team_b_logo,
+      match_poster: match_poster !== undefined ? match_poster : match.match_poster,
+      lock_time_minutes: lock_time_minutes !== undefined ? parseInt(lock_time_minutes, 10) : match.lock_time_minutes,
+    });
+
+    // Update players if supplied
+    if (Array.isArray(players) && players.length > 0) {
+      await CricketPlayer.destroy({ where: { match_id: match.id } });
+      for (const p of players) {
+        await CricketPlayer.create({
+          match_id: match.id,
+          team_name: p.team_name,
+          name: p.name,
+          role: p.role || 'BAT',
+          credits: parseFloat(p.credits) || 9.0,
+          points: 0,
+          stats: { runs: 0, balls: 0, wickets: 0, overs: 0 },
+        });
+      }
+    }
+
+    // Update contests if supplied
+    if (Array.isArray(contests) && contests.length > 0) {
+      const teamCount = await CricketTeam.count({ where: { match_id: match.id } });
+      if (teamCount === 0) {
+        await MatchContest.destroy({ where: { match_id: match.id } });
+        for (const c of contests) {
+          const isH2H = c.type === 'h2h';
+          await MatchContest.create({
+            match_id: match.id,
+            type: c.type || 'standard',
+            title: c.title || (isH2H ? 'Head-to-Head Custom Challenge' : `${match.team_a} vs ${match.team_b} Contest`),
+            prize_pool: isH2H ? 0 : (parseFloat(c.prize_pool) || 10000),
+            entry_fee: isH2H ? 0 : (parseFloat(c.entry_fee) || 49),
+            total_spots: isH2H ? 2 : (parseInt(c.total_spots, 10) || 250),
+            filled_spots: 0,
+            spots_per_battlefield: c.type === 'multi_battlefield' ? (parseInt(c.spots_per_battlefield, 10) || 25) : null,
+            battlefield_number: 1,
+            is_active: true,
+            status: 'open',
+          });
+        }
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Match "${match.title}" and its contests have been successfully updated!`,
+      match_id: match.id,
+    });
+  } catch (error) {
+    console.error('Match edit error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DELETE /admin/cricket/matches/:id (Delete Match and Associated Contests)
+router.delete('/cricket/matches/:id', async (req, res) => {
+  try {
+    const match = await CricketMatch.findByPk(req.params.id);
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+
+    const matchId = match.id;
+
+    // Delete TeamPlayers and Teams
+    const teams = await CricketTeam.findAll({ where: { match_id: matchId } });
+    const teamIds = teams.map(t => t.id);
+    if (teamIds.length > 0) {
+      await TeamPlayer.destroy({ where: { team_id: teamIds } });
+      await CricketTeam.destroy({ where: { match_id: matchId } });
+    }
+
+    // Delete Contests
+    await MatchContest.destroy({ where: { match_id: matchId } });
+
+    // Delete Players
+    await CricketPlayer.destroy({ where: { match_id: matchId } });
+
+    // Delete H2H Challenges
+    await H2HChallenge.destroy({ where: { match_id: matchId } }).catch(() => {});
+
+    // Delete the match itself
+    await match.destroy();
+
+    res.json({
+      success: true,
+      message: `Match "${match.title}" and all its contests have been deleted successfully.`,
+    });
+  } catch (error) {
+    console.error('Match delete error:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -5,6 +5,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 interface User {
   id: string;
   name: string;
+  username?: string;
   email: string;
   kycStatus?: string;
   role?: string;
