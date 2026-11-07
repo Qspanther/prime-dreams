@@ -208,6 +208,8 @@ export default function AdminCricketMatchesPage() {
     try {
       const res = await apiDelete(`/admin/cricket/matches/${m.id}`, token);
       if (res?.success) {
+        setMatches(prev => prev.filter(item => item.id !== m.id));
+        if (selectedMatchId === m.id) setSelectedMatchId(null);
         alert(res.message || 'Match and contests deleted successfully.');
         fetchMatches();
       } else {

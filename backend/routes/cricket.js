@@ -7,10 +7,11 @@ const {
   CricketMatch, CricketPlayer, MatchContest, 
   CricketTeam, TeamPlayer, H2HChallenge, User, Wallet 
 } = require('../db/models');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, isAdmin } = require('../middleware/auth');
 const config = require('../config');
 const { syncLiveMatch, getCachedMatchLive } = require('../services/cricbuzzService');
 const { createH2HChallenge, acceptH2HChallenge, rejectH2HChallenge, handleBattlefieldFill } = require('../services/contestService');
+const { deleteMatchPermanently } = require('../services/cricketDeleteHelper');
 
 /**
  * GET /api/matches
@@ -505,6 +506,28 @@ router.post('/h2h/:id/reject', authenticate, async (req, res) => {
     res.json({ success: true, message: result.message });
   } catch (err) {
     res.status(400).json({ error: err.message });
+  }
+});
+
+/**
+ * DELETE /api/matches/:id & /api/cricket/matches/:id
+ * Bulletproof deletion of match under any condition
+ */
+router.delete('/matches/:id', authenticate, isAdmin, async (req, res) => {
+  try {
+    const result = await deleteMatchPermanently(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/cricket/matches/:id', authenticate, isAdmin, async (req, res) => {
+  try {
+    const result = await deleteMatchPermanently(req.params.id);
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

@@ -140,6 +140,10 @@ class HotStore {
       recent_validation_errors: this.metrics.validation_logs.slice(0, 10),
     };
   }
+  cleanupMatch(matchId) {
+    this.snapshots.delete(matchId);
+    this.metrics.paused_matches.delete(matchId);
+  }
 }
 
 module.exports = new HotStore();

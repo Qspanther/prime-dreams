@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { 
   Users, Trophy, Shield, Activity, DollarSign, Radio, 
   Clock, RefreshCw, ChevronRight, Eye, Layers, Sparkles, Check, AlertCircle, Plus,
-  Calendar, MapPin, Globe, DownloadCloud, CheckCircle2, Sliders, Play, Pause
+  Calendar, MapPin, Globe, DownloadCloud, CheckCircle2, Sliders, Play, Pause, Trash2
 } from 'lucide-react';
 import { useAuth } from '../lib/auth-context';
-import { apiGet, apiPost } from '../lib/api';
+import { apiGet, apiPost, apiDelete } from '../lib/api';
 import CategoryBadge from '../components/ui/CategoryBadge';
 import CategoryFilterTabs from '../components/ui/CategoryFilterTabs';
 
@@ -90,6 +90,24 @@ export default function AdminDashboardPage() {
       console.error('Error fetching platform matches:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteMatch = async (m: any) => {
+    const ok = window.confirm(`Are you sure you want to permanently delete "${m.title}"?\n\nThis will remove the match, all associated contests, 30-player rosters, and contest records.`);
+    if (!ok) return;
+
+    try {
+      const res = await apiDelete(`/admin/cricket/matches/${m.id}`, token);
+      if (res?.success) {
+        setMatches(prev => prev.filter(item => item.id !== m.id));
+        alert(res.message || 'Match and contests deleted successfully.');
+        fetchDashboardData();
+      } else {
+        alert(res?.error || 'Failed to delete match');
+      }
+    } catch (err: any) {
+      alert(err?.message || 'Error deleting match');
     }
   };
 
@@ -714,12 +732,23 @@ export default function AdminDashboardPage() {
                           </span>
                         </td>
                         <td className="p-4 text-right">
-                          <Link
-                            href={`/match/${m.id}`}
-                            className="prime-btn-dark-3d text-xs !py-1.5 !px-3 font-black"
-                          >
-                            Inspect Contest &rarr;
-                          </Link>
+                          <div className="flex items-center justify-end gap-2">
+                            <Link
+                              href={`/match/${m.id}`}
+                              className="prime-btn-dark-3d text-xs !py-1.5 !px-3 font-black"
+                            >
+                              Inspect Contest &rarr;
+                            </Link>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMatch(m)}
+                              className="px-2.5 py-1.5 rounded-lg bg-red-950/60 hover:bg-red-900/80 border border-red-500/40 text-xs font-black text-[#FF8095] flex items-center gap-1 transition"
+                              title="Delete match and all its contests"
+                            >
+                              <Trash2 className="w-3 h-3 text-[#FF1744]" />
+                              <span>Delete</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );

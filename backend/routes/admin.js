@@ -3,9 +3,14 @@ const multer = require('multer');
 const path = require('path');
 const { authenticate, isAdmin } = require('../middleware/auth');
 const { purgeCache } = require('../middleware/cache');
-const { User, Creator, Tournament, Team, Wallet, Transaction, Notification, SystemSetting, ReferralLog, CricketMatch, CricketPlayer, MatchContest, ScoreAuditLog, PlayerPointsLog } = require('../db/models');
+const {
+  User, Creator, Tournament, Team, Wallet, Transaction, Notification,
+  SystemSetting, ReferralLog, CricketMatch, CricketPlayer, MatchContest,
+  CricketTeam, TeamPlayer, H2HChallenge, ScoreAuditLog, PlayerPointsLog
+} = require('../db/models');
 const config = require('../config');
 const sequelize = require('../db/index');
+const { deleteMatchPermanently } = require('../services/cricketDeleteHelper');
 
 const router = express.Router();
 
@@ -1189,38 +1194,22 @@ router.put('/cricket/matches/:id', async (req, res) => {
   }
 });
 
-// DELETE /admin/cricket/matches/:id (Delete Match and Associated Contests)
+// DELETE /admin/cricket/matches/:id (Delete Match and Associated Contests Permanently Under Any Condition)
 router.delete('/cricket/matches/:id', async (req, res) => {
   try {
-    const match = await CricketMatch.findByPk(req.params.id);
-    if (!match) return res.status(404).json({ error: 'Match not found' });
+    const result = await deleteMatchPermanently(req.params.id);
+    res.json(result);
+  } catch (error) {
+    console.error('Match delete error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
-    const matchId = match.id;
-
-    // Delete TeamPlayers and Teams
-    const teams = await CricketTeam.findAll({ where: { match_id: matchId } });
-    const teamIds = teams.map(t => t.id);
-    if (teamIds.length > 0) {
-      await TeamPlayer.destroy({ where: { team_id: teamIds } });
-      await CricketTeam.destroy({ where: { match_id: matchId } });
-    }
-
-    // Delete Contests
-    await MatchContest.destroy({ where: { match_id: matchId } });
-
-    // Delete Players
-    await CricketPlayer.destroy({ where: { match_id: matchId } });
-
-    // Delete H2H Challenges
-    await H2HChallenge.destroy({ where: { match_id: matchId } }).catch(() => {});
-
-    // Delete the match itself
-    await match.destroy();
-
-    res.json({
-      success: true,
-      message: `Match "${match.title}" and all its contests have been deleted successfully.`,
-    });
+// Alias: DELETE /admin/matches/:id
+router.delete('/matches/:id', async (req, res) => {
+  try {
+    const result = await deleteMatchPermanently(req.params.id);
+    res.json(result);
   } catch (error) {
     console.error('Match delete error:', error);
     res.status(500).json({ error: error.message });
