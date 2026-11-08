@@ -3,11 +3,11 @@
 import React, { useState, useEffect, use } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { 
-  Shield, Crown, Star, Check, X, ArrowLeft, 
-  AlertCircle, Users, Award, ChevronRight, Zap 
+import {
+  Shield, Crown, Star, Check, X, ArrowLeft,
+  AlertCircle, Users, Award, ChevronRight, Zap
 } from 'lucide-react';
-import { apiGet, apiPost } from '../../lib/api';
+import { apiGet, apiPost, resolveImageUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import CategoryBadge from '../../components/ui/CategoryBadge';
 
@@ -18,6 +18,7 @@ interface Player {
   role: 'WK' | 'BAT' | 'AR' | 'BOWL';
   credits: number;
   points: number;
+  photo_url?: string;
 }
 
 export default function CricketTeamBuilderPage({ params }: { params: Promise<{ tournamentId: string }> }) {
@@ -192,14 +193,44 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
 
       {/* Match & Squad Meter Card (3D Elevated) */}
       {match && (
-        <div className="prime-card-3d p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#222222]">
-            <div>
-              <h2 className="font-black text-white text-base sm:text-xl">
-                {match.team_a} vs {match.team_b}
-              </h2>
-              <p className="text-xs text-[#A3A3A3] font-bold">Max 7 players from any single team</p>
+        <div className="prime-card-3d p-5 space-y-4 relative overflow-hidden">
+          {/* Match Poster Backdrop if available */}
+          {resolveImageUrl(match.match_poster) && (
+            <div className="absolute inset-0 z-0 opacity-15 pointer-events-none overflow-hidden">
+              <img
+                src={resolveImageUrl(match.match_poster)}
+                alt="Poster"
+                className="w-full h-full object-cover scale-105"
+                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-black/60" />
             </div>
+          )}
+
+          <div className="relative z-10 flex items-center justify-between pb-3 border-b border-[#222222]">
+            <div className="flex items-center gap-3">
+              {/* Team A Logo */}
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border border-[#93C5FD] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
+                {resolveImageUrl(match.team_a_logo) ? (
+                  <img src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                ) : (match.team_a_code || match.team_a?.slice(0, 3).toUpperCase())}
+              </div>
+
+              <div>
+                <h2 className="font-black text-white text-base sm:text-xl">
+                  {match.team_a} vs {match.team_b}
+                </h2>
+                <p className="text-xs text-[#A3A3A3] font-bold">Max 7 players from any single team</p>
+              </div>
+
+              {/* Team B Logo */}
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-[#FDE68A] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
+                {resolveImageUrl(match.team_b_logo) ? (
+                  <img src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                ) : (match.team_b_code || match.team_b?.slice(0, 3).toUpperCase())}
+              </div>
+            </div>
+
             <div className="text-right">
               <span className="text-[10px] text-[#A3A3A3] uppercase font-black block">Credits Left</span>
               <span className={`text-xl font-black font-mono ${creditsLeft < 9 ? 'text-[#FF1744]' : 'text-[#FFD700] drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]'}`}>
@@ -209,7 +240,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
           </div>
 
           {/* 11 Players Count Meter */}
-          <div className="grid grid-cols-4 gap-2 pt-1 text-center text-xs">
+          <div className="relative z-10 grid grid-cols-4 gap-2 pt-1 text-center text-xs">
             <div className="p-2.5 rounded-xl bg-[#000000] border border-[#2A2A2A]">
               <span className="text-[10px] text-[#A3A3A3] font-bold block">Selected</span>
               <span className="font-black text-base text-[#FFD700] font-mono">
@@ -246,11 +277,10 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
             <button
               key={role}
               onClick={() => setSelectedRole(role)}
-              className={`p-3 rounded-xl border text-center transition cursor-pointer ${
-                isSelected
+              className={`p-3 rounded-xl border text-center transition cursor-pointer ${isSelected
                   ? 'prime-btn-3d !p-3 shadow-[0_0_15px_rgba(255,23,68,0.5)]'
                   : 'prime-btn-dark-3d !p-3 !text-[#A3A3A3]'
-              }`}
+                }`}
             >
               <div className="font-black text-sm">{role}</div>
               <div className="text-[11px] font-black mt-0.5">
@@ -277,17 +307,29 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
             <div
               key={p.id}
               onClick={() => togglePlayer(p)}
-              className={`p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all select-none border-2 ${
-                isSelected
+              className={`p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all select-none border-2 ${isSelected
                   ? 'bg-gradient-to-r from-[#FF1744]/25 to-[#000000] border-[#FF1744] shadow-[0_0_15px_rgba(255,23,68,0.4)]'
                   : 'bg-[#121212] border-[#222222] hover:border-[#FFD700]/50 hover:bg-[#181818]'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-3">
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center font-black text-xs border-2 ${
-                  isSelected ? 'bg-[#FF1744] text-white border-[#FF8095] shadow-[0_0_8px_#FF1744]' : 'bg-[#000000] text-[#FFD700] border-[#333333]'
-                }`}>
-                  {p.role}
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xs border-2 overflow-hidden shrink-0 ${isSelected ? 'bg-[#FF1744] text-white border-[#FF8095] shadow-[0_0_8px_#FF1744]' : 'bg-[#000000] text-[#FFD700] border-[#333333]'
+                  }`}>
+                  {resolveImageUrl(p.photo_url) ? (
+                    <img
+                      src={resolveImageUrl(p.photo_url)}
+                      alt={p.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).style.display = 'none';
+                        if ((e.target as HTMLImageElement).parentElement) {
+                          (e.target as HTMLImageElement).parentElement!.textContent = p.role;
+                        }
+                      }}
+                    />
+                  ) : (
+                    <span className="font-mono text-xs">{p.role}</span>
+                  )}
                 </div>
                 <div>
                   <h4 className="font-black text-sm text-white">{p.name}</h4>
@@ -301,11 +343,10 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                 <span className="font-mono font-black text-sm text-[#FFD700]">
                   {p.credits} CR
                 </span>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 font-black ${
-                  isSelected
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 font-black ${isSelected
                     ? 'bg-[#FF1744] text-white border-white shadow-[0_0_6px_#FF1744]'
                     : 'bg-[#000000] border-[#333333] text-[#A3A3A3]'
-                }`}>
+                  }`}>
                   {isSelected ? <Check className="w-4 h-4" /> : '+'}
                 </div>
               </div>
@@ -375,9 +416,18 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                     key={p.id}
                     className="p-3 rounded-xl bg-[#000000] border border-[#222222] flex items-center justify-between"
                   >
-                    <div>
-                      <p className="font-black text-sm text-white">{p.name}</p>
-                      <p className="text-xs text-[#A3A3A3] font-bold">{p.team_name} • {p.role}</p>
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-[#222222] border border-[#333333] flex items-center justify-center text-[10px] font-black text-[#FFD700] shrink-0 overflow-hidden">
+                        {resolveImageUrl(p.photo_url) ? (
+                          <img src={resolveImageUrl(p.photo_url)} alt={p.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                        ) : (
+                          <span>{p.role}</span>
+                        )}
+                      </div>
+                      <div>
+                        <p className="font-black text-sm text-white">{p.name}</p>
+                        <p className="text-xs text-[#A3A3A3] font-bold">{p.team_name} • {p.role}</p>
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -386,11 +436,10 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                           setCaptainId(p.id);
                           if (viceCaptainId === p.id) setViceCaptainId(null);
                         }}
-                        className={`w-10 h-10 rounded-xl font-black text-xs border-2 transition cursor-pointer ${
-                          isC
+                        className={`w-10 h-10 rounded-xl font-black text-xs border-2 transition cursor-pointer ${isC
                             ? 'bg-[#FF1744] text-white border-[#FF8095] shadow-[0_0_12px_#FF1744]'
                             : 'bg-[#141414] text-[#A3A3A3] border-[#333333] hover:text-[#FFD700]'
-                        }`}
+                          }`}
                         title="2x Multiplier"
                       >
                         2×
@@ -401,11 +450,10 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                           setViceCaptainId(p.id);
                           if (captainId === p.id) setCaptainId(null);
                         }}
-                        className={`w-10 h-10 rounded-xl font-black text-xs border-2 transition cursor-pointer ${
-                          isVC
+                        className={`w-10 h-10 rounded-xl font-black text-xs border-2 transition cursor-pointer ${isVC
                             ? 'bg-[#FFD700] text-black border-white shadow-[0_0_12px_#FFD700]'
                             : 'bg-[#141414] text-[#A3A3A3] border-[#333333] hover:text-[#FFD700]'
-                        }`}
+                          }`}
                         title="1.5x Multiplier"
                       >
                         1.5×

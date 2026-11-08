@@ -59,12 +59,12 @@ export default function TopBar() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-[#222222] bg-[#000000]/95 backdrop-blur-xl px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-4 shadow-[0_4px_25px_rgba(0,0,0,0.9)]">
+      <header className="sticky top-0 z-30 border-b-2 border-[#CBD5E1] bg-white/90 backdrop-blur-xl px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-4 shadow-[0_4px_20px_rgba(30,58,138,0.06)] text-[#0F172A]">
         {/* Left: Logo & Mobile Toggle */}
         <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
           <button
             onClick={() => setMobileDrawerOpen(true)}
-            className="lg:hidden p-2 rounded-xl text-[#A3A3A3] hover:bg-[#141414] hover:text-[#FFD700] border border-transparent hover:border-[#333333] transition"
+            className="lg:hidden p-2 rounded-xl text-[#475569] hover:bg-[#E0F2FE] hover:text-[#0284C7] border border-[#CBD5E1] transition shadow-sm"
             aria-label="Open Navigation Drawer"
           >
             <Menu className="w-5 h-5" />
@@ -78,10 +78,10 @@ export default function TopBar() {
           {liveCount > 0 && (
             <button
               onClick={() => setShowLiveSwitcher(true)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-[#FF1744]/25 to-[#FF1744]/10 border-2 border-[#FF1744] text-xs font-black text-[#FFD700] hover:scale-105 shadow-[0_0_15px_rgba(255,23,68,0.5)] transition cursor-pointer"
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-red-50 to-red-100 border-2 border-[#EF4444] text-xs font-black text-[#B91C1C] hover:scale-105 shadow-[0_4px_12px_rgba(239,68,68,0.25)] transition cursor-pointer"
               title="Click to switch live matches"
             >
-              <Radio className="w-3.5 h-3.5 text-[#FF1744] animate-pulse" />
+              <Radio className="w-3.5 h-3.5 text-[#EF4444] animate-pulse" />
               <span className="tracking-wider">{liveCount} {liveCount === 1 ? 'Match' : 'Matches'} LIVE</span>
             </button>
           )}
@@ -92,9 +92,9 @@ export default function TopBar() {
           {/* 3D Gold Wallet Balance Pill */}
           <Link
             href="/wallet"
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-gradient-to-b from-[#1C1808] to-[#0A0903] border border-[#FFD700]/50 hover:border-[#FFD700] text-xs sm:text-sm font-black text-[#FFD700] shadow-[0_0_12px_rgba(255,215,0,0.25)] hover:shadow-[0_0_20px_rgba(255,215,0,0.4)] transition"
+            className="prime-btn-gold-3d !py-1.5 !px-3.5 !text-xs font-black"
           >
-            <Wallet className="w-4 h-4 text-[#FF1744]" />
+            <Wallet className="w-4 h-4 text-[#92400E]" />
             <span className="font-mono text-sm">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
           </Link>
 
@@ -102,31 +102,31 @@ export default function TopBar() {
           <div className="relative">
             <button
               onClick={() => setShowNotif(!showNotif)}
-              className="relative p-2.5 rounded-xl bg-[#141414] border border-[#262626] text-[#A3A3A3] hover:text-[#FFD700] hover:border-[#FFD700]/40 transition shadow-md"
+              className="relative p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#475569] hover:text-[#2563EB] hover:border-[#3B82F6] transition shadow-sm"
               aria-label="Notifications"
             >
               <Bell className="w-4 h-4" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#FF1744] text-white text-[10px] font-black flex items-center justify-center shadow-[0_0_8px_#FF1744]">
+                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#EF4444] text-white text-[10px] font-black flex items-center justify-center shadow-[0_0_8px_#EF4444]">
                   {unreadCount}
                 </span>
               )}
             </button>
 
             {showNotif && (
-              <div className="absolute right-0 mt-2 w-80 prime-card-3d p-4 z-50 animate-in fade-in zoom-in-95">
-                <div className="flex items-center justify-between pb-2 border-b border-[#222222] mb-3">
-                  <span className="font-black text-xs uppercase text-[#FFD700] tracking-wider">Notifications</span>
-                  <span className="text-[10px] text-[#A3A3A3]">{notifications.length} total</span>
+              <div className="absolute right-0 mt-2 w-80 prime-card-3d p-4 z-50 animate-in fade-in zoom-in-95 border-2 border-[#94A3B8]">
+                <div className="flex items-center justify-between pb-2 border-b border-[#CBD5E1] mb-3">
+                  <span className="font-black text-xs uppercase text-[#1E293B] tracking-wider">Notifications</span>
+                  <span className="text-[10px] text-[#64748B]">{notifications.length} total</span>
                 </div>
                 <div className="max-h-60 overflow-y-auto space-y-2">
                   {notifications.length === 0 ? (
-                    <p className="text-xs text-center text-[#A3A3A3] py-4">No notifications yet</p>
+                    <p className="text-xs text-center text-[#64748B] py-4">No notifications yet</p>
                   ) : (
                     notifications.slice(0, 10).map((n) => (
-                      <div key={n.id} className="p-2.5 rounded-lg bg-[#000000] border border-[#222222] text-xs text-white">
-                        <p className="font-bold text-white text-[11px]">{n.title}</p>
-                        <p className="text-[10px] text-[#A3A3A3] mt-0.5">{n.message}</p>
+                      <div key={n.id} className="p-2.5 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] text-xs text-[#0F172A]">
+                        <p className="font-bold text-[#0F172A] text-[11px]">{n.title}</p>
+                        <p className="text-[10px] text-[#475569] mt-0.5">{n.message}</p>
                       </div>
                     ))
                   )}
@@ -144,17 +144,17 @@ export default function TopBar() {
                   className="prime-btn-3d !py-1.5 !px-3 !text-xs"
                   title="Open Admin Console"
                 >
-                  <Shield className="w-3.5 h-3.5 text-[#FFD700]" />
+                  <Shield className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Admin Console</span>
                   <span className="sm:hidden">Admin</span>
                 </Link>
               )}
-              <span className="hidden sm:inline text-xs font-black text-white px-2 py-1 rounded-lg bg-[#141414] border border-[#262626]">
+              <span className="hidden sm:inline text-xs font-black text-[#0369A1] px-2.5 py-1 rounded-xl bg-[#E0F2FE] border border-[#BAE6FD]">
                 @{user.username || user.name?.split(' ')[0]}
               </span>
               <button
                 onClick={logout}
-                className="p-2.5 rounded-xl bg-[#141414] border border-[#262626] text-[#A3A3A3] hover:text-[#FF1744] hover:border-[#FF1744]/40 transition"
+                className="p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#64748B] hover:text-[#EF4444] hover:border-[#EF4444] transition shadow-sm"
                 title="Logout"
               >
                 <LogOut className="w-4 h-4" />

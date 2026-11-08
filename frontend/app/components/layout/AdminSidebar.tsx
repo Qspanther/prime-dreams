@@ -20,11 +20,11 @@ export default function AdminSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex bg-[#000000] border-r border-[#222222] fixed left-0 top-0 h-full w-[240px] z-40 flex-col py-6 shadow-[4px_0_25px_rgba(0,0,0,0.9)]">
+    <aside className="hidden md:flex bg-white/90 backdrop-blur-xl border-r-2 border-[#CBD5E1] fixed left-0 top-0 h-full w-[240px] z-40 flex-col py-6 shadow-[4px_0_20px_rgba(30,58,138,0.06)] text-[#0F172A]">
       {/* Admin Branding */}
       <div className="px-5 mb-8">
         <PrimeLogo size="sm" />
-        <p className="text-[10px] text-[#FFD700] font-black tracking-widest uppercase mt-2">Admin Command Deck</p>
+        <p className="text-[10px] text-[#2563EB] font-black tracking-widest uppercase mt-2">Admin Command Deck</p>
       </div>
 
       {/* Navigation */}
@@ -37,11 +37,11 @@ export default function AdminSidebar() {
             <Link key={item.href} href={item.href}>
               <div
                 className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl transition-all cursor-pointer ${isActive
-                    ? 'prime-btn-3d !justify-start !py-2.5 !px-3.5 shadow-[0_0_15px_rgba(255,23,68,0.5)]'
-                    : 'text-[#A3A3A3] hover:text-[#FFD700] hover:bg-[#141414] border border-transparent hover:border-[#FFD700]/30'
+                    ? 'prime-btn-3d !justify-start !py-2.5 !px-3.5'
+                    : 'text-[#475569] hover:text-[#0284C7] hover:bg-[#E0F2FE] border border-transparent hover:border-[#BAE6FD]'
                   }`}
               >
-                <Icon size={18} className={isActive ? 'text-white' : 'text-[#FF1744]'} />
+                <Icon size={18} className={isActive ? 'text-white' : 'text-[#2563EB]'} />
                 <span className="text-xs font-black tracking-wide">{item.label}</span>
               </div>
             </Link>
@@ -57,7 +57,7 @@ export default function AdminSidebar() {
             <span>Switch to Player App</span>
           </div>
         </Link>
-        <p className="px-3 text-[10px] text-[#A3A3A3] tracking-widest text-center font-mono font-bold">PRIME DREEMS • v2.1</p>
+        <p className="px-3 text-[10px] text-[#64748B] tracking-widest text-center font-mono font-bold">PRIME DREEMS • v2.1</p>
       </div>
     </aside>
   );

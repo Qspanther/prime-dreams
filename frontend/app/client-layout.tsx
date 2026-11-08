@@ -41,14 +41,14 @@ function AppShell({ children }: { children: ReactNode }) {
 
   if (loading && !isPublicPage) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#000000]">
-        <div className="w-12 h-12 border-4 border-[#FF1744] border-t-transparent rounded-full animate-spin shadow-[0_0_20px_#FF1744]" />
+      <div className="flex items-center justify-center min-h-screen bg-[#F0F4F9]">
+        <div className="w-12 h-12 border-4 border-[#2563EB] border-t-transparent rounded-full animate-spin shadow-[0_0_20px_rgba(37,99,235,0.4)]" />
       </div>
     );
   }
 
   return (
-    <div className="relative min-h-screen bg-[#000000] text-[#FFFFFF] overflow-x-hidden font-['Montserrat',sans-serif]">
+    <div className="relative min-h-screen bg-[#F0F4F9] text-[#0F172A] overflow-x-hidden font-['Montserrat',sans-serif]">
       {isAuthPage ? (
         <main className="relative z-10 min-h-screen flex items-center justify-center p-4">
           {children}

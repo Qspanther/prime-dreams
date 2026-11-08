@@ -7,7 +7,7 @@ import {
   Trophy, Swords, Users, Clock, Shield, Radio,
   ArrowLeft, Search, Check, AlertCircle, Zap, Calendar, MapPin
 } from 'lucide-react';
-import { apiGet, apiPost } from '../../lib/api';
+import { apiGet, apiPost, resolveImageUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import CategoryBadge from '../../components/ui/CategoryBadge';
 
@@ -237,12 +237,12 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
   });
 
   return (
-    <div className="px-3 sm:px-6 py-6 max-w-6xl mx-auto w-full space-y-6 bg-[#000000] text-white">
+    <div className="px-3 sm:px-6 py-6 max-w-6xl mx-auto w-full space-y-6 bg-transparent text-[#0F172A]">
       {/* Top Breadcrumb */}
       <div>
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-xs font-black text-[#D4D4D4] hover:text-[#FFD700] transition group"
+          className="inline-flex items-center gap-2 text-xs font-black text-[#475569] hover:text-[#2563EB] transition group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
           <span>Back to All Matches</span>
@@ -250,8 +250,21 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
       </div>
 
       {/* Main Match Header 3D Card */}
-      <div className="prime-card-3d p-6 relative overflow-hidden space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#222222] pb-3">
+      <div className="prime-card-3d p-6 relative overflow-hidden space-y-4 border-2 border-[#94A3B8] bg-white/95">
+        {/* Match Poster Backdrop if available */}
+        {resolveImageUrl(match.match_poster) && (
+          <div className="absolute inset-0 z-0 opacity-15 pointer-events-none overflow-hidden">
+            <img
+              src={resolveImageUrl(match.match_poster)}
+              alt="Match Poster"
+              className="w-full h-full object-cover scale-105"
+              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-white/70" />
+          </div>
+        )}
+
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] pb-3">
           <CategoryBadge category={match.category} size="md" />
 
           {isLive ? (
@@ -260,16 +273,16 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               LIVE MATCH INNINGS
             </span>
           ) : match.is_locked ? (
-            <span className="px-3 py-1 rounded-full bg-red-950/80 text-red-300 border border-red-600/50 text-xs font-black">
+            <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 border border-red-300 text-xs font-black">
               🔒 CONTESTS LOCKED
             </span>
           ) : (
             <div className="flex items-center gap-2">
-              <span className="text-xs font-black text-[#FFD700] flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#141414] border border-[#FFD700]/40">
-                <Clock className="w-3.5 h-3.5 text-[#FF1744]" />
+              <span className="text-xs font-black text-[#1E3A8A] flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EFF6FF] border border-[#93C5FD]">
+                <Clock className="w-3.5 h-3.5 text-[#2563EB]" />
                 📅 {match.match_date} • ⏰ {match.match_time}
               </span>
-              <span className="bg-[#141414] text-[#D4D4D4] border border-[#262626] px-2.5 py-1 rounded-full text-xs font-black">
+              <span className="bg-[#F1F5F9] text-[#334155] border border-[#CBD5E1] px-2.5 py-1 rounded-full text-xs font-black">
                 ⚡ UPCOMING
               </span>
             </div>
@@ -277,18 +290,20 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         </div>
 
         {/* Teams Matchup Ribbon */}
-        <div className="grid grid-cols-5 items-center gap-3 py-3">
+        <div className="relative z-10 grid grid-cols-5 items-center gap-3 py-3">
           {/* Team A */}
           <div className="col-span-2 flex items-center gap-3 sm:gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-b from-[#FF1744] to-[#800018] border-2 border-[#FF8095] flex items-center justify-center font-black text-lg text-white shadow-[0_0_15px_rgba(255,23,68,0.5)] shrink-0">
-              {match.team_a_code || match.team_a?.slice(0, 3).toUpperCase()}
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border-2 border-[#93C5FD] flex items-center justify-center font-black text-lg text-white shadow-[0_4px_12px_rgba(37,99,235,0.3)] shrink-0 overflow-hidden">
+              {resolveImageUrl(match.team_a_logo) ? (
+                <img src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+              ) : (match.team_a_code || match.team_a?.slice(0, 3).toUpperCase())}
             </div>
             <div>
-              <h2 className="font-black text-base sm:text-2xl text-white">{match.team_a}</h2>
+              <h2 className="font-black text-base sm:text-2xl text-[#0F172A]">{match.team_a}</h2>
               {scoreSummary?.team_a && (
-                <p className="text-lg font-mono font-black text-[#FFD700]">
+                <p className="text-lg font-mono font-black text-[#2563EB]">
                   {scoreSummary.team_a.runs}/{scoreSummary.team_a.wickets}
-                  <span className="text-xs font-normal text-[#A3A3A3] ml-1.5">
+                  <span className="text-xs font-normal text-[#64748B] ml-1.5">
                     ({scoreSummary.team_a.overs} ov)
                   </span>
                 </p>
@@ -298,7 +313,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
 
           {/* VS Divider */}
           <div className="col-span-1 text-center">
-            <span className="inline-block px-3 py-1 rounded-xl bg-gradient-to-b from-[#FF1744] to-[#800018] border border-[#FF8095] text-white font-black text-sm italic shadow-[0_0_10px_#FF1744]">
+            <span className="inline-block px-3 py-1 rounded-xl bg-gradient-to-b from-[#0284C7] to-[#0369A1] border border-[#BAE6FD] text-white font-black text-sm italic shadow-md">
               VS
             </span>
           </div>
@@ -306,35 +321,37 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
           {/* Team B */}
           <div className="col-span-2 flex items-center justify-end gap-3 sm:gap-4 text-right">
             <div>
-              <h2 className="font-black text-base sm:text-2xl text-white">{match.team_b}</h2>
+              <h2 className="font-black text-base sm:text-2xl text-[#0F172A]">{match.team_b}</h2>
               {scoreSummary?.team_b ? (
-                <p className="text-lg font-mono font-black text-[#FFD700]">
+                <p className="text-lg font-mono font-black text-[#D97706]">
                   {scoreSummary.team_b.runs}/{scoreSummary.team_b.wickets}
-                  <span className="text-xs font-normal text-[#A3A3A3] ml-1.5">
+                  <span className="text-xs font-normal text-[#64748B] ml-1.5">
                     ({scoreSummary.team_b.overs} ov)
                   </span>
                 </p>
               ) : isLive ? (
-                <p className="text-xs font-mono text-[#A3A3A3]">Yet to bat</p>
+                <p className="text-xs font-mono text-[#64748B]">Yet to bat</p>
               ) : null}
             </div>
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-b from-[#FFD700] to-[#997A00] border-2 border-[#FFF9C4] flex items-center justify-center font-black text-lg text-black shadow-[0_0_15px_rgba(255,215,0,0.5)] shrink-0">
-              {match.team_b_code || match.team_b?.slice(0, 3).toUpperCase()}
+            <div className="w-14 h-14 rounded-2xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border-2 border-[#FDE68A] flex items-center justify-center font-black text-lg text-white shadow-[0_4px_12px_rgba(245,158,11,0.3)] shrink-0 overflow-hidden">
+              {resolveImageUrl(match.team_b_logo) ? (
+                <img src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+              ) : (match.team_b_code || match.team_b?.slice(0, 3).toUpperCase())}
             </div>
           </div>
         </div>
 
         {/* Schedule & Venue Meta */}
-        <div className="pt-3 border-t border-[#222222] flex flex-wrap items-center justify-between gap-3 text-xs text-[#A3A3A3] font-bold">
-          <span className="flex items-center gap-1.5 text-white">
-            <MapPin className="w-3.5 h-3.5 text-[#FF1744]" />
+        <div className="pt-3 border-t border-[#E2E8F0] flex flex-wrap items-center justify-between gap-3 text-xs text-[#64748B] font-bold">
+          <span className="flex items-center gap-1.5 text-[#0F172A]">
+            <MapPin className="w-3.5 h-3.5 text-[#2563EB]" />
             <span>{match.venue || 'International Cricket Stadium'}</span>
           </span>
-          <span className="flex items-center gap-1.5 text-[#FFD700]">
-            <Calendar className="w-3.5 h-3.5 text-[#FFD700]" />
+          <span className="flex items-center gap-1.5 text-[#2563EB]">
+            <Calendar className="w-3.5 h-3.5 text-[#2563EB]" />
             <span>Scheduled: {match.match_date} at {match.match_time}</span>
           </span>
-          <span>
+          <span className="text-[#64748B]">
             Lock Time: {match.lock_time_minutes || 15} mins before match start
           </span>
         </div>
@@ -344,13 +361,13 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
       {/* 🔴 LIVE MATCH TELEMETRY DECK (Kaun khel rha h, kaun bowler h, har ball ka status) */}
       {/* ================================================================= */}
       {isLive && (
-        <div className="prime-card-3d p-5 space-y-4 border-2 border-[#FF1744]/40">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#222222] pb-3">
-            <h3 className="text-xs font-black text-[#FFD700] uppercase tracking-wider flex items-center gap-2">
-              <Radio className="w-4 h-4 text-[#FF1744] animate-pulse" />
+        <div className="prime-card-3d p-5 space-y-4 border-2 border-[#38BDF8] bg-white/95">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2E8F0] pb-3">
+            <h3 className="text-xs font-black text-[#1E3A8A] uppercase tracking-wider flex items-center gap-2">
+              <Radio className="w-4 h-4 text-[#EF4444] animate-pulse" />
               <span>In-Play Live Cricket Telemetry Stream</span>
             </h3>
-            <span className="neon-badge-gold px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold">
+            <span className="bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE] px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold">
               ⚡ Cricbuzz Auto-Syncing (10s)
             </span>
           </div>
@@ -358,47 +375,47 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
           {/* Batsmen on Crease & Active Bowler */}
           <div className="grid sm:grid-cols-2 gap-4">
             {/* Batting Crease: Kaun khel rha h */}
-            <div className="p-4 rounded-xl bg-[#000000] border-2 border-[#FFD700]/40 space-y-3">
-              <div className="flex justify-between items-center border-b border-[#222222] pb-2">
-                <span className="text-xs font-black text-[#FFD700] uppercase">Batting Crease</span>
-                <span className="text-[10px] text-[#A3A3A3] font-bold">Runs (Balls) • 4s / 6s • SR</span>
+            <div className="p-4 rounded-xl bg-white border-2 border-[#93C5FD] shadow-sm space-y-3">
+              <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-2">
+                <span className="text-xs font-black text-[#1E3A8A] uppercase">Batting Crease</span>
+                <span className="text-[10px] text-[#64748B] font-bold">Runs (Balls) • 4s / 6s • SR</span>
               </div>
 
               {/* Striker */}
-              <div className="p-2.5 rounded-lg bg-[#0D0D0D] border border-[#222222] flex items-center justify-between">
+              <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-between">
                 <div>
-                  <p className="font-black text-white text-sm flex items-center gap-1">
+                  <p className="font-black text-[#0F172A] text-sm flex items-center gap-1">
                     🏏 {liveData.current_striker?.name || 'Active Striker'} *
                   </p>
-                  <span className="text-[11px] text-[#A3A3A3] font-bold">
+                  <span className="text-[11px] text-[#64748B] font-bold">
                     4s: {liveData.current_striker?.fours || 5} • 6s: {liveData.current_striker?.sixes || 2}
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="font-black text-base text-[#FFD700] font-mono">
+                  <span className="font-black text-base text-[#2563EB] font-mono">
                     {liveData.current_striker?.runs || 48} ({liveData.current_striker?.balls || 32})
                   </span>
-                  <span className="text-[10px] text-[#A3A3A3] block font-mono">
+                  <span className="text-[10px] text-[#64748B] block font-mono">
                     SR: {liveData.current_striker?.strike_rate || '150.0'}
                   </span>
                 </div>
               </div>
 
               {/* Non-Striker */}
-              <div className="p-2.5 rounded-lg bg-[#0D0D0D] border border-[#222222] flex items-center justify-between">
+              <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-between">
                 <div>
-                  <p className="font-bold text-white text-xs">
+                  <p className="font-bold text-[#0F172A] text-xs">
                     {liveData.non_striker?.name || 'Non-Striker'}
                   </p>
-                  <span className="text-[10px] text-[#A3A3A3]">
+                  <span className="text-[10px] text-[#64748B]">
                     4s: {liveData.non_striker?.fours || 2} • 6s: {liveData.non_striker?.sixes || 0}
                   </span>
                 </div>
                 <div className="text-right">
-                  <span className="font-mono text-sm text-white font-bold">
+                  <span className="font-mono text-sm text-[#0F172A] font-bold">
                     {liveData.non_striker?.runs || 24} ({liveData.non_striker?.balls || 18})
                   </span>
-                  <span className="text-[10px] text-[#A3A3A3] block font-mono">
+                  <span className="text-[10px] text-[#64748B] block font-mono">
                     SR: {liveData.non_striker?.strike_rate || '133.3'}
                   </span>
                 </div>
@@ -406,34 +423,34 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
             </div>
 
             {/* Current Bowler: Kaun bowling kar rha h */}
-            <div className="p-4 rounded-xl bg-[#000000] border-2 border-[#FF1744]/40 space-y-3">
-              <div className="flex justify-between items-center border-b border-[#222222] pb-2">
-                <span className="text-xs font-black text-[#FF1744] uppercase">Active Bowler</span>
-                <span className="text-[10px] text-[#A3A3A3] font-bold">Wickets / Runs Conceded</span>
+            <div className="p-4 rounded-xl bg-white border-2 border-[#FCA5A5] shadow-sm space-y-3">
+              <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-2">
+                <span className="text-xs font-black text-[#DC2626] uppercase">Active Bowler</span>
+                <span className="text-[10px] text-[#64748B] font-bold">Wickets / Runs Conceded</span>
               </div>
 
-              <div className="p-3 rounded-lg bg-[#0D0D0D] border border-[#222222] space-y-2">
+              <div className="p-3 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1] space-y-2">
                 <div className="flex items-center justify-between">
-                  <p className="font-black text-white text-sm flex items-center gap-1.5">
+                  <p className="font-black text-[#0F172A] text-sm flex items-center gap-1.5">
                     ⚾ {liveData.current_bowler?.name || 'Active Bowler'}
                   </p>
-                  <span className="font-mono font-black text-base text-[#FF1744]">
+                  <span className="font-mono font-black text-base text-[#DC2626]">
                     {liveData.current_bowler?.wickets || 2}/{liveData.current_bowler?.runs || 28}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                  <div className="p-1.5 rounded-lg bg-[#000000] border border-[#222222]">
-                    <span className="text-[10px] text-[#A3A3A3] block font-bold">Overs</span>
-                    <strong className="text-white font-mono">{liveData.current_bowler?.overs || '3.4'}</strong>
+                  <div className="p-1.5 rounded-lg bg-white border border-[#CBD5E1]">
+                    <span className="text-[10px] text-[#64748B] block font-bold">Overs</span>
+                    <strong className="text-[#0F172A] font-mono">{liveData.current_bowler?.overs || '3.4'}</strong>
                   </div>
-                  <div className="p-1.5 rounded-lg bg-[#000000] border border-[#222222]">
-                    <span className="text-[10px] text-[#A3A3A3] block font-bold">Maidens</span>
-                    <strong className="text-white font-mono">{liveData.current_bowler?.maidens || 0}</strong>
+                  <div className="p-1.5 rounded-lg bg-white border border-[#CBD5E1]">
+                    <span className="text-[10px] text-[#64748B] block font-bold">Maidens</span>
+                    <strong className="text-[#0F172A] font-mono">{liveData.current_bowler?.maidens || 0}</strong>
                   </div>
-                  <div className="p-1.5 rounded-lg bg-[#000000] border border-[#222222]">
-                    <span className="text-[10px] text-[#A3A3A3] block font-bold">Economy</span>
-                    <strong className="text-white font-mono">{liveData.current_bowler?.economy || '7.63'}</strong>
+                  <div className="p-1.5 rounded-lg bg-white border border-[#CBD5E1]">
+                    <span className="text-[10px] text-[#64748B] block font-bold">Economy</span>
+                    <strong className="text-[#0F172A] font-mono">{liveData.current_bowler?.economy || '7.63'}</strong>
                   </div>
                 </div>
               </div>
@@ -441,18 +458,18 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
           </div>
 
           {/* Current Over Tokens: Kis ball pe kitne run bane */}
-          <div className="p-3 rounded-xl bg-[#000000] border border-[#222222] flex flex-wrap items-center gap-3">
-            <span className="text-xs font-black text-[#A3A3A3] uppercase">This Over Balls:</span>
+          <div className="p-3 rounded-xl bg-white border border-[#CBD5E1] flex flex-wrap items-center gap-3">
+            <span className="text-xs font-black text-[#64748B] uppercase">This Over Balls:</span>
             <div className="flex items-center gap-2">
               {(liveData.recent_balls || ['1', '0', '4', '2', 'W', '1']).map((token: string, idx: number) => (
                 <span
                   key={idx}
                   className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-xs ${
                     token === 'W'
-                      ? 'bg-[#FF1744] text-white shadow-[0_0_10px_#FF1744]'
+                      ? 'bg-[#EF4444] text-white shadow-sm'
                       : token === '4' || token === '6'
-                      ? 'bg-[#FFD700] text-black shadow-[0_0_10px_#FFD700]'
-                      : 'bg-[#141414] border border-[#333333] text-white'
+                      ? 'bg-[#F59E0B] text-white shadow-sm'
+                      : 'bg-[#F1F5F9] border border-[#CBD5E1] text-[#0F172A]'
                   }`}
                 >
                   {token}
@@ -460,14 +477,14 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               ))}
             </div>
             <div className="ml-auto flex items-center gap-4 text-xs font-mono font-bold">
-              <span className="text-[#FFD700]">CRR: {liveData.current_rate || '8.76'}</span>
-              <span className="text-[#A3A3A3]">RRR: {liveData.required_rate || '8.40'}</span>
+              <span className="text-[#2563EB]">CRR: {liveData.current_rate || '8.76'}</span>
+              <span className="text-[#64748B]">RRR: {liveData.required_rate || '8.40'}</span>
             </div>
           </div>
 
           {/* Live Commentary Feed: Kya hua h iss ball pe */}
-          <div className="p-4 rounded-xl bg-[#000000] border border-[#222222] space-y-2">
-            <h4 className="text-xs font-black text-[#FFD700] uppercase flex items-center gap-1.5">
+          <div className="p-4 rounded-xl bg-white border border-[#CBD5E1] space-y-2">
+            <h4 className="text-xs font-black text-[#1E3A8A] uppercase flex items-center gap-1.5">
               <span>Ball-by-Ball Live Commentary</span>
             </h4>
             <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 text-xs">
@@ -477,8 +494,8 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                 'Dot ball, tight length on the off-stump.',
                 '🔴 WICKET! Caught at deep square leg! Massive breakthrough!',
               ]).map((comm: string, i: number) => (
-                <div key={i} className="p-2 rounded-lg bg-[#0A0A0A] border border-[#222222] font-medium text-white flex items-start gap-2">
-                  <span className="text-[#FFD700] font-black shrink-0">#{i + 1}</span>
+                <div key={i} className="p-2 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] font-medium text-[#0F172A] flex items-start gap-2">
+                  <span className="text-[#2563EB] font-black shrink-0">#{i + 1}</span>
                   <span>{comm}</span>
                 </div>
               ))}
@@ -488,12 +505,12 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
       )}
 
       {/* Main Section Navigation: Contests vs Squad Rosters (15 + 15 Players) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#222222] pb-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] pb-3">
         <div className="flex items-center gap-2">
           <button
             onClick={() => setActiveView('contests')}
             className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-              activeView === 'contests' ? 'prime-btn-3d !py-2 !px-4' : 'prime-btn-dark-3d !py-2 !px-4 !text-[#A3A3A3]'
+              activeView === 'contests' ? 'prime-btn-3d !py-2 !px-4' : 'prime-btn-dark-3d !py-2 !px-4 !text-[#64748B]'
             }`}
           >
             Contests &amp; Pools ({(match.contests || []).length})
@@ -502,7 +519,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
           <button
             onClick={() => setActiveView('squads')}
             className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-              activeView === 'squads' ? 'prime-btn-gold-3d !py-2 !px-4' : 'prime-btn-dark-3d !py-2 !px-4 !text-[#A3A3A3]'
+              activeView === 'squads' ? 'prime-btn-gold-3d !py-2 !px-4' : 'prime-btn-dark-3d !py-2 !px-4 !text-[#64748B]'
             }`}
           >
             <Users className="w-3.5 h-3.5 inline mr-1.5" />
@@ -516,7 +533,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
             onClick={() => setShowH2HModal(true)}
             className="prime-btn-dark-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"
           >
-            <Swords className="w-4 h-4 text-[#FFD700]" />
+            <Swords className="w-4 h-4 text-[#D97706]" />
             <span>H2H Duel</span>
           </button>
           {!match.is_locked && (
@@ -545,10 +562,10 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               <button
                 key={tab.id}
                 onClick={() => setSelectedContestTab(tab.id as any)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider ${
+                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition ${
                   selectedContestTab === tab.id
-                    ? 'bg-[#FF1744] text-white shadow-md'
-                    : 'bg-[#111111] text-[#A3A3A3] hover:text-white'
+                    ? 'bg-[#2563EB] text-white shadow-sm'
+                    : 'bg-white text-[#475569] border border-[#CBD5E1] hover:bg-[#F1F5F9]'
                 }`}
               >
                 {tab.label}
@@ -562,36 +579,36 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               const percentFilled = Math.min(100, Math.round(((c.filled_spots || 0) / (c.total_spots || 100)) * 100));
 
               return (
-                <div key={c.id} className="prime-card-3d p-5 flex flex-col justify-between">
+                <div key={c.id} className="contest-card-3d p-5 flex flex-col justify-between">
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <CategoryBadge category={match.category} size="xs" />
-                      <span className="font-mono font-black text-base text-[#FFD700]">
+                      <span className="font-mono font-black text-sm text-[#1D4ED8] bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-[#BFDBFE]">
                         ₹{c.entry_fee}
                       </span>
                     </div>
 
-                    <h4 className="font-black text-white text-base mb-1">{c.title}</h4>
-                    <p className="text-xs text-[#A3A3A3] font-bold">
-                      Prize Pool: <span className="font-black text-[#FFD700] font-mono">₹{c.prize_pool.toLocaleString('en-IN')}</span>
+                    <h4 className="font-black text-[#0F172A] text-base mb-1">{c.title}</h4>
+                    <p className="text-xs text-[#64748B] font-bold">
+                      Prize Pool: <span className="font-black text-[#D97706] font-mono">₹{c.prize_pool.toLocaleString('en-IN')}</span>
                     </p>
 
                     <div className="mt-4 space-y-1.5">
                       <div className="flex items-center justify-between text-xs font-bold">
-                        <span className="text-[#FF1744] font-black">{spotsLeft} spots left</span>
-                        <span className="text-[#A3A3A3]">{c.total_spots} total</span>
+                        <span className="text-[#2563EB] font-black">{spotsLeft} spots left</span>
+                        <span className="text-[#64748B]">{c.total_spots} total</span>
                       </div>
-                      <div className="h-2 w-full bg-[#000000] rounded-full overflow-hidden border border-[#262626]">
+                      <div className="h-2 w-full bg-[#E2E8F0] rounded-full overflow-hidden border border-[#CBD5E1]">
                         <div
-                          className="h-full bg-gradient-to-r from-[#FF1744] to-[#FFD700] rounded-full transition-all"
+                          className="h-full bg-gradient-to-r from-[#2563EB] via-[#38BDF8] to-[#0284C7] rounded-full transition-all"
                           style={{ width: `${percentFilled}%` }}
                         />
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-5 pt-3 border-t border-[#222222] flex items-center justify-between">
-                    <span className="text-[11px] text-[#A3A3A3] font-bold">
+                  <div className="mt-5 pt-3 border-t border-[#E2E8F0] flex items-center justify-between">
+                    <span className="text-[11px] text-[#64748B] font-bold">
                       {c.type === 'multi_battlefield' ? 'Auto-clones' : 'Guaranteed'}
                     </span>
                     <Link
@@ -613,40 +630,47 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
       {/* ================================================================= */}
       {activeView === 'squads' && (
         <div className="space-y-5">
-          <div className="p-4 rounded-xl bg-[#0A0A0A] border border-[#222222] flex flex-wrap items-center justify-between gap-3">
+          <div className="p-4 rounded-xl bg-white border-2 border-[#CBD5E1] shadow-sm flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h3 className="font-black text-white text-sm uppercase">
+              <h3 className="font-black text-[#0F172A] text-sm uppercase">
                 Complete Match Squad Pool (30 Players Total)
               </h3>
-              <p className="text-xs text-[#A3A3A3] font-bold mt-0.5">
+              <p className="text-xs text-[#64748B] font-bold mt-0.5">
                 Exact 15 players for {match.team_a} and 15 players for {match.team_b}
               </p>
             </div>
-            <span className="neon-badge-gold px-3 py-1 rounded-full text-xs font-black">
+            <span className="bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE] px-3 py-1 rounded-full text-xs font-black">
               15 + 15 Roster in Database
             </span>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Team A 15 Players */}
-            <div className="prime-card-3d p-5 space-y-3 border-2 border-[#FF1744]/40">
-              <div className="flex justify-between items-center pb-2 border-b border-[#222222]">
-                <h4 className="font-black text-sm text-[#FF8095] uppercase">{match.team_a} Squad</h4>
-                <span className="text-xs font-mono font-bold text-white">{teamAPlayers.length || 15} Players</span>
+            <div className="prime-card-3d p-5 space-y-3 border-2 border-[#93C5FD] bg-white">
+              <div className="flex justify-between items-center pb-2 border-b border-[#E2E8F0]">
+                <h4 className="font-black text-sm text-[#1D4ED8] uppercase">{match.team_a} Squad</h4>
+                <span className="text-xs font-mono font-bold text-[#64748B]">{teamAPlayers.length || 15} Players</span>
               </div>
 
               <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
                 {(teamAPlayers.length > 0 ? teamAPlayers : Array.from({ length: 15 }, (_, i) => ({ id: `a-${i}`, name: `${match.team_a} Player ${i + 1}`, role: 'BAT', credits: 9.0 }))).map((p: any, idx: number) => (
-                  <div key={p.id || idx} className="p-2.5 rounded-xl bg-[#000000] border border-[#222222] flex items-center justify-between text-xs">
+                  <div key={p.id || idx} className="p-2.5 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-[#A3A3A3] text-xs w-5 font-bold">#{idx + 1}</span>
-                      <span className="font-bold text-white text-sm">{p.name}</span>
+                      <span className="font-mono text-[#64748B] text-xs w-5 font-bold">#{idx + 1}</span>
+                      <div className="w-8 h-8 rounded-full bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center overflow-hidden shrink-0">
+                        {resolveImageUrl(p.photo_url) ? (
+                          <img src={resolveImageUrl(p.photo_url)} alt={p.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                        ) : (
+                          <span className="text-[9px] font-black text-[#1D4ED8]">{p.role}</span>
+                        )}
+                      </div>
+                      <span className="font-bold text-[#0F172A] text-sm">{p.name}</span>
                     </div>
                     <div className="flex items-center gap-2.5">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#141414] text-[#FFD700] border border-[#FFD700]/30">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">
                         {p.role}
                       </span>
-                      <span className="font-mono text-xs text-[#A3A3A3] font-bold">{p.credits || 9.0} Cr</span>
+                      <span className="font-mono text-xs text-[#64748B] font-bold">{p.credits || 9.0} Cr</span>
                     </div>
                   </div>
                 ))}
@@ -654,24 +678,31 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
             </div>
 
             {/* Team B 15 Players */}
-            <div className="prime-card-3d p-5 space-y-3 border-2 border-[#FFD700]/40">
-              <div className="flex justify-between items-center pb-2 border-b border-[#222222]">
-                <h4 className="font-black text-sm text-[#FFD700] uppercase">{match.team_b} Squad</h4>
-                <span className="text-xs font-mono font-bold text-white">{teamBPlayers.length || 15} Players</span>
+            <div className="prime-card-3d p-5 space-y-3 border-2 border-[#FDE68A] bg-white">
+              <div className="flex justify-between items-center pb-2 border-b border-[#E2E8F0]">
+                <h4 className="font-black text-sm text-[#D97706] uppercase">{match.team_b} Squad</h4>
+                <span className="text-xs font-mono font-bold text-[#64748B]">{teamBPlayers.length || 15} Players</span>
               </div>
 
               <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
                 {(teamBPlayers.length > 0 ? teamBPlayers : Array.from({ length: 15 }, (_, i) => ({ id: `b-${i}`, name: `${match.team_b} Player ${i + 1}`, role: 'BAT', credits: 9.0 }))).map((p: any, idx: number) => (
-                  <div key={p.id || idx} className="p-2.5 rounded-xl bg-[#000000] border border-[#222222] flex items-center justify-between text-xs">
+                  <div key={p.id || idx} className="p-2.5 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-between text-xs">
                     <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-[#A3A3A3] text-xs w-5 font-bold">#{idx + 1}</span>
-                      <span className="font-bold text-white text-sm">{p.name}</span>
+                      <span className="font-mono text-[#64748B] text-xs w-5 font-bold">#{idx + 1}</span>
+                      <div className="w-8 h-8 rounded-full bg-[#FEF3C7] border border-[#FDE68A] flex items-center justify-center overflow-hidden shrink-0">
+                        {resolveImageUrl(p.photo_url) ? (
+                          <img src={resolveImageUrl(p.photo_url)} alt={p.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                        ) : (
+                          <span className="text-[9px] font-black text-[#D97706]">{p.role}</span>
+                        )}
+                      </div>
+                      <span className="font-bold text-[#0F172A] text-sm">{p.name}</span>
                     </div>
                     <div className="flex items-center gap-2.5">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#141414] text-[#FFD700] border border-[#FFD700]/30">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]">
                         {p.role}
                       </span>
-                      <span className="font-mono text-xs text-[#A3A3A3] font-bold">{p.credits || 9.0} Cr</span>
+                      <span className="font-mono text-xs text-[#64748B] font-bold">{p.credits || 9.0} Cr</span>
                     </div>
                   </div>
                 ))}
@@ -683,68 +714,68 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
 
       {/* H2H Challenge Modal */}
       {showH2HModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-md prime-card-3d p-6 space-y-5 border-2 border-[#FF1744] shadow-[0_0_50px_rgba(255,23,68,0.5)]">
-            <div className="flex items-center justify-between border-b border-[#222222] pb-3">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md prime-card-3d p-6 space-y-5 border-2 border-[#2563EB] shadow-2xl bg-white text-[#0F172A]">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
               <div className="flex items-center gap-2">
-                <Swords className="w-5 h-5 text-[#FF1744]" />
-                <h3 className="font-black text-white text-base">H2H 1-on-1 Challenge</h3>
+                <Swords className="w-5 h-5 text-[#2563EB]" />
+                <h3 className="font-black text-[#0F172A] text-base">H2H 1-on-1 Challenge</h3>
               </div>
-              <button onClick={() => setShowH2HModal(false)} className="text-[#A3A3A3] hover:text-white">✕</button>
+              <button onClick={() => setShowH2HModal(false)} className="text-[#64748B] hover:text-[#0F172A]">✕</button>
             </div>
 
             {h2hError && (
-              <div className="p-3 rounded-xl bg-red-950/80 border border-red-500/60 text-red-200 text-xs font-bold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
                 <span>{h2hError}</span>
               </div>
             )}
             {h2hMessage && (
-              <div className="p-3 rounded-xl bg-green-950/80 border border-green-500/60 text-green-200 text-xs font-bold flex items-center gap-2">
-                <Check className="w-4 h-4 shrink-0 text-green-400" />
+              <div className="p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-xs font-bold flex items-center gap-2">
+                <Check className="w-4 h-4 shrink-0 text-green-500" />
                 <span>{h2hMessage}</span>
               </div>
             )}
 
             <form onSubmit={handleSendH2HChallenge} className="space-y-4">
               <div>
-                <label className="block text-xs font-black text-[#FFD700] uppercase mb-1.5">
+                <label className="block text-xs font-black text-[#1E3A8A] uppercase mb-1.5">
                   Set Challenge Amount (₹)
                 </label>
                 <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-base font-black text-[#FFD700]">₹</span>
+                  <span className="absolute left-3 top-2.5 text-base font-black text-[#2563EB]">₹</span>
                   <input
                     type="number"
                     min="10"
                     step="10"
                     value={h2hAmount}
                     onChange={(e) => setH2HAmount(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2.5 rounded-xl bg-[#000000] border-2 border-[#333333] text-white text-base font-black focus:border-[#FF1744] outline-none"
+                    className="w-full pl-8 pr-3 py-2.5 rounded-xl bg-[#F8FAFC] border-2 border-[#CBD5E1] text-[#0F172A] text-base font-black focus:border-[#2563EB] outline-none"
                     required
                   />
                 </div>
-                <p className="text-[11px] text-[#A3A3A3] font-bold mt-1">
+                <p className="text-[11px] text-[#64748B] font-bold mt-1">
                   Winner takes 85% of total pool (₹{(parseFloat(h2hAmount || '0') * 2 * 0.85).toFixed(0)}), platform keeps 15%.
                 </p>
               </div>
 
               <div>
-                <label className="block text-xs font-black text-[#FFD700] uppercase mb-1.5">
+                <label className="block text-xs font-black text-[#1E3A8A] uppercase mb-1.5">
                   Search Opponent (Username or Email)
                 </label>
                 <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-3 text-[#A3A3A3]" />
+                  <Search className="w-4 h-4 absolute left-3 top-3 text-[#64748B]" />
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Type username..."
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#000000] border-2 border-[#333333] text-white text-xs font-bold focus:border-[#FF1744] outline-none"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#F8FAFC] border-2 border-[#CBD5E1] text-[#0F172A] text-xs font-bold focus:border-[#2563EB] outline-none"
                   />
                 </div>
 
                 {searchResults.length > 0 && (
-                  <div className="mt-2 max-h-40 overflow-y-auto space-y-1 rounded-xl bg-[#000000] border border-[#333333] p-1.5">
+                  <div className="mt-2 max-h-40 overflow-y-auto space-y-1 rounded-xl bg-white border border-[#CBD5E1] p-1.5 shadow-sm">
                     {searchResults.map((opp) => (
                       <button
                         key={opp.id}
@@ -755,20 +786,20 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                           setSearchResults([]);
                         }}
                         className={`w-full p-2 text-left rounded-lg text-xs font-bold flex items-center justify-between ${
-                          selectedOpponent?.id === opp.id ? 'bg-[#FF1744] text-white' : 'hover:bg-[#1C1C1C] text-white'
+                          selectedOpponent?.id === opp.id ? 'bg-[#2563EB] text-white' : 'hover:bg-[#F1F5F9] text-[#0F172A]'
                         }`}
                       >
                         <span>@{opp.username}</span>
-                        <span className="text-[10px] text-[#A3A3A3]">{opp.email}</span>
+                        <span className="text-[10px] text-[#64748B]">{opp.email}</span>
                       </button>
                     ))}
                   </div>
                 )}
 
                 {selectedOpponent && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-[#141414] border border-[#FFD700]/40 flex items-center justify-between text-xs">
-                    <span className="text-white font-black">Challenging: @{selectedOpponent.username}</span>
-                    <span className="text-[#FFD700] font-black">Ready</span>
+                  <div className="mt-2 p-2.5 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-between text-xs">
+                    <span className="text-[#0F172A] font-black">Challenging: @{selectedOpponent.username}</span>
+                    <span className="text-[#2563EB] font-black">Ready</span>
                   </div>
                 )}
               </div>

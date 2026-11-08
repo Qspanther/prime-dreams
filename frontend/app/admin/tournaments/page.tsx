@@ -1,20 +1,25 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '../../lib/auth-context';
-import { apiGet, apiPost, apiPut, apiDelete, getApiBase } from '../../lib/api';
+import { apiGet, apiPost, apiPut, apiDelete, getApiBase, resolveImageUrl } from '../../lib/api';
 import {
   Trophy, Plus, ChevronDown, ChevronUp, AlertCircle,
   Check, X, Shield, Clock, Users, ArrowRight, Layers,
-  Radio, RefreshCw, Activity, Calendar, MapPin, Edit2, Trash2, Upload, ImageIcon
+  Radio, RefreshCw, Activity, Calendar, MapPin, Edit2, Trash2, Upload, ImageIcon, Zap
 } from 'lucide-react';
 import CategoryFilterTabs from '../../components/ui/CategoryFilterTabs';
 import CategoryBadge from '../../components/ui/CategoryBadge';
 
-export default function AdminCricketMatchesPage() {
+function AdminCricketMatchesContent() {
   const { token } = useAuth();
+  const searchParams = useSearchParams();
+  const importCbId = searchParams.get('import');
+
   const [activeTab, setActiveTab] = useState<'matches' | 'telemetry' | 'squads'>('matches');
   const [matches, setMatches] = useState<any[]>([]);
+  const [cricbuzzUpcoming, setCricbuzzUpcoming] = useState<any[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
   const [expandedMatchId, setExpandedMatchId] = useState<string | null>(null);
@@ -50,10 +55,10 @@ export default function AdminCricketMatchesPage() {
     const roles: ('WK' | 'BAT' | 'AR' | 'BOWL')[] = ['WK', 'BAT', 'BAT', 'BAT', 'BAT', 'AR', 'AR', 'AR', 'BOWL', 'BOWL', 'BOWL', 'BOWL', 'WK', 'BAT', 'BOWL'];
     const list: any[] = [];
     for (let i = 1; i <= 15; i++) {
-      list.push({ team_name: 'India', name: i === 1 ? 'Rohit Sharma' : i === 2 ? 'Virat Kohli' : `IND Player ${i}`, role: roles[i - 1], credits: 9.0 });
+      list.push({ team_name: 'India', name: i === 1 ? 'Rohit Sharma' : i === 2 ? 'Virat Kohli' : `IND Player ${i}`, role: roles[i - 1], credits: 9.0, photo_url: '' });
     }
     for (let i = 1; i <= 15; i++) {
-      list.push({ team_name: 'South Africa', name: i === 1 ? 'Quinton de Kock' : i === 2 ? 'Kagiso Rabada' : `SA Player ${i}`, role: roles[i - 1], credits: 9.0 });
+      list.push({ team_name: 'South Africa', name: i === 1 ? 'Quinton de Kock' : i === 2 ? 'Kagiso Rabada' : `SA Player ${i}`, role: roles[i - 1], credits: 9.0, photo_url: '' });
     }
     return list;
   });
@@ -64,6 +69,47 @@ export default function AdminCricketMatchesPage() {
     { type: 'h2h', title: 'H2H Custom Duel', prize_pool: 0, entry_fee: 0, total_spots: 2 },
   ]);
 
+  const handleSelectCricbuzzFixture = (cbMatch: any) => {
+    if (!cbMatch) return;
+    setEditingMatchId(null);
+    setTeamA(cbMatch.team_a || '');
+    setTeamB(cbMatch.team_b || '');
+    setCategory(cbMatch.category || 'League');
+    setMatchDate(cbMatch.match_date || new Date().toISOString().split('T')[0]);
+    setMatchTime(cbMatch.match_time || '19:30');
+    setVenue(cbMatch.venue || `${cbMatch.team_a} International Stadium`);
+    setTeamALogo(cbMatch.team_a_logo || '');
+    setTeamBLogo(cbMatch.team_b_logo || '');
+    setMatchPoster(cbMatch.match_poster || '');
+
+    const list: any[] = [];
+    const sA = cbMatch.squad_a || [];
+    const sB = cbMatch.squad_b || [];
+    for (let i = 0; i < 15; i++) {
+      const p = sA[i];
+      list.push({
+        team_name: cbMatch.team_a,
+        name: p?.name || `${cbMatch.team_a} Player ${i + 1}`,
+        role: p?.role || 'BAT',
+        credits: p?.credits || 9.0,
+        photo_url: p?.photo_url || '',
+      });
+    }
+    for (let i = 0; i < 15; i++) {
+      const p = sB[i];
+      list.push({
+        team_name: cbMatch.team_b,
+        name: p?.name || `${cbMatch.team_b} Player ${i + 1}`,
+        role: p?.role || 'BAT',
+        credits: p?.credits || 9.0,
+        photo_url: p?.photo_url || '',
+      });
+    }
+    setPlayers(list);
+    setFieldErrors({});
+    setSuccessMsg(`⚡ Auto-filled details & 30 players from ${cbMatch.team_a} vs ${cbMatch.team_b}`);
+  };
+
   const fetchMatches = async () => {
     if (!token) return;
     try {
@@ -72,6 +118,20 @@ export default function AdminCricketMatchesPage() {
       if (res?.matches) {
         setMatches(res.matches);
         if (!selectedMatchId && res.matches.length > 0) setSelectedMatchId(res.matches[0].id);
+      }
+
+      // Also fetch upcoming Cricbuzz fixtures for quick auto-fill
+      const cbRes = await apiGet('/admin/cricbuzz/feed', token);
+      if (cbRes?.upcomingMatches) {
+        setCricbuzzUpcoming(cbRes.upcomingMatches);
+        if (importCbId) {
+          const target = cbRes.upcomingMatches.find((u: any) => u.cricbuzz_id === importCbId);
+          if (target) {
+            handleSelectCricbuzzFixture(target);
+            setShowModal(true);
+            setCurrentStep(1);
+          }
+        }
       }
     } catch (e) {
       console.error(e);
@@ -115,25 +175,31 @@ export default function AdminCricketMatchesPage() {
 
   const handleStartCreate = () => {
     setEditingMatchId(null);
-    setTeamA('India');
-    setTeamB('South Africa');
-    setCategory('World Cup');
-    setMatchDate('2026-11-15');
-    setMatchTime('19:30');
-    setVenue('Wankhede Stadium, Mumbai');
-    setTeamALogo('/cricket/team_a.png');
-    setTeamBLogo('/cricket/team_b.png');
-    setMatchPoster('/cricket/poster.png');
-    setLockMinutes(15);
-    const roles: ('WK' | 'BAT' | 'AR' | 'BOWL')[] = ['WK', 'BAT', 'BAT', 'BAT', 'BAT', 'AR', 'AR', 'AR', 'BOWL', 'BOWL', 'BOWL', 'BOWL', 'WK', 'BAT', 'BOWL'];
-    const list: any[] = [];
-    for (let i = 1; i <= 15; i++) {
-      list.push({ team_name: 'India', name: i === 1 ? 'Rohit Sharma' : i === 2 ? 'Virat Kohli' : `IND Player ${i}`, role: roles[i - 1], credits: 9.0 });
+    if (cricbuzzUpcoming.length > 0) {
+      handleSelectCricbuzzFixture(cricbuzzUpcoming[0]);
+    } else {
+      setTeamA('India');
+      setTeamB('South Africa');
+      setCategory('World Cup');
+      setMatchDate(new Date(Date.now() + 86400000).toISOString().split('T')[0]);
+      setMatchTime('19:30');
+      setVenue('Wankhede Stadium, Mumbai');
+      setTeamALogo('https://flagcdn.com/w160/in.png');
+      setTeamBLogo('https://flagcdn.com/w160/za.png');
+      setMatchPoster('https://images.unsplash.com/photo-1540747913346-19e32dc3e97e?w=1200&auto=format&fit=crop&q=80');
+      setLockMinutes(15);
+      const roles: ('WK' | 'BAT' | 'AR' | 'BOWL')[] = ['WK', 'BAT', 'BAT', 'BAT', 'BAT', 'AR', 'AR', 'AR', 'BOWL', 'BOWL', 'BOWL', 'BOWL', 'WK', 'BAT', 'BOWL'];
+      const indSquad = ['Rohit Sharma', 'Shubman Gill', 'Virat Kohli', 'KL Rahul', 'Rishabh Pant', 'Hardik Pandya', 'Ravindra Jadeja', 'Ravichandran Ashwin', 'Jasprit Bumrah', 'Mohammed Siraj', 'Mohammed Shami', 'Ishan Kishan', 'Shreyas Iyer', 'Kuldeep Yadav', 'Shardul Thakur'];
+      const saSquad = ['Quinton de Kock', 'Temba Bavuma', 'Aiden Markram', 'Rassie van der Dussen', 'David Miller', 'Heinrich Klaasen', 'Marco Jansen', 'Keshav Maharaj', 'Kagiso Rabada', 'Anrich Nortje', 'Lungi Ngidi', 'Gerald Coetzee', 'Tristan Stubbs', 'Reeza Hendricks', 'Tabraiz Shamsi'];
+      const list: any[] = [];
+      for (let i = 0; i < 15; i++) {
+        list.push({ team_name: 'India', name: indSquad[i], role: roles[i], credits: 9.0, photo_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(indSquad[i])}` });
+      }
+      for (let i = 0; i < 15; i++) {
+        list.push({ team_name: 'South Africa', name: saSquad[i], role: roles[i], credits: 9.0, photo_url: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(saSquad[i])}` });
+      }
+      setPlayers(list);
     }
-    for (let i = 1; i <= 15; i++) {
-      list.push({ team_name: 'South Africa', name: i === 1 ? 'Quinton de Kock' : i === 2 ? 'Kagiso Rabada' : `SA Player ${i}`, role: roles[i - 1], credits: 9.0 });
-    }
-    setPlayers(list);
     setContests([
       { type: 'standard', title: 'Mega Grand Contest ₹1,00,000', prize_pool: 100000, entry_fee: 49, total_spots: 2500 },
       { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 99, total_spots: 25 },
@@ -153,9 +219,9 @@ export default function AdminCricketMatchesPage() {
     setMatchDate(m.match_date || '');
     setMatchTime(m.match_time || '');
     setVenue(m.venue || '');
-    setTeamALogo(m.team_a_logo || '/cricket/team_a.png');
-    setTeamBLogo(m.team_b_logo || '/cricket/team_b.png');
-    setMatchPoster(m.match_poster || '/cricket/poster.png');
+    setTeamALogo(m.team_a_logo || '');
+    setTeamBLogo(m.team_b_logo || '');
+    setMatchPoster(m.match_poster || '');
     setLockMinutes(m.lock_time_minutes || 15);
 
     if (m.players && m.players.length === 30) {
@@ -163,7 +229,8 @@ export default function AdminCricketMatchesPage() {
         team_name: p.team_name,
         name: p.name,
         role: p.role || 'BAT',
-        credits: p.credits || 9.0
+        credits: p.credits || 9.0,
+        photo_url: p.photo_url || ''
       })));
     } else {
       const roles: ('WK' | 'BAT' | 'AR' | 'BOWL')[] = ['WK', 'BAT', 'BAT', 'BAT', 'BAT', 'AR', 'AR', 'AR', 'BOWL', 'BOWL', 'BOWL', 'BOWL', 'WK', 'BAT', 'BOWL'];
@@ -171,10 +238,10 @@ export default function AdminCricketMatchesPage() {
       const tAName = m.team_a || 'Team A';
       const tBName = m.team_b || 'Team B';
       for (let i = 1; i <= 15; i++) {
-        list.push({ team_name: tAName, name: `${tAName} Player ${i}`, role: roles[i - 1], credits: 9.0 });
+        list.push({ team_name: tAName, name: `${tAName} Player ${i}`, role: roles[i - 1], credits: 9.0, photo_url: '' });
       }
       for (let i = 1; i <= 15; i++) {
-        list.push({ team_name: tBName, name: `${tBName} Player ${i}`, role: roles[i - 1], credits: 9.0 });
+        list.push({ team_name: tBName, name: `${tBName} Player ${i}`, role: roles[i - 1], credits: 9.0, photo_url: '' });
       }
       setPlayers(list);
     }
@@ -292,15 +359,15 @@ export default function AdminCricketMatchesPage() {
   };
 
   return (
-    <div className="px-3 sm:px-6 py-6 max-w-7xl mx-auto w-full space-y-6 bg-[#000000] text-white">
+    <div className="px-3 sm:px-6 py-6 max-w-7xl mx-auto w-full space-y-6 bg-transparent text-[#0F172A]">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#222222] pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#CBD5E1] pb-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-white flex items-center gap-2">
-            <Trophy className="w-6 h-6 text-[#FF1744]" />
+          <h1 className="text-xl sm:text-2xl font-black text-[#0F172A] flex items-center gap-2">
+            <Trophy className="w-6 h-6 text-[#2563EB]" />
             <span>Cricket Match Operations &amp; Database</span>
           </h1>
-          <p className="text-xs text-[#A3A3A3] font-bold mt-0.5">
+          <p className="text-xs text-[#64748B] font-bold mt-0.5">
             Real-time cricket telemetry, squad verification, fixtures schedule, and Cricbuzz live sync
           </p>
         </div>
@@ -320,7 +387,7 @@ export default function AdminCricketMatchesPage() {
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-              activeTab === tab ? 'prime-btn-gold-3d' : 'prime-btn-dark-3d !text-[#A3A3A3]'
+              activeTab === tab ? 'prime-btn-3d' : 'prime-btn-dark-3d !text-[#64748B]'
             }`}
           >
             {tab === 'matches' && 'Matches & Contests'}
@@ -336,25 +403,25 @@ export default function AdminCricketMatchesPage() {
           <CategoryFilterTabs selectedCategory={selectedCategory} onSelect={setSelectedCategory} />
 
           {/* 🔴 Table 1: Live In-Play Matches */}
-          <div className="prime-card-3d overflow-hidden border-2 border-[#FF1744]/40">
-            <div className="p-4 border-b border-[#222222] flex items-center justify-between bg-[#000000]">
-              <span className="font-black text-xs text-[#FF1744] uppercase tracking-wider flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#FF1744] animate-ping" />
+          <div className="prime-card-3d overflow-hidden border-2 border-[#38BDF8] bg-white">
+            <div className="p-4 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAFC]">
+              <span className="font-black text-xs text-[#DC2626] uppercase tracking-wider flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] animate-ping" />
                 Live In-Play Matches ({matches.filter(m => m.status === 'live').length})
               </span>
-              <span className="text-[11px] text-[#A3A3A3] font-bold">Real-time live telemetry active</span>
+              <span className="text-[11px] text-[#64748B] font-bold">Real-time live telemetry active</span>
             </div>
 
             {matches.filter(m => m.status === 'live').length === 0 ? (
               <div className="p-6 text-center text-[#A3A3A3] text-xs font-bold">No matches currently LIVE.</div>
             ) : (
-              <div className="divide-y divide-[#1A1A1A]">
+              <div className="divide-y divide-[#E2E8F0]">
                 {matches.filter(m => m.status === 'live').map((m) => {
                   const isExp = expandedMatchId === m.id;
                   const tA = (m.players || []).filter((p: any) => p.team_name === m.team_a);
                   const tB = (m.players || []).filter((p: any) => p.team_name === m.team_b);
                   return (
-                    <div key={m.id} className="bg-[#0A0A0A] hover:bg-[#111111] transition">
+                    <div key={m.id} className="bg-white hover:bg-[#F8FAFC] transition">
                       <div
                         onClick={() => setExpandedMatchId(isExp ? null : m.id)}
                         className="p-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer"
@@ -362,8 +429,8 @@ export default function AdminCricketMatchesPage() {
                         <div className="flex items-center gap-3">
                           <CategoryBadge category={m.category} size="xs" />
                           <div>
-                            <h4 className="font-black text-white text-sm sm:text-base">{m.title}</h4>
-                            <p className="text-xs text-[#FFD700] font-mono font-bold mt-0.5">
+                            <h4 className="font-black text-[#0F172A] text-sm sm:text-base">{m.title}</h4>
+                            <p className="text-xs text-[#2563EB] font-mono font-bold mt-0.5">
                               🔴 LIVE INNINGS • {m.score_summary?.team_a ? `${m.score_summary.team_a.runs}/${m.score_summary.team_a.wickets} (${m.score_summary.team_a.overs} ov)` : 'In Progress'} • 📍 {m.venue || 'Stadium'}
                             </p>
                           </div>
@@ -390,10 +457,10 @@ export default function AdminCricketMatchesPage() {
                               e.stopPropagation();
                               handleEditMatch(m);
                             }}
-                            className="px-2.5 py-1 rounded-lg bg-[#1F1F1F] hover:bg-[#2A2A2A] border border-[#3A3A3A] text-xs font-black text-[#FFD700] flex items-center gap-1 transition"
+                            className="px-2.5 py-1 rounded-lg bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-xs font-black text-[#1D4ED8] flex items-center gap-1 transition"
                             title="Edit match & contests"
                           >
-                            <Edit2 className="w-3 h-3 text-[#FFD700]" />
+                            <Edit2 className="w-3 h-3 text-[#1D4ED8]" />
                             <span>Edit</span>
                           </button>
                           <button
@@ -402,38 +469,56 @@ export default function AdminCricketMatchesPage() {
                               e.stopPropagation();
                               handleDeleteMatch(m);
                             }}
-                            className="px-2.5 py-1 rounded-lg bg-red-950/60 hover:bg-red-900/80 border border-red-500/40 text-xs font-black text-[#FF8095] flex items-center gap-1 transition"
+                            className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 text-xs font-black text-red-600 flex items-center gap-1 transition"
                             title="Delete match and contests"
                           >
-                            <Trash2 className="w-3 h-3 text-[#FF1744]" />
+                            <Trash2 className="w-3 h-3 text-red-600" />
                             <span>Delete</span>
                           </button>
-                          {isExp ? <ChevronUp className="w-4 h-4 text-[#FFD700]" /> : <ChevronDown className="w-4 h-4 text-[#A3A3A3]" />}
+                          {isExp ? <ChevronUp className="w-4 h-4 text-[#2563EB]" /> : <ChevronDown className="w-4 h-4 text-[#64748B]" />}
                         </div>
                       </div>
 
                       {isExp && (
-                        <div className="p-4 bg-[#000000] border-t border-[#222222] space-y-4">
+                        <div className="p-4 bg-[#F8FAFC] border-t border-[#E2E8F0] space-y-4">
                           <div className="grid md:grid-cols-2 gap-4">
-                            <div className="p-3 rounded-xl bg-[#0A0A0A] border border-[#FF1744]/40 space-y-2">
-                              <h5 className="text-xs font-black text-[#FF8095] uppercase">{m.team_a} (15 Players)</h5>
+                            <div className="p-3 rounded-xl bg-white border border-[#93C5FD] space-y-2">
+                              <h5 className="text-xs font-black text-[#1D4ED8] uppercase">{m.team_a} (15 Players)</h5>
                               <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
                                 {(tA.length > 0 ? tA : Array.from({ length: 15 }, (_, i) => ({ id: `a-${i}`, name: `${m.team_a} #${i + 1}`, role: 'BAT' }))).map((p: any) => (
-                                  <div key={p.id} className="p-1.5 rounded bg-[#000000] border border-[#222222] flex justify-between text-[11px]">
-                                    <span className="truncate text-white font-bold">{p.name}</span>
-                                    <span className="text-[#FFD700] font-black">{p.role}</span>
+                                  <div key={p.id} className="p-1.5 rounded bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-between text-[11px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <div className="w-5 h-5 rounded-full overflow-hidden bg-white border border-[#CBD5E1] shrink-0 flex items-center justify-center">
+                                        {resolveImageUrl(p.photo_url) ? (
+                                          <img src={resolveImageUrl(p.photo_url)} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                                        ) : (
+                                          <span className="text-[7px] font-black text-[#1D4ED8]">{p.role}</span>
+                                        )}
+                                      </div>
+                                      <span className="truncate text-[#0F172A] font-bold">{p.name}</span>
+                                    </div>
+                                    <span className="text-[#1D4ED8] font-black">{p.role}</span>
                                   </div>
                                 ))}
                               </div>
                             </div>
 
-                            <div className="p-3 rounded-xl bg-[#0A0A0A] border border-[#FFD700]/40 space-y-2">
-                              <h5 className="text-xs font-black text-[#FFD700] uppercase">{m.team_b} (15 Players)</h5>
+                            <div className="p-3 rounded-xl bg-white border border-[#FDE68A] space-y-2">
+                              <h5 className="text-xs font-black text-[#D97706] uppercase">{m.team_b} (15 Players)</h5>
                               <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
                                 {(tB.length > 0 ? tB : Array.from({ length: 15 }, (_, i) => ({ id: `b-${i}`, name: `${m.team_b} #${i + 1}`, role: 'BAT' }))).map((p: any) => (
-                                  <div key={p.id} className="p-1.5 rounded bg-[#000000] border border-[#222222] flex justify-between text-[11px]">
-                                    <span className="truncate text-white font-bold">{p.name}</span>
-                                    <span className="text-[#FFD700] font-black">{p.role}</span>
+                                  <div key={p.id} className="p-1.5 rounded bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-between text-[11px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <div className="w-5 h-5 rounded-full overflow-hidden bg-white border border-[#CBD5E1] shrink-0 flex items-center justify-center">
+                                        {resolveImageUrl(p.photo_url) ? (
+                                          <img src={resolveImageUrl(p.photo_url)} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                                        ) : (
+                                          <span className="text-[7px] font-black text-[#D97706]">{p.role}</span>
+                                        )}
+                                      </div>
+                                      <span className="truncate text-[#0F172A] font-bold">{p.name}</span>
+                                    </div>
+                                    <span className="text-[#D97706] font-black">{p.role}</span>
                                   </div>
                                 ))}
                               </div>
@@ -449,27 +534,27 @@ export default function AdminCricketMatchesPage() {
           </div>
 
           {/* ⚡ Table 2: All Upcoming Matches Master Database */}
-          <div className="prime-card-3d overflow-hidden border border-[#222222]">
-            <div className="p-4 border-b border-[#222222] flex items-center justify-between bg-[#000000]">
-              <span className="font-black text-xs text-[#FFD700] uppercase tracking-wider flex items-center gap-2">
-                <Clock className="w-4 h-4 text-[#FFD700]" />
+          <div className="prime-card-3d overflow-hidden border-2 border-[#CBD5E1] bg-white">
+            <div className="p-4 border-b border-[#E2E8F0] flex items-center justify-between bg-[#F8FAFC]">
+              <span className="font-black text-xs text-[#1E3A8A] uppercase tracking-wider flex items-center gap-2">
+                <Clock className="w-4 h-4 text-[#2563EB]" />
                 All Upcoming Matches Database ({matches.filter(m => m.status === 'upcoming').length})
               </span>
-              <span className="text-[11px] text-[#A3A3A3] font-bold">Click match row to inspect schedule &amp; 15+15 squad roster</span>
+              <span className="text-[11px] text-[#64748B] font-bold">Click match row to inspect schedule &amp; 15+15 squad roster</span>
             </div>
 
             {loading ? (
-              <div className="p-12 text-center text-[#A3A3A3] font-bold">Loading cricket database...</div>
+              <div className="p-12 text-center text-[#64748B] font-bold">Loading cricket database...</div>
             ) : matches.filter(m => m.status === 'upcoming').length === 0 ? (
-              <div className="p-12 text-center text-[#A3A3A3] font-bold">No upcoming matches found in this category.</div>
+              <div className="p-12 text-center text-[#64748B] font-bold">No upcoming matches found in this category.</div>
             ) : (
-              <div className="divide-y divide-[#1A1A1A]">
+              <div className="divide-y divide-[#E2E8F0]">
                 {matches.filter(m => m.status === 'upcoming').map((m) => {
                   const isExp = expandedMatchId === m.id;
                   const tA = (m.players || []).filter((p: any) => p.team_name === m.team_a);
                   const tB = (m.players || []).filter((p: any) => p.team_name === m.team_b);
                   return (
-                    <div key={m.id} className="bg-[#0A0A0A] hover:bg-[#111111] transition">
+                    <div key={m.id} className="bg-white hover:bg-[#F8FAFC] transition">
                       <div
                         onClick={() => setExpandedMatchId(isExp ? null : m.id)}
                         className="p-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer"
@@ -477,34 +562,34 @@ export default function AdminCricketMatchesPage() {
                         <div className="flex items-center gap-3">
                           <CategoryBadge category={m.category} size="xs" />
                           <div>
-                            <h4 className="font-black text-white text-sm sm:text-base">{m.title}</h4>
-                            <p className="text-xs text-[#A3A3A3] font-bold mt-0.5">
-                              📅 Date: <span className="text-white">{m.match_date}</span> • ⏰ Time: <span className="text-[#FFD700] font-mono">{m.match_time}</span> • 📍 Venue: <span className="text-white">{m.venue || 'Stadium'}</span>
+                            <h4 className="font-black text-[#0F172A] text-sm sm:text-base">{m.title}</h4>
+                            <p className="text-xs text-[#64748B] font-bold mt-0.5">
+                              📅 Date: <span className="text-[#0F172A]">{m.match_date}</span> • ⏰ Time: <span className="text-[#2563EB] font-mono">{m.match_time}</span> • 📍 Venue: <span className="text-[#0F172A]">{m.venue || 'Stadium'}</span>
                             </p>
                           </div>
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-[#000000] border border-[#FF1744]/40 text-xs font-mono font-bold text-[#FF8095]">
+                          <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] text-xs font-mono font-bold text-[#1D4ED8]">
                             {m.team_a}: {tA.length || 15}
                           </span>
-                          <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-[#000000] border border-[#FFD700]/40 text-xs font-mono font-bold text-[#FFE082]">
+                          <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-[#FEF3C7] border border-[#FDE68A] text-xs font-mono font-bold text-[#D97706]">
                             {m.team_b}: {tB.length || 15}
                           </span>
-                          <span className="bg-[#141414] text-[#D4D4D4] border border-[#262626] px-2.5 py-1 rounded-full text-xs font-black">
+                          <span className="bg-[#F1F5F9] text-[#475569] border border-[#CBD5E1] px-2.5 py-1 rounded-full text-xs font-black">
                             UPCOMING
                           </span>
-                          <span className="text-xs font-black text-[#FFD700]">{(m.contests || []).length} Contests</span>
+                          <span className="text-xs font-black text-[#2563EB]">{(m.contests || []).length} Contests</span>
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleEditMatch(m);
                             }}
-                            className="px-2.5 py-1 rounded-lg bg-[#1F1F1F] hover:bg-[#2A2A2A] border border-[#3A3A3A] text-xs font-black text-[#FFD700] flex items-center gap-1 transition"
+                            className="px-2.5 py-1 rounded-lg bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-xs font-black text-[#1D4ED8] flex items-center gap-1 transition"
                             title="Edit match & contests"
                           >
-                            <Edit2 className="w-3 h-3 text-[#FFD700]" />
+                            <Edit2 className="w-3 h-3 text-[#1D4ED8]" />
                             <span>Edit</span>
                           </button>
                           <button
@@ -513,45 +598,63 @@ export default function AdminCricketMatchesPage() {
                               e.stopPropagation();
                               handleDeleteMatch(m);
                             }}
-                            className="px-2.5 py-1 rounded-lg bg-red-950/60 hover:bg-red-900/80 border border-red-500/40 text-xs font-black text-[#FF8095] flex items-center gap-1 transition"
+                            className="px-2.5 py-1 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 text-xs font-black text-red-600 flex items-center gap-1 transition"
                             title="Delete match and contests"
                           >
-                            <Trash2 className="w-3 h-3 text-[#FF1744]" />
+                            <Trash2 className="w-3 h-3 text-red-600" />
                             <span>Delete</span>
                           </button>
-                          {isExp ? <ChevronUp className="w-4 h-4 text-[#FFD700]" /> : <ChevronDown className="w-4 h-4 text-[#A3A3A3]" />}
+                          {isExp ? <ChevronUp className="w-4 h-4 text-[#2563EB]" /> : <ChevronDown className="w-4 h-4 text-[#64748B]" />}
                         </div>
                       </div>
 
                       {isExp && (
-                        <div className="p-4 bg-[#000000] border-t border-[#222222] space-y-4">
-                          <div className="p-3 rounded-xl bg-[#0D0D0D] border border-[#262626] flex flex-wrap items-center justify-between gap-3 text-xs text-[#A3A3A3]">
-                            <span>📅 Match Date: <strong className="text-white">{m.match_date}</strong></span>
-                            <span>⏰ Start Time: <strong className="text-[#FFD700]">{m.match_time}</strong></span>
-                            <span>📍 Venue: <strong className="text-white">{m.venue || 'Stadium'}</strong></span>
-                            <span>🔒 Contest Lock: <strong className="text-white">{m.lock_time_minutes || 15}m before match</strong></span>
+                        <div className="p-4 bg-[#F8FAFC] border-t border-[#E2E8F0] space-y-4">
+                          <div className="p-3 rounded-xl bg-white border border-[#CBD5E1] flex flex-wrap items-center justify-between gap-3 text-xs text-[#64748B]">
+                            <span>📅 Match Date: <strong className="text-[#0F172A]">{m.match_date}</strong></span>
+                            <span>⏰ Start Time: <strong className="text-[#2563EB]">{m.match_time}</strong></span>
+                            <span>📍 Venue: <strong className="text-[#0F172A]">{m.venue || 'Stadium'}</strong></span>
+                            <span>🔒 Contest Lock: <strong className="text-[#0F172A]">{m.lock_time_minutes || 15}m before match</strong></span>
                           </div>
 
                           <div className="grid md:grid-cols-2 gap-4">
-                            <div className="p-3 rounded-xl bg-[#0A0A0A] border border-[#FF1744]/40 space-y-2">
-                              <h5 className="text-xs font-black text-[#FF8095] uppercase">{m.team_a} (15 Players)</h5>
+                            <div className="p-3 rounded-xl bg-white border border-[#93C5FD] space-y-2">
+                              <h5 className="text-xs font-black text-[#1D4ED8] uppercase">{m.team_a} (15 Players)</h5>
                               <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
                                 {(tA.length > 0 ? tA : Array.from({ length: 15 }, (_, i) => ({ id: `a-${i}`, name: `${m.team_a} #${i + 1}`, role: 'BAT' }))).map((p: any) => (
-                                  <div key={p.id} className="p-1.5 rounded bg-[#000000] border border-[#222222] flex justify-between text-[11px]">
-                                    <span className="truncate text-white font-bold">{p.name}</span>
-                                    <span className="text-[#FFD700] font-black">{p.role}</span>
+                                  <div key={p.id} className="p-1.5 rounded bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-between text-[11px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <div className="w-5 h-5 rounded-full overflow-hidden bg-white border border-[#CBD5E1] shrink-0 flex items-center justify-center">
+                                        {resolveImageUrl(p.photo_url) ? (
+                                          <img src={resolveImageUrl(p.photo_url)} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                                        ) : (
+                                          <span className="text-[7px] font-black text-[#1D4ED8]">{p.role}</span>
+                                        )}
+                                      </div>
+                                      <span className="truncate text-[#0F172A] font-bold">{p.name}</span>
+                                    </div>
+                                    <span className="text-[#1D4ED8] font-black">{p.role}</span>
                                   </div>
                                 ))}
                               </div>
                             </div>
 
-                            <div className="p-3 rounded-xl bg-[#0A0A0A] border border-[#FFD700]/40 space-y-2">
-                              <h5 className="text-xs font-black text-[#FFD700] uppercase">{m.team_b} (15 Players)</h5>
+                            <div className="p-3 rounded-xl bg-white border border-[#FDE68A] space-y-2">
+                              <h5 className="text-xs font-black text-[#D97706] uppercase">{m.team_b} (15 Players)</h5>
                               <div className="grid grid-cols-2 gap-1.5 max-h-48 overflow-y-auto">
                                 {(tB.length > 0 ? tB : Array.from({ length: 15 }, (_, i) => ({ id: `b-${i}`, name: `${m.team_b} #${i + 1}`, role: 'BAT' }))).map((p: any) => (
-                                  <div key={p.id} className="p-1.5 rounded bg-[#000000] border border-[#222222] flex justify-between text-[11px]">
-                                    <span className="truncate text-white font-bold">{p.name}</span>
-                                    <span className="text-[#FFD700] font-black">{p.role}</span>
+                                  <div key={p.id} className="p-1.5 rounded bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-between text-[11px]">
+                                    <div className="flex items-center gap-1.5 min-w-0">
+                                      <div className="w-5 h-5 rounded-full overflow-hidden bg-white border border-[#CBD5E1] shrink-0 flex items-center justify-center">
+                                        {resolveImageUrl(p.photo_url) ? (
+                                          <img src={resolveImageUrl(p.photo_url)} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                                        ) : (
+                                          <span className="text-[7px] font-black text-[#D97706]">{p.role}</span>
+                                        )}
+                                      </div>
+                                      <span className="truncate text-[#0F172A] font-bold">{p.name}</span>
+                                    </div>
+                                    <span className="text-[#D97706] font-black">{p.role}</span>
                                   </div>
                                 ))}
                               </div>
@@ -560,9 +663,9 @@ export default function AdminCricketMatchesPage() {
 
                           <div className="grid sm:grid-cols-4 gap-2">
                             {(m.contests || []).map((c: any) => (
-                              <div key={c.id} className="p-2.5 rounded-xl bg-[#0A0A0A] border border-[#262626] text-xs">
-                                <span className="font-black text-white block truncate">{c.title}</span>
-                                <span className="text-[#FFD700] text-[10px] font-mono block">
+                              <div key={c.id} className="p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-xs shadow-xs">
+                                <span className="font-black text-[#0F172A] block truncate">{c.title}</span>
+                                <span className="text-[#D97706] text-[10px] font-mono block font-bold">
                                   {c.type === 'h2h' ? 'H2H Duel (User Fee)' : `Fee: ₹${c.entry_fee} • Pool: ₹${c.prize_pool}`}
                                 </span>
                               </div>
@@ -582,13 +685,13 @@ export default function AdminCricketMatchesPage() {
       {/* TAB 2: LIVE TELEMETRY */}
       {activeTab === 'telemetry' && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-[#0A0A0A] border border-[#222222]">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-xl bg-white border border-[#CBD5E1] shadow-sm">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-black text-[#FFD700] uppercase">Live Match:</span>
+              <span className="text-xs font-black text-[#1E3A8A] uppercase">Live Match:</span>
               <select
                 value={selectedMatchId || ''}
                 onChange={(e) => setSelectedMatchId(e.target.value)}
-                className="px-3 py-1.5 rounded-lg bg-[#000000] border border-[#333333] text-white text-xs font-black outline-none"
+                className="px-3 py-1.5 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1] text-[#0F172A] text-xs font-black outline-none"
               >
                 {matches.map((m) => (
                   <option key={m.id} value={m.id}>{m.team_a} vs {m.team_b} ({m.status.toUpperCase()})</option>
@@ -606,76 +709,76 @@ export default function AdminCricketMatchesPage() {
           </div>
 
           {telemetryLoading ? (
-            <div className="p-12 text-center text-[#A3A3A3] font-bold">Streaming live telemetry...</div>
+            <div className="p-12 text-center text-[#64748B] font-bold">Streaming live telemetry...</div>
           ) : telemetry?.match ? (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-              <div className="lg:col-span-8 prime-card-3d p-5 space-y-4">
-                <div className="flex justify-between items-center pb-2 border-b border-[#222222]">
-                  <h3 className="text-xs font-black text-[#FFD700] uppercase flex items-center gap-2">
-                    <Radio className="w-3.5 h-3.5 text-[#FF1744] animate-pulse" />
+              <div className="lg:col-span-8 prime-card-3d p-5 space-y-4 bg-white border-2 border-[#38BDF8]">
+                <div className="flex justify-between items-center pb-2 border-b border-[#E2E8F0]">
+                  <h3 className="text-xs font-black text-[#1E3A8A] uppercase flex items-center gap-2">
+                    <Radio className="w-3.5 h-3.5 text-[#EF4444] animate-pulse" />
                     <span>In-Play Live Stream</span>
                   </h3>
-                  <span className="text-[10px] text-emerald-400 font-mono font-bold">Cricbuzz Active</span>
+                  <span className="text-[10px] text-emerald-600 font-mono font-bold">Cricbuzz Active</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <h4 className="text-lg font-black text-white">{telemetry.match.team_a}</h4>
-                    <p className="text-2xl font-black text-[#FFD700]">
+                    <h4 className="text-lg font-black text-[#0F172A]">{telemetry.match.team_a}</h4>
+                    <p className="text-2xl font-black text-[#2563EB]">
                       {telemetry.match.score_summary?.team_a?.runs || 146}/{telemetry.match.score_summary?.team_a?.wickets || 3}
-                      <span className="text-xs font-normal text-[#A3A3A3] ml-1">
+                      <span className="text-xs font-normal text-[#64748B] ml-1">
                         ({telemetry.match.score_summary?.team_a?.overs || 16.4} ov)
                       </span>
                     </p>
                   </div>
                   <div className="text-right">
-                    <h4 className="text-lg font-black text-white">{telemetry.match.team_b}</h4>
-                    <p className="text-xs font-bold text-[#A3A3A3]">Yet to bat</p>
+                    <h4 className="text-lg font-black text-[#0F172A]">{telemetry.match.team_b}</h4>
+                    <p className="text-xs font-bold text-[#64748B]">Yet to bat</p>
                   </div>
                 </div>
 
-                <div className="pt-2 border-t border-[#222222] flex items-center gap-2">
-                  <span className="text-[10px] text-[#A3A3A3] font-bold uppercase">This Over:</span>
+                <div className="pt-2 border-t border-[#E2E8F0] flex items-center gap-2">
+                  <span className="text-[10px] text-[#64748B] font-bold uppercase">This Over:</span>
                   <div className="flex gap-1.5">
                     {(telemetry.match.live_data?.recent_balls || ['1', '0', '4', '2', 'W', '1']).map((token: string, i: number) => (
                       <span key={i} className={`w-6 h-6 rounded-full flex items-center justify-center font-black text-xs ${
-                        token === 'W' ? 'bg-[#FF1744] text-white' : token === '4' || token === '6' ? 'bg-[#FFD700] text-black' : 'bg-[#141414] text-white border border-[#333333]'
+                        token === 'W' ? 'bg-[#EF4444] text-white shadow-xs' : token === '4' || token === '6' ? 'bg-[#F59E0B] text-white shadow-xs' : 'bg-[#F1F5F9] text-[#0F172A] border border-[#CBD5E1]'
                       }`}>
                         {token}
                       </span>
                     ))}
                   </div>
-                  <span className="text-xs font-mono font-bold text-[#A3A3A3] ml-auto">
+                  <span className="text-xs font-mono font-bold text-[#64748B] ml-auto">
                     CRR: {telemetry.match.live_data?.current_rate || '8.76'}
                   </span>
                 </div>
 
                 <div className="grid sm:grid-cols-2 gap-3 pt-2">
-                  <div className="p-3 rounded-xl bg-[#000000] border border-[#FFD700]/40 space-y-1">
-                    <span className="text-[10px] text-[#FFD700] font-black uppercase block">Active Striker</span>
-                    <p className="font-black text-white text-sm">
+                  <div className="p-3 rounded-xl bg-[#F8FAFC] border border-[#93C5FD] space-y-1">
+                    <span className="text-[10px] text-[#1D4ED8] font-black uppercase block">Active Striker</span>
+                    <p className="font-black text-[#0F172A] text-sm">
                       🏏 {telemetry.match.live_data?.current_striker?.name || 'Striker'} *
                     </p>
-                    <p className="text-xs font-mono text-[#FFD700]">
+                    <p className="text-xs font-mono text-[#2563EB]">
                       {telemetry.match.live_data?.current_striker?.runs || 48} runs ({telemetry.match.live_data?.current_striker?.balls || 32}b)
                     </p>
                   </div>
 
-                  <div className="p-3 rounded-xl bg-[#000000] border border-[#FF1744]/40 space-y-1">
-                    <span className="text-[10px] text-[#FF1744] font-black uppercase block">Active Bowler</span>
-                    <p className="font-black text-white text-sm">
+                  <div className="p-3 rounded-xl bg-[#F8FAFC] border border-[#FCA5A5] space-y-1">
+                    <span className="text-[10px] text-[#DC2626] font-black uppercase block">Active Bowler</span>
+                    <p className="font-black text-[#0F172A] text-sm">
                       ⚾ {telemetry.match.live_data?.current_bowler?.name || 'Bowler'}
                     </p>
-                    <p className="text-xs font-mono text-[#FF1744]">
+                    <p className="text-xs font-mono text-[#DC2626]">
                       {telemetry.match.live_data?.current_bowler?.wickets || 2} wkts / {telemetry.match.live_data?.current_bowler?.runs || 28} runs
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="lg:col-span-4 prime-card-3d p-4 flex flex-col h-[360px]">
-                <h4 className="text-xs font-black text-[#FFD700] uppercase mb-2 flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-[#FF1744]" />
+              <div className="lg:col-span-4 prime-card-3d p-4 flex flex-col h-[360px] bg-white border-2 border-[#CBD5E1]">
+                <h4 className="text-xs font-black text-[#1E3A8A] uppercase mb-2 flex items-center gap-1.5">
+                  <Activity className="w-3.5 h-3.5 text-[#2563EB]" />
                   <span>Live Commentary</span>
                 </h4>
                 <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
@@ -685,7 +788,7 @@ export default function AdminCricketMatchesPage() {
                     'Dot ball, good length.',
                     '🔴 WICKET! Clean bowled!',
                   ]).map((line: string, i: number) => (
-                    <div key={i} className="p-2 rounded-lg bg-[#000000] border border-[#222222] text-xs font-bold text-white">
+                    <div key={i} className="p-2 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] text-xs font-bold text-[#0F172A]">
                       {line}
                     </div>
                   ))}
@@ -699,18 +802,18 @@ export default function AdminCricketMatchesPage() {
       {/* TAB 3: SQUADS EXPLORER */}
       {activeTab === 'squads' && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 p-3 rounded-xl bg-[#0A0A0A] border border-[#222222]">
-            <span className="text-xs font-black text-[#FFD700] uppercase">Inspect Roster:</span>
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-white border border-[#CBD5E1] shadow-sm">
+            <span className="text-xs font-black text-[#1E3A8A] uppercase">Inspect Roster:</span>
             <select
               value={selectedMatchId || ''}
               onChange={(e) => setSelectedMatchId(e.target.value)}
-              className="px-3 py-1.5 rounded-lg bg-[#000000] border border-[#333333] text-white text-xs font-black outline-none"
+              className="px-3 py-1.5 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1] text-[#0F172A] text-xs font-black outline-none"
             >
               {matches.map((m) => (
                 <option key={m.id} value={m.id}>{m.team_a} vs {m.team_b}</option>
               ))}
             </select>
-            <span className="neon-badge-gold px-2.5 py-0.5 rounded-full text-[10px] font-black ml-auto">
+            <span className="bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE] px-2.5 py-0.5 rounded-full text-[10px] font-black ml-auto">
               30/30 Players Pool
             </span>
           </div>
@@ -718,23 +821,32 @@ export default function AdminCricketMatchesPage() {
           {telemetry?.match && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
               {[
-                { team: telemetry.match.team_a, border: 'border-[#FF1744]/40', badge: 'text-[#FF8095]' },
-                { team: telemetry.match.team_b, border: 'border-[#FFD700]/40', badge: 'text-[#FFD700]' }
+                { team: telemetry.match.team_a, border: 'border-[#93C5FD]', badge: 'text-[#1D4ED8]' },
+                { team: telemetry.match.team_b, border: 'border-[#FDE68A]', badge: 'text-[#D97706]' }
               ].map(({ team, border, badge }) => {
                 const teamPlayers = (telemetry.players || []).filter((p: any) => p.team_name === team);
                 return (
-                  <div key={team} className={`prime-card-3d p-4 space-y-3 border-2 ${border}`}>
-                    <div className="flex justify-between items-center pb-2 border-b border-[#222222]">
+                  <div key={team} className={`prime-card-3d p-4 space-y-3 border-2 ${border} bg-white`}>
+                    <div className="flex justify-between items-center pb-2 border-b border-[#E2E8F0]">
                       <h4 className={`font-black text-sm uppercase ${badge}`}>{team} Squad</h4>
-                      <span className="text-xs font-mono font-bold text-white">{teamPlayers.length || 15} Players</span>
+                      <span className="text-xs font-mono font-bold text-[#64748B]">{teamPlayers.length || 15} Players</span>
                     </div>
                     <div className="space-y-1.5 max-h-80 overflow-y-auto pr-1">
                       {(teamPlayers.length > 0 ? teamPlayers : Array.from({ length: 15 }, (_, i) => ({ id: `${team}-${i}`, name: `${team} Player ${i + 1}`, role: 'BAT', credits: 9.0 }))).map((p: any, i: number) => (
-                        <div key={p.id || i} className="p-2 rounded-lg bg-[#000000] border border-[#222222] flex justify-between items-center text-xs">
-                          <span className="font-bold text-white truncate">#{i + 1} {p.name}</span>
+                        <div key={p.id || i} className="p-2 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1] flex justify-between items-center text-xs">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-6 h-6 rounded-full overflow-hidden bg-white border border-[#CBD5E1] shrink-0 flex items-center justify-center">
+                              {resolveImageUrl(p.photo_url) ? (
+                                <img src={resolveImageUrl(p.photo_url)} alt="" className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                              ) : (
+                                <span className="text-[8px] font-black text-[#1E3A8A]">{p.role}</span>
+                              )}
+                            </div>
+                            <span className="font-bold text-[#0F172A] truncate">#{i + 1} {p.name}</span>
+                          </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-[#141414] text-[#FFD700] border border-[#FFD700]/30">{p.role}</span>
-                            <span className="font-mono text-[11px] text-[#A3A3A3]">{p.credits || 9.0} Cr</span>
+                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">{p.role}</span>
+                            <span className="font-mono text-[11px] text-[#64748B]">{p.credits || 9.0} Cr</span>
                           </div>
                         </div>
                       ))}
@@ -749,14 +861,14 @@ export default function AdminCricketMatchesPage() {
 
       {/* 6-Step Match Creation Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-sm flex items-center justify-center p-3">
-          <div className="w-full max-w-2xl bg-[#0A0A0A] border-2 border-[#FF1744] rounded-2xl shadow-2xl p-5 space-y-4 max-h-[90vh] flex flex-col">
-            <div className="flex justify-between items-center border-b border-[#222222] pb-3">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3">
+          <div className="w-full max-w-2xl bg-white border-2 border-[#2563EB] rounded-2xl shadow-2xl p-5 space-y-4 max-h-[90vh] flex flex-col text-[#0F172A]">
+            <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-3">
               <div>
-                <h3 className="font-black text-white text-base">
+                <h3 className="font-black text-[#0F172A] text-base">
                   {editingMatchId ? '✏️ Edit Match & Contests' : '⚡ Create Match'} (Step {currentStep} of 6)
                 </h3>
-                <span className="text-xs text-[#FFD700] font-bold">
+                <span className="text-xs text-[#2563EB] font-bold">
                   {currentStep === 1 && 'Match Details & Category Selector'}
                   {currentStep === 2 && 'Team Logos & Poster'}
                   {currentStep === 3 && '30 Squad Players (15 + 15)'}
@@ -784,9 +896,37 @@ export default function AdminCricketMatchesPage() {
             <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs">
               {currentStep === 1 && (
                 <div className="space-y-3">
+                  {/* ⚡ Quick Auto-Fill from Cricbuzz Upcoming Fixtures */}
+                  {cricbuzzUpcoming.length > 0 && !editingMatchId && (
+                    <div className="p-3 rounded-xl bg-gradient-to-r from-[#EFF6FF] via-[#DBEAFE] to-[#BFDBFE] border border-[#93C5FD] space-y-1.5 shadow-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-black text-[#1E3A8A] flex items-center gap-1.5 uppercase">
+                          <Zap className="w-3.5 h-3.5 text-[#2563EB] fill-[#2563EB]" />
+                          ⚡ Auto-Pick Cricbuzz Upcoming Fixture
+                        </span>
+                        <span className="text-[10px] text-[#2563EB] font-bold">Auto-fills Date, Time, Venue &amp; 30 Players</span>
+                      </div>
+                      <select
+                        onChange={(e) => {
+                          const m = cricbuzzUpcoming.find(u => u.cricbuzz_id === e.target.value);
+                          if (m) handleSelectCricbuzzFixture(m);
+                        }}
+                        className="w-full px-3 py-2 rounded-lg bg-white border border-[#93C5FD] text-[#0F172A] font-bold text-xs outline-none shadow-inner"
+                        defaultValue=""
+                      >
+                        <option value="" disabled>-- Select an Upcoming Match to Auto-Fill Everything --</option>
+                        {cricbuzzUpcoming.map(u => (
+                          <option key={u.cricbuzz_id} value={u.cricbuzz_id}>
+                            {u.title} • {u.match_date} @ {u.match_time} ({u.category})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Team A Name *</label>
+                      <label className="text-[10px] text-[#64748B] font-black uppercase">Team A Name *</label>
                       <input
                         type="text"
                         value={teamA}
@@ -794,11 +934,11 @@ export default function AdminCricketMatchesPage() {
                           setTeamA(e.target.value);
                           setPlayers(prev => prev.map((p, idx) => idx < 15 ? { ...p, team_name: e.target.value } : p));
                         }}
-                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white font-bold outline-none"
+                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1] text-[#0F172A] font-bold outline-none"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Team B Name *</label>
+                      <label className="text-[10px] text-[#64748B] font-black uppercase">Team B Name *</label>
                       <input
                         type="text"
                         value={teamB}
@@ -806,21 +946,21 @@ export default function AdminCricketMatchesPage() {
                           setTeamB(e.target.value);
                           setPlayers(prev => prev.map((p, idx) => idx >= 15 ? { ...p, team_name: e.target.value } : p));
                         }}
-                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white font-bold outline-none"
+                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1] text-[#0F172A] font-bold outline-none"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-[10px] text-[#FFD700] font-black uppercase">Category * (Mandatory 1 of 4)</label>
+                    <label className="text-[10px] text-[#1E3A8A] font-black uppercase">Category * (Mandatory 1 of 4)</label>
                     <div className="grid grid-cols-4 gap-2 mt-1">
                       {(['World Cup', 'T20', 'League', "Women's"] as const).map((cat) => (
                         <button
                           key={cat}
                           type="button"
                           onClick={() => setCategory(cat)}
-                          className={`p-2 rounded-lg border text-xs font-bold ${
-                            category === cat ? 'bg-[#FF1744] text-white border-[#FF1744]' : 'bg-[#000000] text-[#A3A3A3] border-[#262626]'
+                          className={`p-2 rounded-lg border text-xs font-bold transition ${
+                            category === cat ? 'bg-[#2563EB] text-white border-[#2563EB] shadow-xs' : 'bg-[#F8FAFC] text-[#475569] border-[#CBD5E1]'
                           }`}
                         >
                           <CategoryBadge category={cat} size="xs" />
@@ -831,32 +971,32 @@ export default function AdminCricketMatchesPage() {
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Match Date *</label>
+                      <label className="text-[10px] text-[#64748B] font-black uppercase">Match Date *</label>
                       <input
                         type="date"
                         value={matchDate}
                         onChange={(e) => setMatchDate(e.target.value)}
-                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white outline-none"
+                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1] text-[#0F172A] outline-none"
                       />
                     </div>
                     <div>
-                      <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Match Time *</label>
+                      <label className="text-[10px] text-[#64748B] font-black uppercase">Match Time *</label>
                       <input
                         type="time"
                         value={matchTime}
                         onChange={(e) => setMatchTime(e.target.value)}
-                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white outline-none"
+                        className="w-full mt-1 px-3 py-2 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1] text-[#0F172A] outline-none"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Venue / Stadium</label>
+                    <label className="text-[10px] text-[#64748B] font-black uppercase">Venue / Stadium</label>
                     <input
                       type="text"
                       value={venue}
                       onChange={(e) => setVenue(e.target.value)}
-                      className="w-full mt-1 px-3 py-2 rounded-lg bg-[#000000] border border-[#333333] text-white outline-none"
+                      className="w-full mt-1 px-3 py-2 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1] text-[#0F172A] outline-none"
                     />
                   </div>
                 </div>
@@ -864,9 +1004,9 @@ export default function AdminCricketMatchesPage() {
 
               {currentStep === 2 && (
                 <div className="space-y-4">
-                  <div className="p-3 rounded-xl bg-[#000000] border border-[#222222] text-[11px] text-[#A3A3A3] space-y-1">
-                    <p className="font-bold text-white flex items-center gap-1.5">
-                      <ImageIcon className="w-4 h-4 text-[#FFD700]" />
+                  <div className="p-3 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] text-[11px] text-[#1E3A8A] space-y-1">
+                    <p className="font-bold text-[#0F172A] flex items-center gap-1.5">
+                      <ImageIcon className="w-4 h-4 text-[#2563EB]" />
                       <span>Image Guidelines &amp; Direct Upload</span>
                     </p>
                     <p>
@@ -875,17 +1015,17 @@ export default function AdminCricketMatchesPage() {
                   </div>
 
                   {/* Team A Logo */}
-                  <div className="p-3 rounded-xl bg-[#000000] border border-[#222222] space-y-2">
-                    <label className="text-[10px] text-[#FF8095] font-black uppercase">{teamA} Logo (Web URL or Upload)</label>
+                  <div className="p-3 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] space-y-2">
+                    <label className="text-[10px] text-[#1D4ED8] font-black uppercase">{teamA} Logo (Web URL or Upload)</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
                         value={teamALogo}
                         onChange={(e) => setTeamALogo(e.target.value)}
-                        placeholder="https://... or /cricket/team_a.png"
-                        className="flex-1 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#333333] text-white outline-none font-mono text-xs"
+                        placeholder="https://... or /uploads/..."
+                        className="flex-1 px-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] outline-none font-mono text-xs"
                       />
-                      <label className="cursor-pointer px-3 py-2 rounded-lg bg-[#1A1A1A] hover:bg-[#252525] border border-[#3A3A3A] text-xs font-black text-[#FFD700] flex items-center gap-1.5 transition shrink-0">
+                      <label className="cursor-pointer px-3 py-2 rounded-lg bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-xs font-black text-[#1D4ED8] flex items-center gap-1.5 transition shrink-0">
                         <Upload className="w-3.5 h-3.5" />
                         <span>{uploadingField === 'team_a' ? 'Uploading...' : 'Upload File'}</span>
                         <input
@@ -896,29 +1036,31 @@ export default function AdminCricketMatchesPage() {
                           className="hidden"
                         />
                       </label>
-                      {teamALogo && (
-                        <img
-                          src={teamALogo}
-                          alt="Team A"
-                          className="w-9 h-9 rounded-lg border border-[#333333] object-contain bg-[#111111] shrink-0"
-                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                        />
-                      )}
+                      {resolveImageUrl(teamALogo) ? (
+                        <div className="w-12 h-12 rounded-xl border border-[#CBD5E1] bg-white overflow-hidden shrink-0 flex items-center justify-center shadow-xs">
+                          <img
+                            src={resolveImageUrl(teamALogo)}
+                            alt="Team A"
+                            className="w-full h-full object-contain"
+                            onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
                   {/* Team B Logo */}
-                  <div className="p-3 rounded-xl bg-[#000000] border border-[#222222] space-y-2">
-                    <label className="text-[10px] text-[#FFD700] font-black uppercase">{teamB} Logo (Web URL or Upload)</label>
+                  <div className="p-3 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] space-y-2">
+                    <label className="text-[10px] text-[#D97706] font-black uppercase">{teamB} Logo (Web URL or Upload)</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
                         value={teamBLogo}
                         onChange={(e) => setTeamBLogo(e.target.value)}
-                        placeholder="https://... or /cricket/team_b.png"
-                        className="flex-1 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#333333] text-white outline-none font-mono text-xs"
+                        placeholder="https://... or /uploads/..."
+                        className="flex-1 px-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] outline-none font-mono text-xs"
                       />
-                      <label className="cursor-pointer px-3 py-2 rounded-lg bg-[#1A1A1A] hover:bg-[#252525] border border-[#3A3A3A] text-xs font-black text-[#FFD700] flex items-center gap-1.5 transition shrink-0">
+                      <label className="cursor-pointer px-3 py-2 rounded-lg bg-[#FEF3C7] hover:bg-[#FDE68A] border border-[#FDE68A] text-xs font-black text-[#D97706] flex items-center gap-1.5 transition shrink-0">
                         <Upload className="w-3.5 h-3.5" />
                         <span>{uploadingField === 'team_b' ? 'Uploading...' : 'Upload File'}</span>
                         <input
@@ -929,29 +1071,31 @@ export default function AdminCricketMatchesPage() {
                           className="hidden"
                         />
                       </label>
-                      {teamBLogo && (
-                        <img
-                          src={teamBLogo}
-                          alt="Team B"
-                          className="w-9 h-9 rounded-lg border border-[#333333] object-contain bg-[#111111] shrink-0"
-                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                        />
-                      )}
+                      {resolveImageUrl(teamBLogo) ? (
+                        <div className="w-12 h-12 rounded-xl border border-[#CBD5E1] bg-white overflow-hidden shrink-0 flex items-center justify-center shadow-xs">
+                          <img
+                            src={resolveImageUrl(teamBLogo)}
+                            alt="Team B"
+                            className="w-full h-full object-contain"
+                            onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
                   {/* Match Poster */}
-                  <div className="p-3 rounded-xl bg-[#000000] border border-[#222222] space-y-2">
-                    <label className="text-[10px] text-[#A3A3A3] font-black uppercase">Match Poster / Banner (Web URL or Upload)</label>
+                  <div className="p-3 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] space-y-2">
+                    <label className="text-[10px] text-[#64748B] font-black uppercase">Match Poster / Banner (Web URL or Upload)</label>
                     <div className="flex items-center gap-2">
                       <input
                         type="text"
                         value={matchPoster}
                         onChange={(e) => setMatchPoster(e.target.value)}
-                        placeholder="https://... or /cricket/poster.png"
-                        className="flex-1 px-3 py-2 rounded-lg bg-[#0A0A0A] border border-[#333333] text-white outline-none font-mono text-xs"
+                        placeholder="https://... or /uploads/..."
+                        className="flex-1 px-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] outline-none font-mono text-xs"
                       />
-                      <label className="cursor-pointer px-3 py-2 rounded-lg bg-[#1A1A1A] hover:bg-[#252525] border border-[#3A3A3A] text-xs font-black text-[#FFD700] flex items-center gap-1.5 transition shrink-0">
+                      <label className="cursor-pointer px-3 py-2 rounded-lg bg-[#F1F5F9] hover:bg-[#E2E8F0] border border-[#CBD5E1] text-xs font-black text-[#334155] flex items-center gap-1.5 transition shrink-0">
                         <Upload className="w-3.5 h-3.5" />
                         <span>{uploadingField === 'poster' ? 'Uploading...' : 'Upload File'}</span>
                         <input
@@ -962,14 +1106,16 @@ export default function AdminCricketMatchesPage() {
                           className="hidden"
                         />
                       </label>
-                      {matchPoster && (
-                        <img
-                          src={matchPoster}
-                          alt="Poster"
-                          className="w-9 h-9 rounded-lg border border-[#333333] object-cover bg-[#111111] shrink-0"
-                          onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                        />
-                      )}
+                      {resolveImageUrl(matchPoster) ? (
+                        <div className="w-14 h-12 rounded-xl border border-[#CBD5E1] bg-white overflow-hidden shrink-0 flex items-center justify-center shadow-xs">
+                          <img
+                            src={resolveImageUrl(matchPoster)}
+                            alt="Poster"
+                            className="w-full h-full object-cover"
+                            onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -978,13 +1124,13 @@ export default function AdminCricketMatchesPage() {
               {currentStep === 3 && (
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="font-black text-[#FFD700] uppercase">30 Players Pool</span>
-                    <span className="text-[#A3A3A3]">15 {teamA} + 15 {teamB}</span>
+                    <span className="font-black text-[#1E3A8A] uppercase">30 Players Pool</span>
+                    <span className="text-[#64748B]">15 {teamA} + 15 {teamB}</span>
                   </div>
                   <div className="grid md:grid-cols-2 gap-3">
                     {[
-                      { team: teamA, start: 0, end: 15, labelColor: 'text-[#FF8095]' },
-                      { team: teamB, start: 15, end: 30, labelColor: 'text-[#FFD700]' }
+                      { team: teamA, start: 0, end: 15, labelColor: 'text-[#1D4ED8]' },
+                      { team: teamB, start: 15, end: 30, labelColor: 'text-[#D97706]' }
                     ].map(({ team, start, end, labelColor }) => (
                       <div key={team} className="space-y-1.5">
                         <span className={`font-black text-xs uppercase ${labelColor}`}>{team}</span>
@@ -992,30 +1138,84 @@ export default function AdminCricketMatchesPage() {
                           {players.slice(start, end).map((p, idx) => {
                             const realIdx = start + idx;
                             return (
-                              <div key={realIdx} className="p-1.5 rounded bg-[#000000] border border-[#222222] flex items-center gap-1.5">
-                                <span className="text-[10px] text-[#A3A3A3] w-4">{idx + 1}</span>
-                                <input
-                                  type="text"
-                                  value={p.name}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setPlayers(prev => prev.map((item, i) => i === realIdx ? { ...item, name: val } : item));
-                                  }}
-                                  className="flex-1 px-2 py-0.5 rounded bg-[#111111] border border-[#333333] text-white text-xs outline-none"
-                                />
-                                <select
-                                  value={p.role}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setPlayers(prev => prev.map((item, i) => i === realIdx ? { ...item, role: val } : item));
-                                  }}
-                                  className="px-1.5 py-0.5 rounded bg-[#111111] border border-[#333333] text-[#FFD700] text-[10px] font-bold outline-none"
-                                >
-                                  <option value="WK">WK</option>
-                                  <option value="BAT">BAT</option>
-                                  <option value="AR">AR</option>
-                                  <option value="BOWL">BOWL</option>
-                                </select>
+                              <div key={realIdx} className="p-2 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] space-y-1.5 shadow-xs">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-[10px] text-[#64748B] font-bold w-4">{idx + 1}</span>
+                                  {resolveImageUrl(p.photo_url) ? (
+                                    <div className="w-8 h-8 rounded-full border border-[#93C5FD] bg-white overflow-hidden shrink-0 flex items-center justify-center">
+                                      <img
+                                        src={resolveImageUrl(p.photo_url)}
+                                        alt=""
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div className="w-8 h-8 rounded-full bg-[#E2E8F0] border border-[#CBD5E1] flex items-center justify-center text-[9px] text-[#1E3A8A] font-black shrink-0">
+                                      {p.role}
+                                    </div>
+                                  )}
+                                  <input
+                                    type="text"
+                                    value={p.name}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setPlayers(prev => prev.map((item, i) => i === realIdx ? { ...item, name: val } : item));
+                                    }}
+                                    placeholder="Player Name"
+                                    className="flex-1 px-2.5 py-1 rounded bg-white border border-[#CBD5E1] text-[#0F172A] text-xs font-bold outline-none"
+                                  />
+                                  <select
+                                    value={p.role}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setPlayers(prev => prev.map((item, i) => i === realIdx ? { ...item, role: val } : item));
+                                    }}
+                                    className="px-2 py-1 rounded bg-[#EFF6FF] border border-[#BFDBFE] text-[#1D4ED8] text-xs font-black outline-none"
+                                  >
+                                    <option value="WK">WK</option>
+                                    <option value="BAT">BAT</option>
+                                    <option value="AR">AR</option>
+                                    <option value="BOWL">BOWL</option>
+                                  </select>
+                                </div>
+                                <div className="flex items-center gap-1.5 pl-6">
+                                  <input
+                                    type="text"
+                                    value={p.photo_url || ''}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setPlayers(prev => prev.map((item, i) => i === realIdx ? { ...item, photo_url: val } : item));
+                                    }}
+                                    placeholder="Photo URL (paste web image link)"
+                                    className="flex-1 px-2 py-0.5 rounded bg-white border border-[#CBD5E1] text-[#0F172A] text-[11px] outline-none placeholder-[#94A3B8]"
+                                  />
+                                  <label className="cursor-pointer px-2 py-1 rounded bg-[#EFF6FF] hover:bg-[#DBEAFE] border border-[#BFDBFE] text-[10px] font-black text-[#1D4ED8] flex items-center gap-1 transition shrink-0">
+                                    <Upload className="w-2.5 h-2.5" />
+                                    <span>Upload Photo</span>
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        const formData = new FormData();
+                                        formData.append('image', file);
+                                        try {
+                                          const base = getApiBase();
+                                          const headers: Record<string, string> = {};
+                                          if (token) headers['Authorization'] = `Bearer ${token}`;
+                                          const res = await fetch(`${base}/admin/upload`, { method: 'POST', headers, body: formData });
+                                          const data = await res.json();
+                                          if (data?.url) {
+                                            setPlayers(prev => prev.map((item, i) => i === realIdx ? { ...item, photo_url: data.url } : item));
+                                          }
+                                        } catch (err) { console.error('Photo upload failed:', err); }
+                                      }}
+                                      className="hidden"
+                                    />
+                                  </label>
+                                </div>
                               </div>
                             );
                           })}
@@ -1029,11 +1229,11 @@ export default function AdminCricketMatchesPage() {
               {currentStep === 4 && (
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="font-black text-[#FFD700] uppercase">Contests Configuration</span>
+                    <span className="font-black text-[#1E3A8A] uppercase">Contests Configuration</span>
                     <button
                       type="button"
                       onClick={() => setContests(prev => [...prev, { type: 'standard', title: `Contest #${prev.length + 1}`, prize_pool: 10000, entry_fee: 25, total_spots: 500 }])}
-                      className="text-xs font-black text-[#FFD700] hover:underline"
+                      className="text-xs font-black text-[#2563EB] hover:underline"
                     >
                       + Add Contest
                     </button>
@@ -1041,7 +1241,7 @@ export default function AdminCricketMatchesPage() {
 
                   <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                     {contests.map((c, idx) => (
-                      <div key={idx} className="p-2.5 rounded-xl bg-[#000000] border border-[#222222] space-y-2">
+                      <div key={idx} className="p-2.5 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] space-y-2">
                         <div className="flex justify-between items-center">
                           <input
                             type="text"
@@ -1050,10 +1250,10 @@ export default function AdminCricketMatchesPage() {
                               const val = e.target.value;
                               setContests(prev => prev.map((item, i) => i === idx ? { ...item, title: val } : item));
                             }}
-                            className="font-bold text-xs bg-transparent text-white border-b border-[#333333] outline-none w-2/3"
+                            className="font-bold text-xs bg-transparent text-[#0F172A] border-b border-[#CBD5E1] outline-none w-2/3"
                           />
                           {contests.length > 1 && (
-                            <button type="button" onClick={() => setContests(prev => prev.filter((_, i) => i !== idx))} className="text-[#A3A3A3] hover:text-[#FF1744] text-xs">
+                            <button type="button" onClick={() => setContests(prev => prev.filter((_, i) => i !== idx))} className="text-[#64748B] hover:text-red-600 text-xs font-black">
                               ✕
                             </button>
                           )}
@@ -1066,7 +1266,7 @@ export default function AdminCricketMatchesPage() {
                               const val = e.target.value;
                               setContests(prev => prev.map((item, i) => i === idx ? { ...item, type: val } : item));
                             }}
-                            className="px-2 py-1 rounded bg-[#111111] border border-[#333333] text-[#FFD700] font-bold text-xs"
+                            className="px-2 py-1 rounded bg-white border border-[#CBD5E1] text-[#2563EB] font-bold text-xs"
                           >
                             <option value="standard">Standard</option>
                             <option value="multi_battlefield">Battlefield</option>
@@ -1074,7 +1274,7 @@ export default function AdminCricketMatchesPage() {
                           </select>
 
                           {c.type === 'h2h' ? (
-                            <div className="col-span-2 text-[10px] text-[#FFD700] flex items-center font-bold">
+                            <div className="col-span-2 text-[10px] text-[#2563EB] flex items-center font-bold">
                               User specifies entry fee on challenge (85% win split)
                             </div>
                           ) : (
@@ -1087,7 +1287,7 @@ export default function AdminCricketMatchesPage() {
                                   const val = parseFloat(e.target.value) || 0;
                                   setContests(prev => prev.map((item, i) => i === idx ? { ...item, entry_fee: val } : item));
                                 }}
-                                className="px-2 py-1 rounded bg-[#111111] border border-[#333333] text-white text-xs"
+                                className="px-2 py-1 rounded bg-white border border-[#CBD5E1] text-[#0F172A] text-xs"
                               />
                               <input
                                 type="number"
@@ -1097,7 +1297,7 @@ export default function AdminCricketMatchesPage() {
                                   const val = parseFloat(e.target.value) || 0;
                                   setContests(prev => prev.map((item, i) => i === idx ? { ...item, prize_pool: val } : item));
                                 }}
-                                className="px-2 py-1 rounded bg-[#111111] border border-[#333333] text-white text-xs"
+                                className="px-2 py-1 rounded bg-white border border-[#CBD5E1] text-[#0F172A] text-xs"
                               />
                             </>
                           )}
@@ -1109,9 +1309,9 @@ export default function AdminCricketMatchesPage() {
               )}
 
               {currentStep === 5 && (
-                <div className="space-y-3 p-4 rounded-xl bg-[#000000] border border-[#222222]">
-                  <h4 className="font-black text-xs text-[#FFD700] uppercase">Contest Lock Timing</h4>
-                  <p className="text-xs text-[#A3A3A3]">
+                <div className="space-y-3 p-4 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1]">
+                  <h4 className="font-black text-xs text-[#1E3A8A] uppercase">Contest Lock Timing</h4>
+                  <p className="text-xs text-[#64748B]">
                     Contests automatically lock X minutes before start time.
                   </p>
                   <div className="flex gap-2">
@@ -1132,24 +1332,24 @@ export default function AdminCricketMatchesPage() {
               )}
 
               {currentStep === 6 && (
-                <div className="space-y-3 p-4 rounded-xl bg-[#000000] border border-[#222222]">
-                  <h4 className="font-black text-xs text-[#FFD700] uppercase">
+                <div className="space-y-3 p-4 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1]">
+                  <h4 className="font-black text-xs text-[#1E3A8A] uppercase">
                     {editingMatchId ? 'Ready to Update Database' : 'Ready for DB Verification'}
                   </h4>
                   <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div><span className="text-[#A3A3A3]">Match:</span> <strong className="text-white ml-1">{teamA} vs {teamB}</strong></div>
-                    <div><span className="text-[#A3A3A3]">Category:</span> <strong className="text-[#FFD700] ml-1">{category}</strong></div>
-                    <div><span className="text-[#A3A3A3]">Squad:</span> <strong className="text-white ml-1">{players.length} Players</strong></div>
-                    <div><span className="text-[#A3A3A3]">Contests:</span> <strong className="text-white ml-1">{contests.length} Configured</strong></div>
-                    <div><span className="text-[#A3A3A3]">Lock Time:</span> <strong className="text-white ml-1">{lockMinutes}m before start</strong></div>
-                    <div><span className="text-[#A3A3A3]">Mode:</span> <strong className="text-[#FF8095] ml-1">{editingMatchId ? 'Update Existing' : 'New Creation'}</strong></div>
+                    <div><span className="text-[#64748B]">Match:</span> <strong className="text-[#0F172A] ml-1">{teamA} vs {teamB}</strong></div>
+                    <div><span className="text-[#64748B]">Category:</span> <strong className="text-[#2563EB] ml-1">{category}</strong></div>
+                    <div><span className="text-[#64748B]">Squad:</span> <strong className="text-[#0F172A] ml-1">{players.length} Players</strong></div>
+                    <div><span className="text-[#64748B]">Contests:</span> <strong className="text-[#0F172A] ml-1">{contests.length} Configured</strong></div>
+                    <div><span className="text-[#64748B]">Lock Time:</span> <strong className="text-[#0F172A] ml-1">{lockMinutes}m before start</strong></div>
+                    <div><span className="text-[#64748B]">Mode:</span> <strong className="text-[#1D4ED8] ml-1">{editingMatchId ? 'Update Existing' : 'New Creation'}</strong></div>
                   </div>
                 </div>
               )}
             </div>
 
             {/* Controls */}
-            <div className="pt-3 border-t border-[#222222] flex justify-between">
+            <div className="pt-3 border-t border-[#E2E8F0] flex justify-between">
               {currentStep > 1 ? (
                 <button
                   type="button"
@@ -1185,5 +1385,13 @@ export default function AdminCricketMatchesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AdminCricketMatchesPage() {
+  return (
+    <Suspense fallback={<div className="p-12 text-center text-[#64748B] font-bold">Loading match console...</div>}>
+      <AdminCricketMatchesContent />
+    </Suspense>
   );
 }

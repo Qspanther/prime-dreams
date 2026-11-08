@@ -16,6 +16,13 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  images: {
+    remotePatterns: [
+      { protocol: 'http', hostname: 'localhost' },
+      { protocol: 'http', hostname: '127.0.0.1' },
+      { protocol: 'https', hostname: '**' },
+    ],
+  },
   allowedDevOrigins: [
     '*.trycloudflare.com',
     'localhost:3000',
@@ -26,12 +33,12 @@ const nextConfig: NextConfig = {
   async rewrites() {
     return [
       {
-        source: '/api-backend/:path*',
-        destination: `${backendUrl}/:path*`,
-      },
-      {
         source: '/uploads/:path*',
         destination: `${backendUrl}/uploads/:path*`,
+      },
+      {
+        source: '/api-backend/:path*',
+        destination: `${backendUrl}/:path*`,
       },
     ];
   },

@@ -1046,7 +1046,7 @@ router.post('/cricket/matches/verify-and-create', async (req, res) => {
         name: p.name.trim(),
         team_name: p.team_name.trim(),
         role: p.role,
-        photo_url: p.photo_url || '/cricket/player_avatar.png',
+        photo_url: p.photo_url || null,
         credits: parseFloat(p.credits) || 9.0,
         points: 0,
       });
@@ -1152,6 +1152,7 @@ router.put('/cricket/matches/:id', async (req, res) => {
           team_name: p.team_name,
           name: p.name,
           role: p.role || 'BAT',
+          photo_url: p.photo_url || null,
           credits: parseFloat(p.credits) || 9.0,
           points: 0,
           stats: { runs: 0, balls: 0, wickets: 0, overs: 0 },
