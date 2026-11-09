@@ -180,7 +180,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
               {/* 3D Teams Face-Off Card Ribbon */}
               <div className="grid grid-cols-7 items-center bg-white/90 rounded-2xl p-4 sm:p-5 border-2 border-[#CBD5E1] shadow-[0_4px_12px_rgba(30,58,138,0.06)]">
                 {/* Team A */}
-                <div className="col-span-3 flex items-center gap-3">
+                <div className="col-span-3 flex items-center gap-2 sm:gap-3 min-w-0">
                   <div className="w-13 h-13 rounded-2xl bg-gradient-to-b from-[#EF4444] to-[#B91C1C] flex items-center justify-center shadow-[0_4px_14px_rgba(239,68,68,0.4)] font-black text-lg text-white font-['Montserrat'] shrink-0 border-2 border-white overflow-hidden">
                     {resolveImageUrl(heroMatch.team_a_logo) && heroMatch.team_a_logo !== '/cricket/team_a.png' ? (
                       <img src={resolveImageUrl(heroMatch.team_a_logo)} alt={heroMatch.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.innerHTML = heroMatch.team_a_code || heroMatch.team_a?.slice(0, 3).toUpperCase(); }} />
@@ -188,28 +188,28 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                   </div>
                   <div className="flex flex-col min-w-0">
                     <span className="font-black text-base text-[#0F172A] truncate drop-shadow-sm">{heroMatch.team_a}</span>
-                    <span className="text-xs text-emerald-600 font-extrabold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                      Form: W • W • L • W
+                    <span className="text-[10px] sm:text-xs text-emerald-600 font-extrabold flex items-center gap-1 min-w-0 max-w-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                      <span className="truncate">Form: W • W • L • W</span>
                     </span>
                   </div>
                 </div>
 
                 {/* VS Badge & Lock Countdown */}
-                <div className="col-span-1 flex flex-col items-center justify-center text-center">
+                <div className="col-span-1 min-w-0 flex flex-col items-center justify-center text-center">
                   <span className="font-black text-base text-[#2563EB] italic">VS</span>
-                  <div className="bg-[#E0F2FE] px-2.5 py-1 rounded-full text-[#0369A1] text-[10px] font-black mt-1 whitespace-nowrap border border-[#38BDF8] shadow-sm">
+                  <div className="bg-[#E0F2FE] px-1.5 py-0.5 rounded-full text-[#0369A1] text-[9px] font-black mt-1 border border-[#38BDF8] shadow-sm leading-tight max-w-full">
                     {heroMatch.status === 'live' ? 'LIVE NOW' : `${heroMatch.match_date}`}
                   </div>
                 </div>
 
                 {/* Team B */}
-                <div className="col-span-3 flex items-center justify-end gap-3 text-right">
+                <div className="col-span-3 flex items-center justify-end gap-2 sm:gap-3 text-right min-w-0">
                   <div className="flex flex-col min-w-0 items-end">
                     <span className="font-black text-base text-[#0F172A] truncate drop-shadow-sm">{heroMatch.team_b}</span>
-                    <span className="text-xs text-emerald-600 font-extrabold flex items-center gap-1">
-                      Form: W • W • W • L
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span className="text-[10px] sm:text-xs text-emerald-600 font-extrabold flex items-center gap-1 min-w-0 max-w-full">
+                      <span className="truncate">Form: W • W • W • L</span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                     </span>
                   </div>
                   <div className="w-13 h-13 rounded-2xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] flex items-center justify-center shadow-[0_4px_14px_rgba(245,158,11,0.4)] font-black text-lg text-white font-['Montserrat'] shrink-0 border-2 border-white overflow-hidden">
@@ -253,7 +253,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
               </div>
 
               {/* 3D Tactile Water Action Buttons */}
-              <div className="grid grid-cols-2 gap-3 pt-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                 <Link
                   href={`/team-builder/${heroMatch.id}`}
                   className="prime-btn-dark-3d text-center text-xs font-black uppercase tracking-wider"
@@ -425,7 +425,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
                   {/* Match Poster Banner if uploaded */}
                   {resolveImageUrl(m.match_poster) && (
-                    <div className="relative h-24 w-full rounded-xl overflow-hidden mb-3 border border-[#CBD5E1] shadow-xs">
+                    <div className="relative aspect-[3/2] w-full rounded-xl overflow-hidden mb-3 border border-[#CBD5E1] shadow-xs">
                       <img
                         src={resolveImageUrl(m.match_poster)}
                         alt={m.title}
@@ -526,7 +526,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
                 {/* Match Poster Banner if uploaded */}
                 {resolveImageUrl(m.match_poster) && (
-                  <div className="relative h-20 w-full rounded-xl overflow-hidden border border-[#CBD5E1]">
+                  <div className="relative aspect-[3/2] w-full rounded-xl overflow-hidden border border-[#CBD5E1]">
                     <img
                       src={resolveImageUrl(m.match_poster)}
                       alt={m.title}

@@ -83,26 +83,26 @@ export default function VerifyOtpPage() {
           <PrimeLogo size="md" />
         </div>
 
-        <div className="glass p-8 glow-cyan">
+        <div className="prime-card-3d p-8">
           <div className="flex items-center gap-3 mb-4">
-            <ShieldCheck size={28} className="text-neon-cyan" />
+            <ShieldCheck size={28} className="text-[#2563EB]" />
             <div>
-              <h2 className="text-2xl font-bold">Verify OTP</h2>
-              <p className="text-xs text-text-secondary">Enter the 6-digit code sent to your email</p>
+              <h2 className="text-2xl font-bold text-[#0F172A]">Verify OTP</h2>
+              <p className="text-xs text-[#334155]">Enter the 6-digit code sent to your email</p>
             </div>
           </div>
 
           {/* Email Notice & Quick Edit */}
-          <div className="mb-6 p-4 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 space-y-2">
+          <div className="mb-6 p-4 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1] space-y-2">
             <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-2 text-xs text-neon-cyan font-bold">
+              <div className="flex items-center gap-2 text-xs text-[#2563EB] font-bold">
                 <Mail size={15} />
                 <span>Verification Email</span>
               </div>
               <button
                 type="button"
                 onClick={() => setIsEditingEmail(!isEditingEmail)}
-                className="text-[11px] text-text-muted hover:text-white flex items-center gap-1 transition-colors"
+                className="text-[11px] text-[#64748B] hover:text-[#0F172A] flex items-center gap-1 transition-colors"
               >
                 <Edit2 size={12} />
                 {isEditingEmail ? 'Done' : 'Change'}
@@ -115,27 +115,27 @@ export default function VerifyOtpPage() {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="Enter your email address"
-                className="w-full px-3 py-1.5 text-xs bg-black/50 border border-white/20 rounded-lg text-white outline-none focus:border-neon-cyan"
+                className="w-full px-3 py-1.5 text-xs bg-white border border-[#CBD5E1] rounded-lg text-[#0F172A] placeholder-[#64748B] outline-none focus:border-[#2563EB]"
               />
             ) : (
-              <p className="text-xs text-slate-300 font-mono break-all font-semibold">
-                {email || <span className="text-amber-400 font-normal font-sans">No email set. Click Change to enter.</span>}
+              <p className="text-xs text-[#334155] font-mono break-all font-semibold">
+                {email || <span className="text-[#D97706] font-normal font-sans">No email set. Click Change to enter.</span>}
               </p>
             )}
 
-            <p className="text-[11px] text-text-muted">
+            <p className="text-[11px] text-[#64748B]">
               💡 Please check your <strong>Inbox</strong> and <strong>Spam / Junk</strong> folder.
             </p>
           </div>
 
           {error && (
-            <div className="mb-4 p-3 rounded-xl bg-danger/10 border border-danger/20 text-xs text-danger font-medium">
+            <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-300 text-xs text-red-700 font-medium">
               {error}
             </div>
           )}
 
           {successMsg && (
-            <div className="mb-4 p-3 rounded-xl bg-success/10 border border-success/20 text-xs text-success flex items-center gap-2 font-medium">
+            <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-xs text-emerald-700 flex items-center gap-2 font-medium">
               <CheckCircle2 size={16} className="shrink-0" />
               <span>{successMsg}</span>
             </div>
@@ -143,7 +143,7 @@ export default function VerifyOtpPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label className="block text-xs text-text-muted mb-2 text-center uppercase tracking-wider font-semibold">
+              <label className="block text-xs text-[#64748B] mb-2 text-center uppercase tracking-wider font-semibold">
                 6-Digit Security Code
               </label>
               <input
@@ -154,7 +154,7 @@ export default function VerifyOtpPage() {
                 required
                 maxLength={6}
                 autoFocus
-                className="w-full text-center !text-3xl !tracking-[0.4em] !font-mono py-3"
+                className="w-full text-center !text-3xl !tracking-[0.4em] !font-mono py-3 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] placeholder-[#64748B] focus:border-[#2563EB] outline-none"
               />
             </div>
 
@@ -163,7 +163,7 @@ export default function VerifyOtpPage() {
               disabled={loading || otp.length !== 6}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="w-full py-3.5 text-sm font-bold bg-gradient-to-r from-neon-cyan to-neon-purple text-white rounded-xl disabled:opacity-50 shadow-lg shadow-neon-cyan/20 hover:opacity-95 transition cursor-pointer"
+              className="w-full py-3.5 text-sm font-bold prime-btn-3d rounded-xl disabled:opacity-50 shadow-lg shadow-[#2563EB]/20 hover:opacity-95 transition cursor-pointer"
             >
               {loading ? 'Verifying OTP...' : 'Verify & Enter 3D Arena'}
             </motion.button>
@@ -174,7 +174,7 @@ export default function VerifyOtpPage() {
                 type="button"
                 onClick={handleResendOtp}
                 disabled={cooldown > 0 || resending || !email.trim()}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-neon-cyan hover:underline disabled:text-text-muted disabled:no-underline disabled:cursor-not-allowed transition"
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#2563EB] hover:underline disabled:text-[#64748B] disabled:no-underline disabled:cursor-not-allowed transition"
               >
                 <RefreshCw size={13} className={resending ? 'animate-spin' : ''} />
                 {resending
@@ -186,8 +186,8 @@ export default function VerifyOtpPage() {
             </div>
           </form>
 
-          <div className="mt-6 pt-4 border-t border-white/10 text-center">
-            <Link href="/signup" className="text-xs text-text-muted hover:text-white transition">
+          <div className="mt-6 pt-4 border-t border-[#E2E8F0] text-center">
+            <Link href="/signup" className="text-xs text-[#64748B] hover:text-[#2563EB] transition">
               ← Back to Create Account
             </Link>
           </div>

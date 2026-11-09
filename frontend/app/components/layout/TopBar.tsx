@@ -61,48 +61,48 @@ export default function TopBar() {
     <>
       <header className="sticky top-0 z-30 border-b-2 border-[#CBD5E1] bg-white/90 backdrop-blur-xl px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-4 shadow-[0_4px_20px_rgba(30,58,138,0.06)] text-[#0F172A]">
         {/* Left: Logo & Mobile Toggle */}
-        <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
+        <div className="flex items-center gap-1.5 sm:gap-4 min-w-0 flex-1">
           <button
             onClick={() => setMobileDrawerOpen(true)}
-            className="lg:hidden p-2 rounded-xl text-[#475569] hover:bg-[#E0F2FE] hover:text-[#0284C7] border border-[#CBD5E1] transition shadow-sm"
+            className="lg:hidden shrink-0 p-1.5 sm:p-2 rounded-xl text-[#475569] hover:bg-[#E0F2FE] hover:text-[#0284C7] border border-[#CBD5E1] transition shadow-sm"
             aria-label="Open Navigation Drawer"
           >
             <Menu className="w-5 h-5" />
           </button>
 
-          <Link href="/" className="flex items-center gap-2 shrink-0">
-            <PrimeLogo size="sm" />
+          <Link href="/" className="flex items-center gap-2 shrink-0 min-w-0">
+            <PrimeLogo size="sm" compactOnMobile />
           </Link>
 
           {/* Section 8: Global Live Indicator (3D Glowing Badge) */}
           {liveCount > 0 && (
             <button
               onClick={() => setShowLiveSwitcher(true)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gradient-to-r from-red-50 to-red-100 border-2 border-[#EF4444] text-xs font-black text-[#B91C1C] hover:scale-105 shadow-[0_4px_12px_rgba(239,68,68,0.25)] transition cursor-pointer"
+              className="shrink-0 flex items-center gap-1 sm:gap-2 px-1.5 sm:px-3 py-1.5 rounded-full bg-gradient-to-r from-red-50 to-red-100 border-2 border-[#EF4444] text-[10px] sm:text-xs font-black text-[#B91C1C] hover:scale-105 shadow-[0_4px_12px_rgba(239,68,68,0.25)] transition cursor-pointer"
               title="Click to switch live matches"
             >
-              <Radio className="w-3.5 h-3.5 text-[#EF4444] animate-pulse" />
-              <span className="tracking-wider">{liveCount} {liveCount === 1 ? 'Match' : 'Matches'} LIVE</span>
+              <Radio className="w-3.5 h-3.5 text-[#EF4444] animate-pulse shrink-0" />
+              <span className="tracking-wider whitespace-nowrap">{liveCount}<span className="hidden md:inline"> {liveCount === 1 ? 'Match' : 'Matches'} LIVE</span></span>
             </button>
           )}
         </div>
 
         {/* Right: Wallet Balance, Notifications & User */}
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           {/* 3D Gold Wallet Balance Pill */}
           <Link
             href="/wallet"
-            className="prime-btn-gold-3d !py-1.5 !px-3.5 !text-xs font-black"
+            className="prime-btn-gold-3d !py-1.5 !px-2 sm:!px-3.5 !text-xs font-black shrink-0"
           >
-            <Wallet className="w-4 h-4 text-[#92400E]" />
-            <span className="font-mono text-sm">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+            <Wallet className="w-4 h-4 text-[#92400E] shrink-0" />
+            <span className="font-mono text-xs sm:text-sm whitespace-nowrap">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
           </Link>
 
           {/* Notifications */}
           <div className="relative">
             <button
               onClick={() => setShowNotif(!showNotif)}
-              className="relative p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#475569] hover:text-[#2563EB] hover:border-[#3B82F6] transition shadow-sm"
+              className="relative p-2 sm:p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#475569] hover:text-[#2563EB] hover:border-[#3B82F6] transition shadow-sm"
               aria-label="Notifications"
             >
               <Bell className="w-4 h-4" />
@@ -141,20 +141,19 @@ export default function TopBar() {
               {user.role === 'admin' && (
                 <Link
                   href="/admin/tournaments"
-                  className="prime-btn-3d !py-1.5 !px-3 !text-xs"
+                  className="prime-btn-3d !py-1.5 !px-2 sm:!px-3 !text-xs"
                   title="Open Admin Console"
                 >
                   <Shield className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Admin Console</span>
-                  <span className="sm:hidden">Admin</span>
+                  <span className="hidden lg:inline">Admin Console</span>
                 </Link>
               )}
-              <span className="hidden sm:inline text-xs font-black text-[#0369A1] px-2.5 py-1 rounded-xl bg-[#E0F2FE] border border-[#BAE6FD]">
+              <span className="hidden lg:inline text-xs font-black text-[#0369A1] px-2.5 py-1 rounded-xl bg-[#E0F2FE] border border-[#BAE6FD]">
                 @{user.username || user.name?.split(' ')[0]}
               </span>
               <button
                 onClick={logout}
-                className="p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#64748B] hover:text-[#EF4444] hover:border-[#EF4444] transition shadow-sm"
+                className="p-2 sm:p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#64748B] hover:text-[#EF4444] hover:border-[#EF4444] transition shadow-sm"
                 title="Logout"
               >
                 <LogOut className="w-4 h-4" />
@@ -176,14 +175,14 @@ export default function TopBar() {
 
       {/* Mobile Drawer (Exactly 4 items Section 2) */}
       {mobileDrawerOpen && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex lg:hidden">
-          <div className="w-68 bg-[#0A0A0A] border-r-2 border-[#262626] p-5 flex flex-col justify-between h-full shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex lg:hidden">
+          <div className="w-68 bg-white border-r-2 border-[#CBD5E1] p-5 flex flex-col justify-between h-full shadow-2xl">
             <div>
-              <div className="flex items-center justify-between pb-4 border-b border-[#222222]">
+              <div className="flex items-center justify-between pb-4 border-b border-[#E2E8F0]">
                 <PrimeLogo size="sm" />
                 <button
                   onClick={() => setMobileDrawerOpen(false)}
-                  className="p-1 rounded-lg text-[#A3A3A3] hover:text-white"
+                  className="p-1 rounded-lg text-[#64748B] hover:text-[#0F172A]"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -202,9 +201,9 @@ export default function TopBar() {
                       key={item.href}
                       href={item.href}
                       onClick={() => setMobileDrawerOpen(false)}
-                      className="flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-black text-white hover:bg-[#1A1A1A] hover:text-[#FFD700] border border-transparent hover:border-[#FFD700]/30 transition"
+                      className="flex items-center gap-3.5 px-4 py-3 rounded-xl text-sm font-black text-[#0F172A] hover:bg-[#EFF6FF] hover:text-[#2563EB] border border-transparent hover:border-[#93C5FD] transition"
                     >
-                      <Icon className="w-5 h-5 text-[#FF1744]" />
+                      <Icon className="w-5 h-5 text-[#2563EB]" />
                       <span>{item.label}</span>
                     </Link>
                   );
@@ -213,8 +212,8 @@ export default function TopBar() {
             </div>
 
             <div className="prime-card-shiny-gold p-4 text-center">
-              <p className="text-xs font-black text-[#FFD700]">🏏 PRIME DREEMS</p>
-              <p className="text-[10px] text-[#A3A3A3] mt-0.5 font-bold">Cricket Fantasy Colosseum</p>
+              <p className="text-xs font-black text-[#D97706]">🏏 PRIME DREEMS</p>
+              <p className="text-[10px] text-[#64748B] mt-0.5 font-bold">Cricket Fantasy Colosseum</p>
             </div>
           </div>
 

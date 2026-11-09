@@ -92,7 +92,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="w-8 h-8 border-2 border-neon-purple border-t-transparent rounded-full animate-spin" />
+        <div className="w-8 h-8 border-2 border-[#2563EB] border-t-transparent rounded-full animate-spin" />
       </div>
     );
   }
@@ -106,28 +106,28 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
     const progressPercent = (contest.joined_participants / contest.max_participants) * 100;
     
     return (
-      <div className="glass p-5 rounded-2xl border border-white/5 hover:border-white/10 transition-colors">
+      <div className="prime-card-3d p-5 transition-colors">
         <div className="flex justify-between items-start mb-4">
           <div>
             <h3 className="font-bold text-lg">{contest.name}</h3>
-            <p className="text-xs text-text-muted capitalize">{contest.type.replace(/_/g, ' ')}</p>
+            <p className="text-xs text-[#64748B] capitalize">{contest.type.replace(/_/g, ' ')}</p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-text-muted mb-1">Prize Pool</p>
-            <p className="font-bold text-neon-cyan flex items-center justify-end gap-1">
+            <p className="text-xs text-[#64748B] mb-1">Prize Pool</p>
+            <p className="font-bold text-[#2563EB] flex items-center justify-end gap-1">
               <Trophy size={14} /> ₹{contest.prize_pool}
             </p>
           </div>
         </div>
 
         <div className="mb-4">
-          <div className="flex justify-between text-xs text-text-muted mb-2">
+          <div className="flex justify-between text-xs text-[#64748B] mb-2">
             <span>{spotsLeft} spots left</span>
             <span>{contest.max_participants} spots</span>
           </div>
-          <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+          <div className="w-full h-1.5 bg-[#E2E8F0] rounded-full overflow-hidden">
             <div 
-              className="h-full bg-gradient-to-r from-neon-purple to-neon-cyan rounded-full"
+              className="h-full bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] rounded-full"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -135,11 +135,11 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
 
         <div className="flex justify-between items-center mt-6">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center">
-              <Coins size={14} className="text-neon-gold" />
+            <div className="w-8 h-8 rounded-full bg-[#F1F5F9] flex items-center justify-center">
+              <Coins size={14} className="text-[#D97706]" />
             </div>
             <div>
-              <p className="text-xs text-text-muted">Entry Fee</p>
+              <p className="text-xs text-[#64748B]">Entry Fee</p>
               <p className="font-bold">₹{contest.entry_fee}</p>
             </div>
           </div>
@@ -148,7 +148,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
             whileTap={{ scale: 0.95 }}
             onClick={() => handleJoinClick(contest)}
             disabled={spotsLeft === 0}
-            className="px-6 py-2 bg-white text-black font-bold rounded-xl text-sm disabled:opacity-50"
+            className="px-6 py-2 prime-btn-3d font-bold rounded-xl text-sm disabled:opacity-50"
           >
             {spotsLeft === 0 ? 'Full' : 'Join'}
           </motion.button>
@@ -160,20 +160,20 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       <div className="flex items-center gap-4 mb-8">
-        <button onClick={() => router.back()} className="text-text-muted hover:text-white transition-colors">
+        <button onClick={() => router.back()} className="text-[#64748B] hover:text-[#0F172A] transition-colors">
           ← Back
         </button>
         <div>
           <h1 className="text-2xl font-bold">{tournament?.name} Contests</h1>
-          <p className="text-sm text-text-secondary">Select a contest to join with your team</p>
+          <p className="text-sm text-[#334155]">Select a contest to join with your team</p>
         </div>
       </div>
 
-      <div className="flex justify-between items-center glass p-4 rounded-2xl">
+      <div className="flex justify-between items-center prime-card-3d p-4 rounded-2xl">
         <div className="flex items-center gap-3">
-          <ShieldCheck size={24} className="text-neon-cyan" />
+          <ShieldCheck size={24} className="text-[#2563EB]" />
           <div>
-            <p className="text-sm text-text-muted">Your Teams for this Match</p>
+            <p className="text-sm text-[#64748B]">Your Teams for this Match</p>
             <p className="font-bold">{userTeams.length} Created</p>
           </div>
         </div>
@@ -182,7 +182,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="px-3.5 py-2 bg-neon-purple/20 border border-neon-purple/40 hover:bg-neon-purple/30 text-neon-purple rounded-lg text-sm font-bold flex items-center gap-1.5 transition-colors"
+              className="px-3.5 py-2 prime-btn-dark-3d rounded-lg text-sm font-bold flex items-center gap-1.5 transition-colors"
             >
               <Trophy size={15} /> Live Dashboard
             </motion.button>
@@ -191,7 +191,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
+              className="px-4 py-2 prime-btn-dark-3d rounded-lg text-sm font-bold flex items-center gap-2 transition-colors"
             >
               <UserPlus size={16} /> Create Team
             </motion.button>
@@ -200,7 +200,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
       </div>
 
       {contests.length === 0 ? (
-        <div className="text-center py-20 text-text-muted glass rounded-2xl">
+        <div className="text-center py-20 text-[#64748B] prime-card-3d rounded-2xl">
           No contests available for this match yet.
         </div>
       ) : (
@@ -208,7 +208,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
           {megaContests.length > 0 && (
             <section>
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <span className="w-2 h-6 bg-neon-purple rounded-full"></span> Mega Contests
+                <span className="w-2 h-6 bg-[#2563EB] rounded-full"></span> Mega Contests
               </h2>
               <div className="grid md:grid-cols-2 gap-4">
                 {megaContests.map(c => <ContestCard key={c.id} contest={c} />)}
@@ -219,7 +219,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
           {h2hContests.length > 0 && (
             <section>
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <span className="w-2 h-6 bg-neon-cyan rounded-full"></span> Head to Head
+                <span className="w-2 h-6 bg-[#0EA5E9] rounded-full"></span> Head to Head
               </h2>
               <div className="grid md:grid-cols-2 gap-4">
                 {h2hContests.map(c => <ContestCard key={c.id} contest={c} />)}
@@ -230,7 +230,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
           {otherContests.length > 0 && (
             <section>
               <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <span className="w-2 h-6 bg-neon-gold rounded-full"></span> More Contests
+                <span className="w-2 h-6 bg-[#F59E0B] rounded-full"></span> More Contests
               </h2>
               <div className="grid md:grid-cols-2 gap-4">
                 {otherContests.map(c => <ContestCard key={c.id} contest={c} />)}
@@ -251,26 +251,26 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-md glass p-8 rounded-2xl shadow-2xl border border-white/10"
+              className="relative w-full max-w-md prime-card-3d p-8 rounded-2xl shadow-2xl"
             >
-              <button onClick={() => setSelectedContest(null)} className="absolute top-4 right-4 text-text-muted hover:text-white">
+              <button onClick={() => setSelectedContest(null)} className="absolute top-4 right-4 text-[#64748B] hover:text-[#0F172A]">
                 <X size={20} />
               </button>
 
               <h2 className="text-xl font-bold mb-1">Join {selectedContest.name}</h2>
-              <p className="text-sm text-text-secondary mb-6">Entry Fee: <span className="font-bold text-white">₹{selectedContest.entry_fee}</span></p>
+              <p className="text-sm text-[#334155] mb-6">Entry Fee: <span className="font-bold text-[#0F172A]">₹{selectedContest.entry_fee}</span></p>
 
               {errorMsg && (
-                <div className="mb-4 p-3 rounded-xl bg-danger/10 text-danger text-sm border border-danger/20">
+                <div className="mb-4 p-3 rounded-xl bg-red-50 text-red-700 text-sm border border-red-300">
                   {errorMsg}
                 </div>
               )}
 
               {userTeams.length === 0 ? (
                 <div className="text-center py-6">
-                  <p className="text-text-muted mb-4">You need to create a team for this match first.</p>
+                  <p className="text-[#64748B] mb-4">You need to create a team for this match first.</p>
                   <Link href={`/team-builder/${id}`}>
-                    <button className="px-6 py-3 bg-neon-purple text-white rounded-xl font-bold w-full">
+                    <button className="px-6 py-3 prime-btn-3d rounded-xl font-bold w-full">
                       Create Team Now
                     </button>
                   </Link>
@@ -278,14 +278,14 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
               ) : (
                 <div className="space-y-6">
                   <div>
-                    <label className="block text-sm text-text-muted mb-2">Select Your Team</label>
+                    <label className="block text-sm text-[#64748B] mb-2">Select Your Team</label>
                     <div className="space-y-2">
                       {userTeams.map((team, idx) => (
                         <div 
                           key={team.id}
                           onClick={() => setSelectedTeamId(team.id)}
                           className={`p-4 rounded-xl border cursor-pointer flex justify-between items-center transition-colors ${
-                            selectedTeamId === team.id ? 'border-neon-cyan bg-neon-cyan/10' : 'border-white/10 hover:bg-white/5'
+                            selectedTeamId === team.id ? 'border-[#2563EB] bg-[#2563EB]/10' : 'border-[#CBD5E1] hover:bg-[#F1F5F9]'
                           }`}
                         >
                           <span className="font-bold">Team {idx + 1}</span>
@@ -297,7 +297,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
                   <button
                     onClick={confirmJoin}
                     disabled={joinLoading || !selectedTeamId}
-                    className="w-full py-4 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="w-full py-4 prime-btn-3d font-bold rounded-xl disabled:opacity-50 flex items-center justify-center gap-2"
                   >
                     {joinLoading ? 'Joining...' : `Pay ${selectedContest.entry_fee} & Join`}
                   </button>

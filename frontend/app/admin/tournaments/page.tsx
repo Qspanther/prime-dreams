@@ -413,7 +413,7 @@ function AdminCricketMatchesContent() {
             </div>
 
             {matches.filter(m => m.status === 'live').length === 0 ? (
-              <div className="p-6 text-center text-[#A3A3A3] text-xs font-bold">No matches currently LIVE.</div>
+              <div className="p-6 text-center text-[#64748B] text-xs font-bold">No matches currently LIVE.</div>
             ) : (
               <div className="divide-y divide-[#E2E8F0]">
                 {matches.filter(m => m.status === 'live').map((m) => {
@@ -436,7 +436,7 @@ function AdminCricketMatchesContent() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           <span className="neon-badge-red px-2.5 py-1 rounded-full text-xs font-black uppercase">
                             🔴 LIVE
                           </span>
@@ -569,7 +569,7 @@ function AdminCricketMatchesContent() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center justify-end gap-2">
                           <span className="hidden sm:inline-block px-2.5 py-1 rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] text-xs font-mono font-bold text-[#1D4ED8]">
                             {m.team_a}: {tA.length || 15}
                           </span>
@@ -877,12 +877,12 @@ function AdminCricketMatchesContent() {
                   {currentStep === 6 && 'DB Verification & Publish'}
                 </span>
               </div>
-              <button onClick={() => setShowModal(false)} className="text-[#A3A3A3] hover:text-white">✕</button>
+              <button onClick={() => setShowModal(false)} className="text-[#64748B] hover:text-[#0F172A]">✕</button>
             </div>
 
             {fieldErrors.general && (
-              <div className="p-2.5 rounded-lg bg-red-950/80 border border-red-500/50 text-red-200 text-xs flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-[#FF1744]" />
+              <div className="p-2.5 rounded-lg bg-red-50 border border-red-300 text-red-700 text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-[#DC2626]" />
                 <span>{fieldErrors.general}</span>
               </div>
             )}
@@ -1233,75 +1233,109 @@ function AdminCricketMatchesContent() {
                     <button
                       type="button"
                       onClick={() => setContests(prev => [...prev, { type: 'standard', title: `Contest #${prev.length + 1}`, prize_pool: 10000, entry_fee: 25, total_spots: 500 }])}
-                      className="text-xs font-black text-[#2563EB] hover:underline"
+                      className="prime-btn-3d !py-1.5 !px-3 !text-xs"
                     >
                       + Add Contest
                     </button>
                   </div>
+                  <p className="text-[11px] text-[#64748B] font-bold">
+                    Har contest ka type, name, prize pool, entry fee aur total spots aap khud decide karein.
+                  </p>
 
-                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  <div className="space-y-3 max-h-[26rem] overflow-y-auto pr-1">
                     {contests.map((c, idx) => (
-                      <div key={idx} className="p-2.5 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] space-y-2">
+                      <div key={idx} className="p-3.5 rounded-xl bg-white border-2 border-[#CBD5E1] shadow-[0_0_12px_rgba(37,99,235,0.10)] space-y-3">
                         <div className="flex justify-between items-center">
-                          <input
-                            type="text"
-                            value={c.title}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setContests(prev => prev.map((item, i) => i === idx ? { ...item, title: val } : item));
-                            }}
-                            className="font-bold text-xs bg-transparent text-[#0F172A] border-b border-[#CBD5E1] outline-none w-2/3"
-                          />
+                          <span className="text-[10px] font-black uppercase tracking-wider text-[#2563EB]">Contest #{idx + 1}</span>
                           {contests.length > 1 && (
                             <button type="button" onClick={() => setContests(prev => prev.filter((_, i) => i !== idx))} className="text-[#64748B] hover:text-red-600 text-xs font-black">
-                              ✕
+                              ✕ Remove
                             </button>
                           )}
                         </div>
 
-                        <div className="grid grid-cols-3 gap-2">
-                          <select
-                            value={c.type}
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              setContests(prev => prev.map((item, i) => i === idx ? { ...item, type: val } : item));
-                            }}
-                            className="px-2 py-1 rounded bg-white border border-[#CBD5E1] text-[#2563EB] font-bold text-xs"
-                          >
-                            <option value="standard">Standard</option>
-                            <option value="multi_battlefield">Battlefield</option>
-                            <option value="h2h">H2H</option>
-                          </select>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className="pd-label">Contest Name</label>
+                            <input
+                              type="text"
+                              value={c.title}
+                              placeholder="Mega Grand Contest"
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setContests(prev => prev.map((item, i) => i === idx ? { ...item, title: val } : item));
+                              }}
+                              className="pd-input font-bold"
+                            />
+                          </div>
 
-                          {c.type === 'h2h' ? (
-                            <div className="col-span-2 text-[10px] text-[#2563EB] flex items-center font-bold">
-                              User specifies entry fee on challenge (85% win split)
-                            </div>
-                          ) : (
-                            <>
-                              <input
-                                type="number"
-                                placeholder="Fee"
-                                value={c.entry_fee}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
-                                  setContests(prev => prev.map((item, i) => i === idx ? { ...item, entry_fee: val } : item));
-                                }}
-                                className="px-2 py-1 rounded bg-white border border-[#CBD5E1] text-[#0F172A] text-xs"
-                              />
-                              <input
-                                type="number"
-                                placeholder="Pool"
-                                value={c.prize_pool}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
-                                  setContests(prev => prev.map((item, i) => i === idx ? { ...item, prize_pool: val } : item));
-                                }}
-                                className="px-2 py-1 rounded bg-white border border-[#CBD5E1] text-[#0F172A] text-xs"
-                              />
-                            </>
-                          )}
+                          <div>
+                            <label className="pd-label">Contest Type</label>
+                            <select
+                              value={c.type}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setContests(prev => prev.map((item, i) => i === idx ? { ...item, type: val } : item));
+                              }}
+                              className="pd-input font-bold text-[#2563EB]"
+                            >
+                              <option value="standard">Standard Pool</option>
+                              <option value="multi_battlefield">PUBG Battlefield</option>
+                              <option value="h2h">Head-to-Head (H2H)</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="pd-label">Total Spots</label>
+                            <input
+                              type="number"
+                              min={2}
+                              value={c.total_spots}
+                              disabled={c.type === 'h2h'}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10) || 0;
+                                setContests(prev => prev.map((item, i) => i === idx ? { ...item, total_spots: val } : item));
+                              }}
+                              className="pd-input font-mono disabled:opacity-50"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="pd-label">Entry Fee (₹)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={c.entry_fee}
+                              disabled={c.type === 'h2h'}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setContests(prev => prev.map((item, i) => i === idx ? { ...item, entry_fee: val } : item));
+                              }}
+                              className="pd-input font-mono disabled:opacity-50"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="pd-label">Prize Pool (₹)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={c.prize_pool}
+                              disabled={c.type === 'h2h'}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setContests(prev => prev.map((item, i) => i === idx ? { ...item, prize_pool: val } : item));
+                              }}
+                              className="pd-input font-mono disabled:opacity-50"
+                            />
+                          </div>
                         </div>
+
+                        {c.type === 'h2h' && (
+                          <p className="text-[10px] text-[#2563EB] font-bold bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg px-2.5 py-1.5">
+                            H2H duel: 2 spots. Entry fee challenge banate waqt user set karta hai (85% winner split).
+                          </p>
+                        )}
                       </div>
                     ))}
                   </div>

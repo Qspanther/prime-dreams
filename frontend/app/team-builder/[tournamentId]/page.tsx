@@ -3,13 +3,11 @@
 import React, { useState, useEffect, use } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import {
-  Shield, Crown, Star, Check, X, ArrowLeft,
-  AlertCircle, Users, Award, ChevronRight, Zap
-} from 'lucide-react';
-import { apiGet, apiPost, resolveImageUrl } from '../../lib/api';
+import { Crown, Check, ArrowLeft, AlertCircle, ChevronRight } from 'lucide-react';
+import { apiGet, apiPost, apiPut, resolveImageUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import CategoryBadge from '../../components/ui/CategoryBadge';
+import PlayerPhoto from '../../components/ui/PlayerPhoto';
 
 interface Player {
   id: string;
@@ -21,12 +19,15 @@ interface Player {
   photo_url?: string;
 }
 
+const TOTAL_CREDITS = 105;
+
 export default function CricketTeamBuilderPage({ params }: { params: Promise<{ tournamentId: string }> }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const contestId = searchParams.get('contestId');
+  const teamId = searchParams.get('teamId');
   const { tournamentId: matchId } = use(params);
-  const { token, user } = useAuth();
+  const { token } = useAuth();
 
   const [match, setMatch] = useState<any>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -35,28 +36,53 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const [captainId, setCaptainId] = useState<string | null>(null);
   const [viceCaptainId, setViceCaptainId] = useState<string | null>(null);
   const [showCapModal, setShowCapModal] = useState(false);
+  const [capMode, setCapMode] = useState<'C' | 'VC' | null>(null);
   const [teamName, setTeamName] = useState('My Prime XI');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     apiGet(`/matches/${matchId}`)
-      .then((res) => {
-        if (res?.match) {
-          setMatch(res.match);
-          setPlayers(res.match.players || []);
+      .then(async (res) => {
+        if (cancelled || !res?.match) return;
+        setMatch(res.match);
+        setPlayers(res.match.players || []);
+        if (!token) return;
+        try {
+          const endpoint = teamId
+            ? `/matches/${matchId}/teams/${teamId}`
+            : `/matches/${matchId}/my-team?contest_id=${contestId || ''}`;
+          const teamRes = await apiGet(endpoint, token);
+          if (cancelled || !teamRes?.team) return;
+          const t = teamRes.team;
+          setEditingTeamId(t.id);
+          setSelectedPlayerIds((t.players || []).map((p: Player) => p.id));
+          setCaptainId(t.captain_id);
+          setViceCaptainId(t.vice_captain_id);
+          setTeamName(t.team_name || 'My Prime XI');
+        } catch (err: any) {
+          if (teamId && !cancelled) setError(err?.message || 'Could not load your saved team.');
         }
       })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [matchId]);
+      .catch((err) => { if (!cancelled) setError(err.message); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [matchId, token, teamId, contestId]);
+
+  const lockTime = match
+    ? new Date(new Date(match.start_time).getTime() - (match.lock_time_minutes || 15) * 60000)
+    : null;
+  const isLocked = !!match && (
+    match.is_locked || match.status === 'live' || match.status === 'completed' ||
+    (lockTime !== null && new Date() >= lockTime)
+  );
 
   const selectedPlayers = players.filter((p) => selectedPlayerIds.includes(p.id));
-
-  // Counts & limits
   const totalCreditsUsed = selectedPlayers.reduce((sum, p) => sum + (Number(p.credits) || 9.0), 0);
-  const creditsLeft = Math.round((100 - totalCreditsUsed) * 10) / 10;
+  const creditsLeft = Math.round((TOTAL_CREDITS - totalCreditsUsed) * 10) / 10;
 
   const roleCounts = {
     WK: selectedPlayers.filter((p) => p.role === 'WK').length,
@@ -71,6 +97,10 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   });
 
   const togglePlayer = (p: Player) => {
+    if (isLocked) {
+      setError('Contest is locked. Team editing is closed.');
+      return;
+    }
     const isAlreadySelected = selectedPlayerIds.includes(p.id);
 
     if (isAlreadySelected) {
@@ -128,7 +158,21 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
       return;
     }
     setError(null);
+    setCapMode(null);
     setShowCapModal(true);
+  };
+
+  const assignCapRole = (p: Player) => {
+    if (!capMode) return;
+    if (capMode === 'C') {
+      setCaptainId(p.id);
+      if (viceCaptainId === p.id) setViceCaptainId(null);
+      if (!viceCaptainId || viceCaptainId === p.id) setCapMode('VC');
+    } else {
+      setViceCaptainId(p.id);
+      if (captainId === p.id) setCaptainId(null);
+      if (!captainId || captainId === p.id) setCapMode('C');
+    }
   };
 
   const handleSubmitTeam = async () => {
@@ -146,13 +190,15 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
     setError(null);
 
     try {
-      const res = await apiPost(`/matches/${matchId}/teams`, {
+      const payload = {
         team_name: teamName,
         player_ids: selectedPlayerIds,
         captain_id: captainId,
         vice_captain_id: viceCaptainId,
-        contest_id: contestId || null,
-      }, token);
+      };
+      const res = editingTeamId
+        ? await apiPut(`/matches/${matchId}/teams/${editingTeamId}`, payload, token)
+        : await apiPost(`/matches/${matchId}/teams`, { ...payload, contest_id: contestId || null }, token);
 
       if (res?.success) {
         router.push('/my-teams');
@@ -168,9 +214,9 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
 
   if (loading) {
     return (
-      <div className="py-24 text-center text-[#A3A3A3] bg-[#000000]">
-        <div className="w-10 h-10 border-4 border-[#FF1744] border-t-transparent rounded-full animate-spin mx-auto mb-3 shadow-[0_0_15px_#FF1744]" />
-        <p className="text-sm font-black text-white">Loading 30 squad players...</p>
+      <div className="py-24 text-center text-[#64748B]">
+        <div className="w-10 h-10 border-4 border-[#2563EB] border-t-transparent rounded-full animate-spin mx-auto mb-3 shadow-[0_0_15px_rgba(37,99,235,0.4)]" />
+        <p className="text-sm font-black text-[#0F172A]">Loading 30 squad players...</p>
       </div>
     );
   }
@@ -178,12 +224,12 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const roleFilteredPlayers = players.filter((p) => p.role === selectedRole);
 
   return (
-    <div className="px-3 sm:px-6 py-6 max-w-4xl mx-auto w-full space-y-6 bg-[#000000]">
+    <div className="px-3 sm:px-6 py-6 max-w-4xl mx-auto w-full space-y-6 bg-transparent text-[#0F172A]">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <Link
           href={`/match/${matchId}`}
-          className="inline-flex items-center gap-2 text-xs font-black text-[#D4D4D4] hover:text-[#FFD700] transition group"
+          className="inline-flex items-center gap-2 text-xs font-black text-[#475569] hover:text-[#2563EB] transition group"
         >
           <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
           <span>Exit Builder</span>
@@ -191,23 +237,24 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
         {match && <CategoryBadge category={match.category} size="xs" />}
       </div>
 
-      {/* Match & Squad Meter Card (3D Elevated) */}
-      {match && (
-        <div className="prime-card-3d p-5 space-y-4 relative overflow-hidden">
-          {/* Match Poster Backdrop if available */}
-          {resolveImageUrl(match.match_poster) && (
-            <div className="absolute inset-0 z-0 opacity-15 pointer-events-none overflow-hidden">
-              <img
-                src={resolveImageUrl(match.match_poster)}
-                alt="Poster"
-                className="w-full h-full object-cover scale-105"
-                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-black via-black/80 to-black/60" />
-            </div>
-          )}
+      {editingTeamId && (
+        <div className={`p-3.5 rounded-xl border-2 text-xs font-black flex items-center gap-2 ${isLocked
+            ? 'bg-red-50 border-red-300 text-red-700'
+            : 'bg-green-50 border-green-300 text-green-700'
+          }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>
+            {isLocked
+              ? 'Contest is locked. Your saved team can no longer be edited.'
+              : 'Edit mode: your saved team is loaded. Update it as many times as you like until the contest locks.'}
+          </span>
+        </div>
+      )}
 
-          <div className="relative z-10 flex items-center justify-between pb-3 border-b border-[#222222]">
+      {/* Match & Squad Meter Card */}
+      {match && (
+        <div className="prime-card-3d p-5 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
             <div className="flex items-center gap-3">
               {/* Team A Logo */}
               <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border border-[#93C5FD] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
@@ -217,10 +264,10 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
               </div>
 
               <div>
-                <h2 className="font-black text-white text-base sm:text-xl">
+                <h2 className="font-black text-[#0F172A] text-base sm:text-xl">
                   {match.team_a} vs {match.team_b}
                 </h2>
-                <p className="text-xs text-[#A3A3A3] font-bold">Max 7 players from any single team</p>
+                <p className="text-xs text-[#64748B] font-bold">Max 7 players from any single team</p>
               </div>
 
               {/* Team B Logo */}
@@ -232,143 +279,113 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
             </div>
 
             <div className="text-right">
-              <span className="text-[10px] text-[#A3A3A3] uppercase font-black block">Credits Left</span>
-              <span className={`text-xl font-black font-mono ${creditsLeft < 9 ? 'text-[#FF1744]' : 'text-[#FFD700] drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]'}`}>
-                {creditsLeft} / 100
+              <span className="text-[10px] text-[#64748B] uppercase font-black block">Credits Left</span>
+              <span className={`text-xl font-black font-mono ${creditsLeft < 9 ? 'text-[#DC2626]' : 'text-[#D97706] drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]'}`}>
+                {creditsLeft} / {TOTAL_CREDITS}
               </span>
             </div>
           </div>
 
           {/* 11 Players Count Meter */}
-          <div className="relative z-10 grid grid-cols-4 gap-2 pt-1 text-center text-xs">
-            <div className="p-2.5 rounded-xl bg-[#000000] border border-[#2A2A2A]">
-              <span className="text-[10px] text-[#A3A3A3] font-bold block">Selected</span>
-              <span className="font-black text-base text-[#FFD700] font-mono">
+          <div className="grid grid-cols-4 gap-2 pt-1 text-center text-xs">
+            <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
+              <span className="text-[10px] text-[#64748B] font-bold block">Selected</span>
+              <span className="font-black text-base text-[#2563EB] font-mono">
                 {selectedPlayerIds.length} / 11
               </span>
             </div>
-            <div className="p-2.5 rounded-xl bg-[#000000] border border-[#2A2A2A]">
-              <span className="text-[10px] text-[#A3A3A3] font-bold block truncate">{match.team_a}</span>
-              <span className="font-black text-base text-white font-mono">
+            <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
+              <span className="text-[10px] text-[#64748B] font-bold block truncate">{match.team_a}</span>
+              <span className="font-black text-base text-[#0F172A] font-mono">
                 {teamCounts[match.team_a] || 0} / 7
               </span>
             </div>
-            <div className="p-2.5 rounded-xl bg-[#000000] border border-[#2A2A2A]">
-              <span className="text-[10px] text-[#A3A3A3] font-bold block truncate">{match.team_b}</span>
-              <span className="font-black text-base text-white font-mono">
+            <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
+              <span className="text-[10px] text-[#64748B] font-bold block truncate">{match.team_b}</span>
+              <span className="font-black text-base text-[#0F172A] font-mono">
                 {teamCounts[match.team_b] || 0} / 7
               </span>
             </div>
-            <div className="p-2.5 rounded-xl bg-[#000000] border border-[#2A2A2A]">
-              <span className="text-[10px] text-[#A3A3A3] font-bold block">Squad Pool</span>
-              <span className="font-black text-base text-white font-mono">30 Total</span>
+            <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
+              <span className="text-[10px] text-[#64748B] font-bold block">Squad Pool</span>
+              <span className="font-black text-base text-[#0F172A] font-mono">30 Total</span>
             </div>
           </div>
         </div>
       )}
 
-      {/* Role Navigation Tabs (3D Buttons) */}
+      {/* Role Navigation Tabs */}
       <div className="grid grid-cols-4 gap-2.5">
-        {(['WK', 'BAT', 'AR', 'BOWL'] as const).map((role) => {
-          const isSelected = selectedRole === role;
-          const count = roleCounts[role];
+        {(['WK', 'BAT', 'AR', 'BOWL'] as const).map((role) => (
+          <button
+            key={role}
+            onClick={() => setSelectedRole(role)}
+            className={`p-3 rounded-xl border text-center transition cursor-pointer ${selectedRole === role
+                ? 'prime-btn-3d !p-3'
+                : 'prime-btn-dark-3d !p-3 !text-[#64748B]'
+              }`}
+          >
+            <div className="font-black text-sm">{role}</div>
+            <div className="text-[11px] font-black mt-0.5">({roleCounts[role]})</div>
+          </button>
+        ))}
+      </div>
 
+      {error && !showCapModal && (
+        <div className="pd-error">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      {/* Players Grid for Selected Role — 3 compact photos per row, names below */}
+      <div className="grid grid-cols-3 gap-2.5 max-h-[36rem] overflow-y-auto pr-1">
+        {roleFilteredPlayers.map((p) => {
+          const isSelected = selectedPlayerIds.includes(p.id);
           return (
             <button
-              key={role}
-              onClick={() => setSelectedRole(role)}
-              className={`p-3 rounded-xl border text-center transition cursor-pointer ${isSelected
-                  ? 'prime-btn-3d !p-3 shadow-[0_0_15px_rgba(255,23,68,0.5)]'
-                  : 'prime-btn-dark-3d !p-3 !text-[#A3A3A3]'
+              key={p.id}
+              type="button"
+              onClick={() => togglePlayer(p)}
+              className={`relative rounded-xl border-2 p-2 flex flex-col items-center text-center cursor-pointer transition-all select-none ${isSelected
+                  ? 'bg-[#EFF6FF] border-[#2563EB] shadow-[0_0_14px_rgba(37,99,235,0.35)]'
+                  : 'bg-white border-[#CBD5E1] hover:border-[#93C5FD] hover:shadow-[0_0_10px_rgba(37,99,235,0.18)]'
                 }`}
             >
-              <div className="font-black text-sm">{role}</div>
-              <div className="text-[11px] font-black mt-0.5">
-                ({count})
+              <div className="relative w-full aspect-square mb-1.5">
+                <PlayerPhoto
+                  name={p.name}
+                  photoUrl={p.photo_url}
+                  boxClass="w-full h-full rounded-lg bg-[#F1F5F9] border border-[#CBD5E1] text-xl text-[#94A3B8]"
+                />
+                <span className={`absolute top-1 right-1 w-6 h-6 rounded-full border-2 flex items-center justify-center font-black text-xs ${isSelected
+                    ? 'bg-[#2563EB] text-white border-white shadow-[0_0_6px_rgba(37,99,235,0.6)]'
+                    : 'bg-white/90 border-[#CBD5E1] text-[#64748B]'
+                  }`}>
+                  {isSelected ? <Check className="w-3.5 h-3.5" /> : '+'}
+                </span>
               </div>
+              <span className="font-black text-[11px] text-[#0F172A] leading-tight line-clamp-2 min-h-[2rem] flex items-center">{p.name}</span>
+              <span className="text-[9px] text-[#64748B] font-bold mt-0.5 truncate w-full">
+                {p.team_name} • <span className="text-[#D97706]">{p.points || 0} pts</span>
+              </span>
+              <span className="mt-1 px-2 py-0.5 rounded-md bg-[#FFFBEB] border border-[#FDE68A] font-mono font-black text-[10px] text-[#B45309]">
+                {p.credits} CR
+              </span>
             </button>
           );
         })}
       </div>
 
-      {error && (
-        <div className="p-3.5 rounded-xl bg-red-950/80 border-2 border-red-500/60 text-red-200 text-xs font-black flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {/* Players List for Selected Role */}
-      <div className="space-y-2.5">
-        {roleFilteredPlayers.map((p) => {
-          const isSelected = selectedPlayerIds.includes(p.id);
-
-          return (
-            <div
-              key={p.id}
-              onClick={() => togglePlayer(p)}
-              className={`p-4 rounded-xl flex items-center justify-between cursor-pointer transition-all select-none border-2 ${isSelected
-                  ? 'bg-gradient-to-r from-[#FF1744]/25 to-[#000000] border-[#FF1744] shadow-[0_0_15px_rgba(255,23,68,0.4)]'
-                  : 'bg-[#121212] border-[#222222] hover:border-[#FFD700]/50 hover:bg-[#181818]'
-                }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xs border-2 overflow-hidden shrink-0 ${isSelected ? 'bg-[#FF1744] text-white border-[#FF8095] shadow-[0_0_8px_#FF1744]' : 'bg-[#000000] text-[#FFD700] border-[#333333]'
-                  }`}>
-                  {resolveImageUrl(p.photo_url) ? (
-                    <img
-                      src={resolveImageUrl(p.photo_url)}
-                      alt={p.name}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        (e.target as HTMLImageElement).style.display = 'none';
-                        if ((e.target as HTMLImageElement).parentElement) {
-                          (e.target as HTMLImageElement).parentElement!.textContent = p.role;
-                        }
-                      }}
-                    />
-                  ) : (
-                    <span className="font-mono text-xs">{p.role}</span>
-                  )}
-                </div>
-                <div>
-                  <h4 className="font-black text-sm text-white">{p.name}</h4>
-                  <p className="text-xs text-[#A3A3A3] font-bold">
-                    {p.team_name} • <span className="text-[#FFD700]">{p.points || 0} pts</span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                <span className="font-mono font-black text-sm text-[#FFD700]">
-                  {p.credits} CR
-                </span>
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center border-2 font-black ${isSelected
-                    ? 'bg-[#FF1744] text-white border-white shadow-[0_0_6px_#FF1744]'
-                    : 'bg-[#000000] border-[#333333] text-[#A3A3A3]'
-                  }`}>
-                  {isSelected ? <Check className="w-4 h-4" /> : '+'}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
       {/* Bottom Floating Bar */}
-      <div className="sticky bottom-4 z-20 p-4 bg-[#0A0A0A]/95 backdrop-blur-xl rounded-2xl border-2 border-[#2A2A2A] flex items-center justify-between shadow-[0_10px_30px_rgba(0,0,0,1)]">
+      <div className="sticky bottom-4 z-20 p-4 bg-white/95 backdrop-blur-xl rounded-2xl border-2 border-[#CBD5E1] flex items-center justify-between shadow-[0_10px_30px_rgba(30,58,138,0.18)]">
         <div>
-          <span className="text-xs font-black text-white block">
-            {selectedPlayerIds.length}/11 Players Picked
-          </span>
-          <span className="text-xs text-[#FFD700] font-mono font-black">
-            {creditsLeft} CR left
-          </span>
+          <span className="text-xs font-black text-[#0F172A] block">{selectedPlayerIds.length}/11 Players Picked</span>
+          <span className="text-xs text-[#D97706] font-mono font-black">{creditsLeft} CR left</span>
         </div>
-
         <button
           onClick={handleProceedToCaptain}
-          disabled={selectedPlayerIds.length !== 11}
+          disabled={selectedPlayerIds.length !== 11 || isLocked}
           className="prime-btn-3d !py-2.5 !px-6 text-xs font-black uppercase tracking-wider disabled:opacity-40"
         >
           <span>Choose C / VC</span>
@@ -376,101 +393,114 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
         </button>
       </div>
 
-      {/* Captain & Vice-Captain Selection Modal (§4: C 2.0x, VC 1.5x) */}
+      {/* Captain & Vice-Captain Selection Modal — mode-based with photos */}
       {showCapModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
-          <div className="w-full max-w-lg prime-card-3d p-6 space-y-5 border-2 border-[#FF1744] max-h-[90vh] flex flex-col shadow-[0_0_50px_rgba(255,23,68,0.5)] animate-in zoom-in-95">
-            <div className="flex items-center justify-between border-b border-[#222222] pb-3">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl prime-card-3d p-6 space-y-4 border-2 border-[#2563EB] max-h-[90vh] flex flex-col bg-white">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
               <div>
-                <h3 className="font-black text-white text-base">Assign Multipliers</h3>
-                <p className="text-xs text-[#FFD700] font-bold">Captain gets 2× Points • Vice-Captain gets 1.5× Points</p>
+                <h3 className="font-black text-[#0F172A] text-base flex items-center gap-2">
+                  <Crown className="w-5 h-5 text-[#D97706]" /> Assign Multipliers
+                </h3>
+                <p className="text-xs text-[#64748B] font-bold">Captain gets 2× Points • Vice-Captain gets 1.5× Points</p>
               </div>
-              <button
-                onClick={() => setShowCapModal(false)}
-                className="text-[#A3A3A3] hover:text-white"
-              >
-                ✕
-              </button>
+              <button onClick={() => setShowCapModal(false)} className="text-[#64748B] hover:text-[#0F172A] text-lg">✕</button>
             </div>
 
             <div>
-              <label className="block text-xs font-black text-[#FFD700] uppercase mb-1.5">
-                Team Name
-              </label>
+              <label className="pd-label">Team Name</label>
               <input
                 type="text"
                 value={teamName}
                 onChange={(e) => setTeamName(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl bg-[#000000] border-2 border-[#333333] text-white text-sm focus:border-[#FF1744] outline-none font-black"
+                className="pd-input font-black"
                 placeholder="My Prime XI"
               />
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-              {selectedPlayers.map((p) => {
-                const isC = captainId === p.id;
-                const isVC = viceCaptainId === p.id;
+            <p className={`text-xs font-black text-center py-1.5 rounded-lg ${capMode
+                ? capMode === 'C' ? 'bg-[#EFF6FF] text-[#1D4ED8]' : 'bg-[#FFFBEB] text-[#B45309]'
+                : 'bg-[#F1F5F9] text-[#64748B]'
+              }`}>
+              {capMode
+                ? `All players highlighted — tap one to make ${capMode === 'C' ? 'Captain (2×)' : 'Vice-Captain (1.5×)'}`
+                : 'Tap C or VC below, then tap a player to assign'}
+            </p>
 
-                return (
-                  <div
-                    key={p.id}
-                    className="p-3 rounded-xl bg-[#000000] border border-[#222222] flex items-center justify-between"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-[#222222] border border-[#333333] flex items-center justify-center text-[10px] font-black text-[#FFD700] shrink-0 overflow-hidden">
-                        {resolveImageUrl(p.photo_url) ? (
-                          <img src={resolveImageUrl(p.photo_url)} alt={p.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
-                        ) : (
-                          <span>{p.role}</span>
+            {/* Selected XI photo grid */}
+            <div className="flex-1 overflow-y-auto pr-1">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                {selectedPlayers.map((p) => {
+                  const isC = captainId === p.id;
+                  const isVC = viceCaptainId === p.id;
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => assignCapRole(p)}
+                      className={`rounded-xl border-2 p-2 flex flex-col items-center text-center transition cursor-pointer ${isC
+                          ? 'bg-[#EFF6FF] border-[#2563EB] shadow-[0_0_14px_rgba(37,99,235,0.45)]'
+                          : isVC
+                          ? 'bg-[#FFFBEB] border-[#F59E0B] shadow-[0_0_14px_rgba(245,158,11,0.45)]'
+                          : capMode
+                          ? capMode === 'C'
+                            ? 'bg-white border-[#93C5FD] shadow-[0_0_10px_rgba(37,99,235,0.3)] hover:border-[#2563EB]'
+                            : 'bg-white border-[#FDE68A] shadow-[0_0_10px_rgba(245,158,11,0.3)] hover:border-[#F59E0B]'
+                          : 'bg-[#F8FAFC] border-[#CBD5E1]'
+                        }`}
+                    >
+                      <div className="relative w-full aspect-square mb-1.5">
+                        <PlayerPhoto
+                          name={p.name}
+                          photoUrl={p.photo_url}
+                          boxClass="w-full h-full rounded-lg bg-[#F1F5F9] border border-[#CBD5E1] text-xl text-[#94A3B8]"
+                        />
+                        {isC && (
+                          <span className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-[#2563EB] text-white text-xs font-black flex items-center justify-center border-2 border-white shadow-[0_0_8px_rgba(37,99,235,0.6)]">C</span>
+                        )}
+                        {isVC && (
+                          <span className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-[#F59E0B] text-white text-[10px] font-black flex items-center justify-center border-2 border-white shadow-[0_0_8px_rgba(245,158,11,0.6)]">VC</span>
                         )}
                       </div>
-                      <div>
-                        <p className="font-black text-sm text-white">{p.name}</p>
-                        <p className="text-xs text-[#A3A3A3] font-bold">{p.team_name} • {p.role}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => {
-                          setCaptainId(p.id);
-                          if (viceCaptainId === p.id) setViceCaptainId(null);
-                        }}
-                        className={`w-10 h-10 rounded-xl font-black text-xs border-2 transition cursor-pointer ${isC
-                            ? 'bg-[#FF1744] text-white border-[#FF8095] shadow-[0_0_12px_#FF1744]'
-                            : 'bg-[#141414] text-[#A3A3A3] border-[#333333] hover:text-[#FFD700]'
-                          }`}
-                        title="2x Multiplier"
-                      >
-                        2×
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setViceCaptainId(p.id);
-                          if (captainId === p.id) setCaptainId(null);
-                        }}
-                        className={`w-10 h-10 rounded-xl font-black text-xs border-2 transition cursor-pointer ${isVC
-                            ? 'bg-[#FFD700] text-black border-white shadow-[0_0_12px_#FFD700]'
-                            : 'bg-[#141414] text-[#A3A3A3] border-[#333333] hover:text-[#FFD700]'
-                          }`}
-                        title="1.5x Multiplier"
-                      >
-                        1.5×
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                      <span className="font-bold text-[#0F172A] text-[11px] leading-tight line-clamp-2">{p.name}</span>
+                      <span className="text-[9px] text-[#64748B] font-bold mt-0.5">{p.team_name} • {p.role}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
-            {error && (
-              <div className="p-3 rounded-xl bg-red-950/80 border border-red-500/60 text-red-200 text-xs font-black">
-                {error}
-              </div>
-            )}
+            {/* C / VC mode buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setCapMode(capMode === 'C' ? null : 'C')}
+                className={`py-3 rounded-xl font-black text-sm border-2 transition cursor-pointer flex items-center justify-center gap-2 ${capMode === 'C'
+                    ? 'bg-[#2563EB] text-white border-[#93C5FD] shadow-[0_0_16px_rgba(37,99,235,0.5)]'
+                    : 'bg-white text-[#1D4ED8] border-[#93C5FD] hover:bg-[#EFF6FF]'
+                  }`}
+              >
+                <span className="w-7 h-7 rounded-full bg-white/20 border border-current flex items-center justify-center text-xs">C</span>
+                Captain (2×)
+                {captainId && <Check className="w-4 h-4" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => setCapMode(capMode === 'VC' ? null : 'VC')}
+                className={`py-3 rounded-xl font-black text-sm border-2 transition cursor-pointer flex items-center justify-center gap-2 ${capMode === 'VC'
+                    ? 'bg-[#F59E0B] text-white border-[#FDE68A] shadow-[0_0_16px_rgba(245,158,11,0.5)]'
+                    : 'bg-white text-[#B45309] border-[#FDE68A] hover:bg-[#FFFBEB]'
+                  }`}
+              >
+                <span className="w-7 h-7 rounded-full bg-white/20 border border-current flex items-center justify-center text-[10px]">VC</span>
+                Vice-Captain (1.5×)
+                {viceCaptainId && <Check className="w-4 h-4" />}
+              </button>
+            </div>
 
-            <div className="pt-3 border-t border-[#222222] flex items-center justify-between">
+            {error && <div className="pd-error">{error}</div>}
+
+            <div className="pt-3 border-t border-[#E2E8F0] flex items-center justify-between">
               <button
                 type="button"
                 onClick={() => setShowCapModal(false)}
@@ -484,7 +514,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                 disabled={submitting || !captainId || !viceCaptainId}
                 className="prime-btn-3d text-xs !py-2 !px-5 font-black disabled:opacity-40"
               >
-                {submitting ? 'Saving...' : 'Submit Team'}
+                {submitting ? 'Saving...' : editingTeamId ? 'Update Team' : 'Submit Team'}
               </button>
             </div>
           </div>

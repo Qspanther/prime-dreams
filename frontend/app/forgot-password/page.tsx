@@ -86,19 +86,19 @@ export default function ForgotPasswordPage() {
           <PrimeLogo size="md" />
         </div>
         
-        <div className="glass p-8 glow-cyan">
-          <div className="w-12 h-12 rounded-full bg-neon-cyan/20 text-neon-cyan flex items-center justify-center mb-6 mx-auto">
+        <div className="prime-card-3d p-8">
+          <div className="w-12 h-12 rounded-full bg-[#2563EB]/10 text-[#2563EB] flex items-center justify-center mb-6 mx-auto">
             <KeyRound size={24} />
           </div>
           
-          <h2 className="text-2xl font-bold mb-2 text-center">Reset Password</h2>
-          <p className="text-sm text-text-secondary mb-6 text-center">
+          <h2 className="text-2xl font-bold mb-2 text-center text-[#0F172A]">Reset Password</h2>
+          <p className="text-sm text-[#334155] mb-6 text-center">
             {step === 1 ? "Enter your email to receive an OTP" : `Enter the 6-digit OTP sent to ${email}`}
           </p>
 
-          {error && <div className="mb-4 p-3 rounded-xl bg-danger/10 text-xs text-danger text-center font-medium">{error}</div>}
+          {error && <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-300 text-xs text-red-700 text-center font-medium">{error}</div>}
           {successMsg && (
-            <div className="mb-4 p-3 rounded-xl bg-success/10 text-xs text-success text-center font-medium flex items-center justify-center gap-2">
+            <div className="mb-4 p-3 rounded-xl bg-emerald-50 border border-emerald-300 text-xs text-emerald-700 text-center font-medium flex items-center justify-center gap-2">
               <CheckCircle2 size={15} className="shrink-0" />
               <span>{successMsg}</span>
             </div>
@@ -107,19 +107,19 @@ export default function ForgotPasswordPage() {
           {step === 1 ? (
             <form onSubmit={handleRequestOtp} className="space-y-4">
               <div className="relative">
-                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted z-10" />
+                <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B] z-10" />
                 <input
                   type="email"
                   placeholder="Registered Email"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required
-                  className="w-full !pl-10"
+                  className="w-full !pl-10 px-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] text-sm placeholder-[#64748B] focus:border-[#2563EB] outline-none"
                 />
               </div>
               <motion.button
                 type="submit" disabled={loading} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                className="w-full py-3 text-sm font-bold bg-neon-cyan text-black rounded-xl cursor-pointer disabled:opacity-50"
+                className="w-full py-3 text-sm font-bold prime-btn-3d rounded-xl cursor-pointer disabled:opacity-50"
               >
                 {loading ? 'Sending OTP...' : 'Send Reset OTP'}
               </motion.button>
@@ -127,11 +127,11 @@ export default function ForgotPasswordPage() {
           ) : (
             <form onSubmit={handleResetPassword} className="space-y-4">
               <div>
-                <label className="block text-xs text-text-muted mb-1 font-semibold uppercase tracking-wider">
+                <label className="block text-xs text-[#64748B] mb-1 font-semibold uppercase tracking-wider">
                   6-Digit OTP
                 </label>
                 <div className="relative">
-                  <ShieldCheck size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted z-10" />
+                  <ShieldCheck size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B] z-10" />
                   <input
                     type="text"
                     placeholder="Enter 6-digit OTP"
@@ -140,17 +140,17 @@ export default function ForgotPasswordPage() {
                     required
                     maxLength={6}
                     autoFocus
-                    className="w-full !pl-10 font-mono tracking-widest text-lg"
+                    className="w-full !pl-10 px-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] placeholder-[#64748B] focus:border-[#2563EB] outline-none font-mono tracking-widest text-lg"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs text-text-muted mb-1 font-semibold uppercase tracking-wider">
+                <label className="block text-xs text-[#64748B] mb-1 font-semibold uppercase tracking-wider">
                   New Password
                 </label>
                 <div className="relative">
-                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted z-10" />
+                  <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#64748B] z-10" />
                   <input
                     type="password"
                     placeholder="At least 6 characters"
@@ -158,14 +158,14 @@ export default function ForgotPasswordPage() {
                     onChange={e => setNewPassword(e.target.value)}
                     required
                     minLength={6}
-                    className="w-full !pl-10"
+                    className="w-full !pl-10 px-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] text-sm placeholder-[#64748B] focus:border-[#2563EB] outline-none"
                   />
                 </div>
               </div>
 
               <motion.button
                 type="submit" disabled={loading || otp.length !== 6 || newPassword.length < 6} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                className="w-full py-3 text-sm font-bold bg-gradient-to-r from-neon-cyan to-neon-purple text-white rounded-xl cursor-pointer disabled:opacity-50"
+                className="w-full py-3 text-sm font-bold prime-btn-3d rounded-xl cursor-pointer disabled:opacity-50"
               >
                 {loading ? 'Resetting Password...' : 'Save New Password'}
               </motion.button>
@@ -174,7 +174,7 @@ export default function ForgotPasswordPage() {
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="text-text-muted hover:text-white transition"
+                  className="text-[#64748B] hover:text-[#0F172A] transition"
                 >
                   ← Change Email
                 </button>
@@ -182,7 +182,7 @@ export default function ForgotPasswordPage() {
                   type="button"
                   onClick={handleResendOtp}
                   disabled={cooldown > 0 || resending}
-                  className="text-neon-cyan hover:underline disabled:text-text-muted disabled:no-underline flex items-center gap-1 transition"
+                  className="text-[#2563EB] hover:underline disabled:text-[#64748B] disabled:no-underline flex items-center gap-1 transition"
                 >
                   <RefreshCw size={12} className={resending ? 'animate-spin' : ''} />
                   {resending ? 'Sending...' : cooldown > 0 ? `Resend in ${cooldown}s` : 'Resend OTP'}
@@ -191,8 +191,8 @@ export default function ForgotPasswordPage() {
             </form>
           )}
 
-          <div className="text-center mt-6 pt-4 border-t border-white/10">
-            <Link href="/login" className="text-xs text-text-muted hover:text-white transition-colors">
+          <div className="text-center mt-6 pt-4 border-t border-[#E2E8F0]">
+            <Link href="/login" className="text-xs text-[#64748B] hover:text-[#2563EB] transition-colors">
               Remember your password? Log In
             </Link>
           </div>

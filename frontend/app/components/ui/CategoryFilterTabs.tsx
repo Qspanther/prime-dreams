@@ -19,7 +19,7 @@ export default function CategoryFilterTabs({ selectedCategory, onSelect, classNa
           <button
             key={cat}
             onClick={() => onSelect(cat)}
-            className={`whitespace-nowrap px-4 py-2 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all duration-150 cursor-pointer ${
+            className={`shrink-0 whitespace-nowrap px-4 py-2 rounded-xl text-xs sm:text-sm font-black uppercase tracking-wider transition-all duration-150 cursor-pointer ${
               isSelected
                 ? 'prime-btn-3d shadow-[0_0_20px_rgba(255,23,68,0.6)] !py-2 !px-4'
                 : 'prime-btn-dark-3d !py-2 !px-4 !text-[#D4D4D4] hover:!text-[#FFD700]'

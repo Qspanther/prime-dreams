@@ -5,9 +5,11 @@ import React from 'react';
 export default function PrimeLogo({
   size = 'md',
   className = '',
+  compactOnMobile = false,
 }: {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
+  compactOnMobile?: boolean;
 }) {
   const iconSizes = {
     sm: 'w-8 h-8',
@@ -117,7 +119,7 @@ export default function PrimeLogo({
       </div>
 
       {/* Brand Razor-Sharp Typography */}
-      <div className="flex flex-col leading-none">
+      <div className={`${compactOnMobile ? 'hidden sm:flex' : 'flex'} flex-col leading-none min-w-0`}>
         <div className="flex items-center gap-1.5">
           <span className={`font-black tracking-wider text-white uppercase ${textSizes[size]} drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-['Montserrat',sans-serif]`}>
             PRIME
@@ -126,7 +128,7 @@ export default function PrimeLogo({
             DREEMS
           </span>
         </div>
-        <div className="flex items-center gap-1.5 mt-1">
+        <div className={`${compactOnMobile ? 'hidden md:flex' : 'flex'} items-center gap-1.5 mt-1`}>
           <span className="w-2 h-2 rounded-full bg-[#FF1744] shadow-[0_0_8px_#FF1744] animate-pulse" />
           <span className="text-[10px] font-black tracking-widest text-[#FF1744] uppercase drop-shadow-[0_0_6px_rgba(255,23,68,0.5)]">
             Cricket Fantasy Colosseum

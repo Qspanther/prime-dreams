@@ -12,7 +12,7 @@ const config = {
 
   // ─── Cricket Fantasy Team Rules ───
   TOTAL_TEAM_SIZE: 11,
-  TOTAL_CREDITS: 100,
+  TOTAL_CREDITS: 105,
   MAX_PLAYERS_PER_TEAM: 7,
   SQUAD_POOL_SIZE: 30, // 15 players Team A + 15 players Team B
 
@@ -72,6 +72,7 @@ const config = {
   // ─── Server ───
   PORT: process.env.PORT || 5000,
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
+  BOT_API_KEY: process.env.BOT_API_KEY || '',
 
   // ─── Live Polling Throttle (Section 8: min 10s per match poll) ───
   LIVE_POLL_INTERVAL_MS: 10000,

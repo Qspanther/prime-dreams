@@ -1,12 +1,17 @@
+# Prime Dreems — Render Blueprint (1-click deploy from Git)
+# Deploy: https://render.com/deploy?repo=<your-git-repo-url>
+# Both services build & start automatically; the frontend proxies API + uploads
+# to the backend via same-origin rewrites (no CORS / public API URL needed).
 services:
   # ─── BACKEND API SERVICE ───
   - type: web
-    name: creator11-backend
+    name: prime-dreems-backend
     env: node
     plan: free
     rootDir: backend
     buildCommand: npm install
     startCommand: npm start
+    healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
         value: 20.18.0
@@ -17,13 +22,13 @@ services:
       - key: JWT_SECRET
         generateValue: true
       - key: BOT_API_KEY
-        value: c11_bot_mgr_sec_9938a7fbc21d49e
+        generateValue: true
       - key: FRONTEND_URL
-        value: https://creator11-frontend.onrender.com
+        value: https://prime-dreems-frontend.onrender.com
 
   # ─── FRONTEND NEXT.JS WEB APP ───
   - type: web
-    name: creator11-frontend
+    name: prime-dreems-frontend
     env: node
     plan: free
     rootDir: frontend
@@ -34,7 +39,8 @@ services:
         value: 20.18.0
       - key: NODE_ENV
         value: production
+      - key: PORT
+        value: 10000
+      # Server-side rewrite target for /api-backend/* and /uploads/*
       - key: BACKEND_URL
-        value: https://creator11-backend.onrender.com
-      - key: NEXT_PUBLIC_API_URL
-        value: https://creator11-backend.onrender.com
+        value: https://prime-dreems-backend.onrender.com

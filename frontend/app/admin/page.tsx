@@ -596,7 +596,7 @@ export default function AdminDashboardPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
-                  <tr className="border-b border-[#222222] text-[#737373] uppercase text-[10px] tracking-wider">
+                  <tr className="border-b border-[#E2E8F0] text-[#64748B] uppercase text-[10px] tracking-wider bg-[#F8FAFC]">
                     <th className="p-3">Match</th>
                     <th className="p-3">Score &amp; Status</th>
                     <th className="p-3">Stream Latency</th>
@@ -605,7 +605,7 @@ export default function AdminDashboardPage() {
                     <th className="p-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#1A1A1A]">
+                <tbody className="divide-y divide-[#E2E8F0]">
                   {(dataHealthReport?.database_live_matches || matches.filter(m => m.status === 'live')).map((m: any) => {
                     const healthMatch = (dataHealthReport?.live_matches || []).find((h: any) => h.match_id === m.id);
                     const secondsAgo = healthMatch ? healthMatch.updated_seconds_ago : 0;
@@ -613,33 +613,33 @@ export default function AdminDashboardPage() {
                     const isPaused = healthMatch?.is_paused || false;
 
                     return (
-                      <tr key={m.id} className="hover:bg-[#121212] transition">
+                      <tr key={m.id} className="hover:bg-[#F1F5F9] transition">
                         <td className="p-3">
-                          <p className="font-black text-white">{m.title}</p>
-                          <p className="text-[10px] text-[#A3A3A3]">{m.category} • {m.team_a} vs {m.team_b}</p>
+                          <p className="font-black text-[#0F172A]">{m.title}</p>
+                          <p className="text-[10px] text-[#64748B]">{m.category} • {m.team_a} vs {m.team_b}</p>
                         </td>
                         <td className="p-3 font-mono">
-                          <span className="text-[#FFD700] font-black">
+                          <span className="text-[#D97706] font-black">
                             {m.team_a}: {m.score_summary?.team_a?.runs || 0}/{m.score_summary?.team_a?.wickets || 0} ({m.score_summary?.team_a?.overs || 0} ov)
                           </span>
                         </td>
                         <td className="p-3">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                            isDelayed ? 'bg-red-950 text-red-300 border border-red-500/50 animate-pulse'
-                                      : 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
+                            isDelayed ? 'bg-red-100 text-red-700 border border-red-300 animate-pulse'
+                                      : 'bg-green-100 text-green-700 border border-green-300'
                           }`}>
                             Updated {secondsAgo}s ago
                           </span>
                         </td>
                         <td className="p-3">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-950 text-blue-300 border border-blue-500/40">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-blue-100 text-blue-700 border border-blue-300">
                             {healthMatch?.cross_check_status || 'VERIFIED'}
                           </span>
                         </td>
                         <td className="p-3">
                           <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-                            isPaused ? 'bg-amber-950 text-amber-300 border border-amber-500/50'
-                                     : 'bg-emerald-950 text-emerald-300 border border-emerald-500/40'
+                            isPaused ? 'bg-amber-100 text-amber-700 border border-amber-300'
+                                     : 'bg-green-100 text-green-700 border border-green-300'
                           }`}>
                             {isPaused ? 'PAUSED' : 'ACTIVE'}
                           </span>
@@ -655,8 +655,8 @@ export default function AdminDashboardPage() {
                             onClick={() => handleToggleIngestion(m.id, isPaused)}
                             className={`text-[11px] !py-1 !px-2.5 font-black rounded-lg transition inline-flex items-center gap-1 border ${
                               isPaused
-                                ? 'bg-emerald-900/60 border-emerald-500 text-emerald-200 hover:bg-emerald-800'
-                                : 'bg-amber-900/60 border-amber-500 text-amber-200 hover:bg-amber-800'
+                                ? 'bg-emerald-100 border-emerald-300 text-emerald-700 hover:bg-emerald-200'
+                                : 'bg-amber-100 border-amber-300 text-amber-700 hover:bg-amber-200'
                             }`}
                           >
                             <span>{isPaused ? '▶️ Resume' : '⏸️ Pause'}</span>
@@ -667,7 +667,7 @@ export default function AdminDashboardPage() {
                   })}
                   {(dataHealthReport?.database_live_matches || []).length === 0 && (
                     <tr>
-                      <td colSpan={6} className="p-6 text-center text-[#737373]">
+                      <td colSpan={6} className="p-6 text-center text-[#64748B]">
                         No matches currently LIVE in database. Import a live match from the Cricbuzz tab above to monitor.
                       </td>
                     </tr>

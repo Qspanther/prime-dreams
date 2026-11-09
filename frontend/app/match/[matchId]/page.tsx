@@ -10,6 +10,7 @@ import {
 import { apiGet, apiPost, resolveImageUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import CategoryBadge from '../../components/ui/CategoryBadge';
+import PlayerPhoto from '../../components/ui/PlayerPhoto';
 
 interface MatchDetailProps {
   params: Promise<{ matchId: string }>;
@@ -208,16 +209,16 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
 
   if (loading) {
     return (
-      <div className="py-24 text-center text-[#A3A3A3] bg-[#000000]">
-        <div className="w-10 h-10 border-4 border-[#FF1744] border-t-transparent rounded-full animate-spin mx-auto mb-3 shadow-[0_0_15px_#FF1744]" />
-        <p className="text-sm font-black text-white">Loading cricket match &amp; squad details...</p>
+      <div className="py-24 text-center text-[#64748B]">
+        <div className="w-10 h-10 border-4 border-[#2563EB] border-t-transparent rounded-full animate-spin mx-auto mb-3 shadow-[0_0_15px_rgba(37,99,235,0.4)]" />
+        <p className="text-sm font-black text-[#0F172A]">Loading cricket match &amp; squad details...</p>
       </div>
     );
   }
 
   if (!match) {
     return (
-      <div className="py-24 text-center text-white bg-[#000000]">
+      <div className="py-24 text-center text-[#0F172A]">
         <p className="text-xl font-black mb-3">Match not found in database</p>
         <Link href="/" className="prime-btn-3d inline-flex">Back to Matches</Link>
       </div>
@@ -250,21 +251,20 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
       </div>
 
       {/* Main Match Header 3D Card */}
-      <div className="prime-card-3d p-6 relative overflow-hidden space-y-4 border-2 border-[#94A3B8] bg-white/95">
-        {/* Match Poster Backdrop if available */}
+      <div className="prime-card-3d p-6 space-y-4">
+        {/* Match Poster Banner — fixed 3:2 size (full poster, no crop), 50% visibility */}
         {resolveImageUrl(match.match_poster) && (
-          <div className="absolute inset-0 z-0 opacity-15 pointer-events-none overflow-hidden">
+          <div className="relative aspect-[3/2] w-full max-w-2xl mx-auto rounded-xl overflow-hidden border-2 border-[#CBD5E1] bg-[#F1F5F9] shadow-[0_4px_16px_rgba(37,99,235,0.12)]">
             <img
               src={resolveImageUrl(match.match_poster)}
               alt="Match Poster"
-              className="w-full h-full object-cover scale-105"
+              className="w-full h-full object-cover opacity-50"
               onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-white via-white/80 to-white/70" />
           </div>
         )}
 
-        <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] pb-3">
           <CategoryBadge category={match.category} size="md" />
 
           {isLive ? (
@@ -292,16 +292,16 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         {/* Teams Matchup Ribbon */}
         <div className="relative z-10 grid grid-cols-5 items-center gap-3 py-3">
           {/* Team A */}
-          <div className="col-span-2 flex items-center gap-3 sm:gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border-2 border-[#93C5FD] flex items-center justify-center font-black text-lg text-white shadow-[0_4px_12px_rgba(37,99,235,0.3)] shrink-0 overflow-hidden">
+          <div className="col-span-2 flex items-center gap-2 sm:gap-4 min-w-0">
+            <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border-2 border-[#93C5FD] flex items-center justify-center font-black text-lg text-white shadow-[0_4px_12px_rgba(37,99,235,0.3)] shrink-0 overflow-hidden">
               {resolveImageUrl(match.team_a_logo) ? (
                 <img src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
               ) : (match.team_a_code || match.team_a?.slice(0, 3).toUpperCase())}
             </div>
-            <div>
-              <h2 className="font-black text-base sm:text-2xl text-[#0F172A]">{match.team_a}</h2>
+            <div className="min-w-0">
+              <h2 className="font-black text-sm sm:text-2xl text-[#0F172A] truncate">{match.team_a}</h2>
               {scoreSummary?.team_a && (
-                <p className="text-lg font-mono font-black text-[#2563EB]">
+                <p className="text-base sm:text-lg font-mono font-black text-[#2563EB]">
                   {scoreSummary.team_a.runs}/{scoreSummary.team_a.wickets}
                   <span className="text-xs font-normal text-[#64748B] ml-1.5">
                     ({scoreSummary.team_a.overs} ov)
@@ -319,11 +319,11 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
           </div>
 
           {/* Team B */}
-          <div className="col-span-2 flex items-center justify-end gap-3 sm:gap-4 text-right">
-            <div>
-              <h2 className="font-black text-base sm:text-2xl text-[#0F172A]">{match.team_b}</h2>
+          <div className="col-span-2 flex items-center justify-end gap-2 sm:gap-4 text-right min-w-0">
+            <div className="min-w-0">
+              <h2 className="font-black text-sm sm:text-2xl text-[#0F172A] truncate">{match.team_b}</h2>
               {scoreSummary?.team_b ? (
-                <p className="text-lg font-mono font-black text-[#D97706]">
+                <p className="text-base sm:text-lg font-mono font-black text-[#D97706]">
                   {scoreSummary.team_b.runs}/{scoreSummary.team_b.wickets}
                   <span className="text-xs font-normal text-[#64748B] ml-1.5">
                     ({scoreSummary.team_b.overs} ov)
@@ -333,7 +333,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                 <p className="text-xs font-mono text-[#64748B]">Yet to bat</p>
               ) : null}
             </div>
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border-2 border-[#FDE68A] flex items-center justify-center font-black text-lg text-white shadow-[0_4px_12px_rgba(245,158,11,0.3)] shrink-0 overflow-hidden">
+            <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border-2 border-[#FDE68A] flex items-center justify-center font-black text-lg text-white shadow-[0_4px_12px_rgba(245,158,11,0.3)] shrink-0 overflow-hidden">
               {resolveImageUrl(match.team_b_logo) ? (
                 <img src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
               ) : (match.team_b_code || match.team_b?.slice(0, 3).toUpperCase())}
@@ -652,25 +652,18 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                 <span className="text-xs font-mono font-bold text-[#64748B]">{teamAPlayers.length || 15} Players</span>
               </div>
 
-              <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-3 max-h-[32rem] overflow-y-auto pr-1">
                 {(teamAPlayers.length > 0 ? teamAPlayers : Array.from({ length: 15 }, (_, i) => ({ id: `a-${i}`, name: `${match.team_a} Player ${i + 1}`, role: 'BAT', credits: 9.0 }))).map((p: any, idx: number) => (
-                  <div key={p.id || idx} className="p-2.5 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-[#64748B] text-xs w-5 font-bold">#{idx + 1}</span>
-                      <div className="w-8 h-8 rounded-full bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-center overflow-hidden shrink-0">
-                        {resolveImageUrl(p.photo_url) ? (
-                          <img src={resolveImageUrl(p.photo_url)} alt={p.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
-                        ) : (
-                          <span className="text-[9px] font-black text-[#1D4ED8]">{p.role}</span>
-                        )}
-                      </div>
-                      <span className="font-bold text-[#0F172A] text-sm">{p.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2.5">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">
-                        {p.role}
-                      </span>
-                      <span className="font-mono text-xs text-[#64748B] font-bold">{p.credits || 9.0} Cr</span>
+                  <div key={p.id || idx} className="rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] p-2.5 flex flex-col items-center text-center shadow-xs">
+                    <PlayerPhoto
+                      name={p.name}
+                      photoUrl={p.photo_url}
+                      boxClass="w-full aspect-square rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] text-2xl text-[#93C5FD] mb-2"
+                    />
+                    <span className="font-bold text-[#0F172A] text-xs leading-tight line-clamp-2 min-h-[2rem] flex items-center">{p.name}</span>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">{p.role}</span>
+                      <span className="font-mono text-[10px] text-[#64748B] font-bold">{p.credits || 9.0} Cr</span>
                     </div>
                   </div>
                 ))}
@@ -684,25 +677,18 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                 <span className="text-xs font-mono font-bold text-[#64748B]">{teamBPlayers.length || 15} Players</span>
               </div>
 
-              <div className="space-y-1.5 max-h-96 overflow-y-auto pr-1">
+              <div className="grid grid-cols-2 gap-3 max-h-[32rem] overflow-y-auto pr-1">
                 {(teamBPlayers.length > 0 ? teamBPlayers : Array.from({ length: 15 }, (_, i) => ({ id: `b-${i}`, name: `${match.team_b} Player ${i + 1}`, role: 'BAT', credits: 9.0 }))).map((p: any, idx: number) => (
-                  <div key={p.id || idx} className="p-2.5 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-[#64748B] text-xs w-5 font-bold">#{idx + 1}</span>
-                      <div className="w-8 h-8 rounded-full bg-[#FEF3C7] border border-[#FDE68A] flex items-center justify-center overflow-hidden shrink-0">
-                        {resolveImageUrl(p.photo_url) ? (
-                          <img src={resolveImageUrl(p.photo_url)} alt={p.name} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
-                        ) : (
-                          <span className="text-[9px] font-black text-[#D97706]">{p.role}</span>
-                        )}
-                      </div>
-                      <span className="font-bold text-[#0F172A] text-sm">{p.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2.5">
-                      <span className="px-2 py-0.5 rounded text-[10px] font-black bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]">
-                        {p.role}
-                      </span>
-                      <span className="font-mono text-xs text-[#64748B] font-bold">{p.credits || 9.0} Cr</span>
+                  <div key={p.id || idx} className="rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] p-2.5 flex flex-col items-center text-center shadow-xs">
+                    <PlayerPhoto
+                      name={p.name}
+                      photoUrl={p.photo_url}
+                      boxClass="w-full aspect-square rounded-lg bg-[#FEF3C7] border border-[#FDE68A] text-2xl text-[#FCD34D] mb-2"
+                    />
+                    <span className="font-bold text-[#0F172A] text-xs leading-tight line-clamp-2 min-h-[2rem] flex items-center">{p.name}</span>
+                    <div className="flex items-center gap-1.5 mt-1">
+                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]">{p.role}</span>
+                      <span className="font-mono text-[10px] text-[#64748B] font-bold">{p.credits || 9.0} Cr</span>
                     </div>
                   </div>
                 ))}

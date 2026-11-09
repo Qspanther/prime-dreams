@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Shield, Crown, Star, Trophy, Clock, Users, ArrowRight, Plus } from 'lucide-react';
+import { Shield, ArrowRight, Plus, Pencil, Lock } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import CategoryFilterTabs from '../components/ui/CategoryFilterTabs';
@@ -32,15 +32,15 @@ export default function MyTeamsPage() {
   });
 
   return (
-    <div className="px-3 sm:px-6 py-6 max-w-7xl mx-auto w-full space-y-6 bg-[#000000]">
+    <div className="px-3 sm:px-6 py-6 max-w-7xl mx-auto w-full space-y-6 bg-transparent text-[#0F172A]">
       {/* Page Title */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-3xl font-black text-white flex items-center gap-2.5">
-            <Shield className="w-7 h-7 text-[#FF1744] drop-shadow-[0_0_10px_#FF1744]" />
+          <h1 className="text-xl sm:text-3xl font-black text-[#0F172A] flex items-center gap-2.5">
+            <Shield className="w-7 h-7 text-[#2563EB] drop-shadow-[0_0_10px_rgba(37,99,235,0.5)]" />
             <span>My Cricket Fantasy Teams</span>
           </h1>
-          <p className="text-xs sm:text-sm text-[#A3A3A3] font-bold mt-1">
+          <p className="text-xs sm:text-sm text-[#64748B] font-bold mt-1">
             Track your 11-player lineups, live points, multipliers, and contest ranks
           </p>
         </div>
@@ -60,17 +60,17 @@ export default function MyTeamsPage() {
 
       {/* Teams Grid (3 Columns on Desktop) */}
       {loading ? (
-        <div className="py-24 text-center text-[#A3A3A3] bg-[#000000]">
-          <div className="w-10 h-10 border-4 border-[#FF1744] border-t-transparent rounded-full animate-spin mx-auto mb-3 shadow-[0_0_15px_#FF1744]" />
-          <p className="text-sm font-black text-white">Loading your teams...</p>
+        <div className="py-24 text-center text-[#64748B]">
+          <div className="w-10 h-10 border-4 border-[#2563EB] border-t-transparent rounded-full animate-spin mx-auto mb-3 shadow-[0_0_15px_rgba(37,99,235,0.4)]" />
+          <p className="text-sm font-black text-[#0F172A]">Loading your teams...</p>
         </div>
       ) : filteredTeams.length === 0 ? (
         <div className="p-12 text-center prime-card-3d space-y-4">
-          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-b from-[#FF1744] to-[#800018] flex items-center justify-center text-3xl shadow-[0_0_20px_#FF1744] border-2 border-[#FF8095]">
+          <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] flex items-center justify-center text-3xl shadow-[0_0_20px_rgba(37,99,235,0.4)] border-2 border-[#93C5FD]">
             🏏
           </div>
-          <h3 className="text-xl font-black text-white">No teams created yet</h3>
-          <p className="text-xs text-[#A3A3A3] font-bold max-w-sm mx-auto">
+          <h3 className="text-xl font-black text-[#0F172A]">No teams created yet</h3>
+          <p className="text-xs text-[#64748B] font-bold max-w-sm mx-auto">
             Pick a match from the home arena, select your 11 players, and enter standard or H2H contests.
           </p>
           <Link href="/" className="prime-btn-3d inline-flex text-xs !py-2.5 !px-5 mt-2 font-black uppercase">
@@ -82,6 +82,11 @@ export default function MyTeamsPage() {
           {filteredTeams.map((team) => {
             const match = team.match;
             const contest = team.contest;
+            const matchLock = match?.start_time
+              ? new Date(new Date(match.start_time).getTime() - (match.lock_time_minutes || 15) * 60000)
+              : null;
+            const teamLocked = !match || match.is_locked || match.status === 'live' ||
+              match.status === 'completed' || (matchLock !== null && new Date() >= matchLock);
 
             return (
               <div
@@ -92,33 +97,33 @@ export default function MyTeamsPage() {
                   {/* Top Bar: Category & Status */}
                   <div className="flex items-center justify-between mb-3">
                     {match && <CategoryBadge category={match.category} size="xs" />}
-                    <span className="font-mono text-xs font-black text-[#FFD700] px-2.5 py-0.5 rounded-lg bg-[#000000] border border-[#FFD700]/40">
+                    <span className="font-mono text-xs font-black text-[#D97706] px-2.5 py-0.5 rounded-lg bg-[#FFFBEB] border border-[#FDE68A]">
                       {match?.status === 'live' ? '⚡ LIVE' : match?.match_date}
                     </span>
                   </div>
 
-                  <h3 className="font-black text-white text-base mb-1">{team.team_name}</h3>
-                  <p className="text-xs text-[#A3A3A3] font-bold">
+                  <h3 className="font-black text-[#0F172A] text-base mb-1">{team.team_name}</h3>
+                  <p className="text-xs text-[#64748B] font-bold">
                     {match?.title || 'Cricket Match'}
                   </p>
 
                   {/* Multipliers & Points Box */}
-                  <div className="mt-4 p-3 rounded-xl bg-[#000000] border border-[#262626] grid grid-cols-3 gap-2 text-center">
+                  <div className="mt-4 p-3 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1] grid grid-cols-3 gap-2 text-center">
                     <div>
-                      <span className="text-[10px] text-[#A3A3A3] uppercase font-black block">Cap (2×)</span>
-                      <span className="text-xs font-black text-white truncate block mt-0.5">
+                      <span className="text-[10px] text-[#64748B] uppercase font-black block">Cap (2×)</span>
+                      <span className="text-xs font-black text-[#0F172A] truncate block mt-0.5">
                         {team.captain?.name || 'Assigned'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-[#A3A3A3] uppercase font-black block">VC (1.5×)</span>
-                      <span className="text-xs font-black text-white truncate block mt-0.5">
+                      <span className="text-[10px] text-[#64748B] uppercase font-black block">VC (1.5×)</span>
+                      <span className="text-xs font-black text-[#0F172A] truncate block mt-0.5">
                         {team.viceCaptain?.name || 'Assigned'}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-[#A3A3A3] uppercase font-black block">Total Pts</span>
-                      <span className="text-base font-black text-[#FFD700] font-mono block mt-0.5 drop-shadow-[0_0_8px_rgba(255,215,0,0.5)]">
+                      <span className="text-[10px] text-[#64748B] uppercase font-black block">Total Pts</span>
+                      <span className="text-base font-black text-[#D97706] font-mono block mt-0.5 drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]">
                         {team.total_points || 0}
                       </span>
                     </div>
@@ -126,18 +131,34 @@ export default function MyTeamsPage() {
                 </div>
 
                 {/* Contest & Rank Footer */}
-                <div className="mt-4 pt-3 border-t border-[#222222] flex items-center justify-between text-xs">
-                  <span className="text-[#A3A3A3] font-bold">
-                    Contest: <strong className="text-white">{contest?.title || 'Open Contest'}</strong>
+                <div className="mt-4 pt-3 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
+                  <span className="text-[#64748B] font-bold">
+                    Contest: <strong className="text-[#0F172A]">{contest?.title || 'Open Contest'}</strong>
                   </span>
                   {match && (
-                    <Link
-                      href={`/match/${match.id}`}
-                      className="text-[#FFD700] font-black hover:underline flex items-center gap-1 group"
-                    >
-                      <span>View</span>
-                      <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                    </Link>
+                    <div className="flex items-center gap-3">
+                      {teamLocked ? (
+                        <span className="text-[#64748B] font-black flex items-center gap-1" title="Contest locked — editing closed">
+                          <Lock className="w-3.5 h-3.5" />
+                          <span>Locked</span>
+                        </span>
+                      ) : (
+                        <Link
+                          href={`/team-builder/${match.id}?teamId=${team.id}`}
+                          className="text-[#16A34A] font-black hover:underline flex items-center gap-1"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                          <span>Edit</span>
+                        </Link>
+                      )}
+                      <Link
+                        href={`/match/${match.id}`}
+                        className="text-[#2563EB] font-black hover:underline flex items-center gap-1 group"
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                      </Link>
+                    </div>
                   )}
                 </div>
               </div>

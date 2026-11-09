@@ -82,3 +82,21 @@ export function resolveImageUrl(url?: string | null): string {
   }
   return `/uploads/${trimmed}`;
 }
+
+// Player photos may be direct images, Google imgres links, or profile pages.
+// Page links go through the backend resolver which extracts og:image server-side.
+export function resolvePlayerPhoto(url?: string | null, name?: string): string {
+  const base = resolveImageUrl(url);
+  if (!base || !/^https?:\/\//i.test(base)) return base;
+  let isGoogleImgres = false;
+  try {
+    const u = new URL(base);
+    isGoogleImgres = /(^|\.)google\.[a-z.]+$/i.test(u.hostname) && u.searchParams.has('imgurl');
+  } catch (_) {}
+  // Google imgres always goes through the proxy: the embedded imgurl host may
+  // block cross-origin browser loads, and the proxy can fall back to the tbn thumbnail.
+  if (!isGoogleImgres && (/\.(png|jpe?g|webp|gif|svg|avif)(\?|#|$)/i.test(base) || /(dicebear|gstatic|redd\.it|wikimedia|twimg|fbcdn)/i.test(base))) {
+    return base;
+  }
+  return `${getApiBase()}/player-photo?url=${encodeURIComponent(base)}&name=${encodeURIComponent(name || '')}`;
+}

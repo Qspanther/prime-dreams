@@ -35,28 +35,20 @@ function getApiBase() {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    if (typeof window !== 'undefined') {
-      try {
-        const cached = localStorage.getItem('prime_dreems_user');
-        if (cached) return JSON.parse(cached);
-      } catch (_) {}
-    }
-    return null;
-  });
-  const [token, setToken] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('prime_dreems_token') || null;
-    }
-    return null;
-  });
+  // Initialize null so the first client render matches SSR (no hydration mismatch);
+  // stored credentials are applied in the mount effect below.
+  const [user, setUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for stored token on mount
     const stored = localStorage.getItem('prime_dreems_token');
     if (stored) {
       setToken(stored);
+      try {
+        const cached = localStorage.getItem('prime_dreems_user');
+        if (cached) setUser(JSON.parse(cached));
+      } catch (_) {}
       // Verify token
       fetch(`${getApiBase()}/auth/me`, {
         headers: { Authorization: `Bearer ${stored}` },

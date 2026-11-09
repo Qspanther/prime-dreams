@@ -55,13 +55,13 @@ export default function PointsFormulaPage() {
   const rawIgPts = (simLikes * formula.instagram_likes) + (simFollowers * formula.instagram_followers);
 
   return (
-    <div className="widescreen-container py-4 space-y-8">
+    <div className="max-w-7xl mx-auto px-3 sm:px-6 py-4 space-y-8">
       <div>
-        <h1 className="text-3xl font-extrabold text-white flex items-center gap-3">
-          <Sliders size={32} className="text-neon-cyan" />
+        <h1 className="text-3xl font-extrabold text-[#0F172A] flex items-center gap-3">
+          <Sliders size={32} className="text-[#2563EB]" />
           Points Formula Engine
         </h1>
-        <p className="text-sm text-text-secondary mt-1">
+        <p className="text-sm text-[#334155] mt-1">
           Adjust live mathematical weights and multipliers that calculate player tournament scores
         </p>
       </div>
@@ -69,15 +69,15 @@ export default function PointsFormulaPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         
         {/* Form Controls (7 cols) */}
-        <div className="lg:col-span-7 glass-card p-6 sm:p-8 border border-white/10">
+        <div className="lg:col-span-7 prime-card-3d bg-white p-6 sm:p-8 border border-[#CBD5E1]">
           <form onSubmit={handleSave} className="space-y-6">
-            <h3 className="text-lg font-extrabold text-white pb-3 border-b border-white/5">
+            <h3 className="text-lg font-extrabold text-[#0F172A] pb-3 border-b border-[#E2E8F0]">
               Raw Metric Weights (Per Unit Gained)
             </h3>
 
             <div className="space-y-4">
               <div>
-                <label className="text-xs font-bold text-text-secondary uppercase tracking-wider block mb-1.5">
+                <label className="text-xs font-bold text-[#334155] uppercase tracking-wider block mb-1.5">
                   YouTube Views Weight
                 </label>
                 <input
@@ -85,20 +85,20 @@ export default function PointsFormulaPage() {
                   step="0.00001"
                   value={formula.youtube_views}
                   onChange={e => setFormula(prev => ({ ...prev, youtube_views: parseFloat(e.target.value) || 0 }))}
-                  className="w-full !font-mono !py-3"
+                  className="w-full !font-mono !py-3 px-3 bg-white border border-[#CBD5E1] rounded-xl text-[#0F172A] focus:outline-none focus:border-[#2563EB]"
                 />
-                <p className="text-[11px] text-text-muted mt-1">
+                <p className="text-[11px] text-[#64748B] mt-1">
                   e.g. 0.0001 means 10,000 views = 1.0 score point.
                 </p>
               </div>
 
-              <div className="p-4 rounded-2xl bg-white/[0.02] border border-white/5 space-y-4">
+              <div className="p-4 rounded-2xl bg-[#F8FAFC] border border-[#E2E8F0] space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-text-muted">Instagram Scoring Weights</span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase tracking-wider">Frozen / Inactive</span>
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#64748B]">Instagram Scoring Weights</span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-300 uppercase tracking-wider">Frozen / Inactive</span>
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-text-secondary uppercase tracking-wider block mb-1.5">
+                  <label className="text-xs font-bold text-[#334155] uppercase tracking-wider block mb-1.5">
                     Instagram Likes Weight
                   </label>
                   <input
@@ -106,11 +106,11 @@ export default function PointsFormulaPage() {
                     step="0.00001"
                     disabled
                     value={formula.instagram_likes}
-                    className="w-full !font-mono !py-3 opacity-60 cursor-not-allowed"
+                    className="w-full !font-mono !py-3 px-3 bg-white border border-[#CBD5E1] rounded-xl text-[#0F172A] focus:outline-none focus:border-[#2563EB] opacity-60 cursor-not-allowed"
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-bold text-text-secondary uppercase tracking-wider block mb-1.5">
+                  <label className="text-xs font-bold text-[#334155] uppercase tracking-wider block mb-1.5">
                     Instagram Followers Weight
                   </label>
                   <input
@@ -118,19 +118,19 @@ export default function PointsFormulaPage() {
                     step="0.00001"
                     disabled
                     value={formula.instagram_followers}
-                    className="w-full !font-mono !py-3 opacity-60 cursor-not-allowed"
+                    className="w-full !font-mono !py-3 px-3 bg-white border border-[#CBD5E1] rounded-xl text-[#0F172A] focus:outline-none focus:border-[#2563EB] opacity-60 cursor-not-allowed"
                   />
                 </div>
               </div>
             </div>
 
-            <h3 className="text-lg font-extrabold text-white pt-4 pb-3 border-b border-white/5">
+            <h3 className="text-lg font-extrabold text-[#0F172A] pt-4 pb-3 border-b border-[#E2E8F0]">
               Leadership Role Multipliers
             </h3>
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-xs font-bold text-neon-gold uppercase tracking-wider block mb-1.5">
+                <label className="text-xs font-bold text-[#D97706] uppercase tracking-wider block mb-1.5">
                   👑 Captain Multiplier
                 </label>
                 <input
@@ -138,12 +138,12 @@ export default function PointsFormulaPage() {
                   step="0.1"
                   value={formula.captain_multiplier}
                   onChange={e => setFormula(prev => ({ ...prev, captain_multiplier: parseFloat(e.target.value) || 0 }))}
-                  className="w-full !font-mono !py-3"
+                  className="w-full !font-mono !py-3 px-3 bg-white border border-[#CBD5E1] rounded-xl text-[#0F172A] focus:outline-none focus:border-[#2563EB]"
                 />
               </div>
 
               <div>
-                <label className="text-xs font-bold text-neon-cyan uppercase tracking-wider block mb-1.5">
+                <label className="text-xs font-bold text-[#2563EB] uppercase tracking-wider block mb-1.5">
                   ⭐ Vice-Captain Multiplier
                 </label>
                 <input
@@ -151,19 +151,19 @@ export default function PointsFormulaPage() {
                   step="0.1"
                   value={formula.vice_captain_multiplier}
                   onChange={e => setFormula(prev => ({ ...prev, vice_captain_multiplier: parseFloat(e.target.value) || 0 }))}
-                  className="w-full !font-mono !py-3"
+                  className="w-full !font-mono !py-3 px-3 bg-white border border-[#CBD5E1] rounded-xl text-[#0F172A] focus:outline-none focus:border-[#2563EB]"
                 />
               </div>
             </div>
 
             {msg && (
-              <p className="text-xs text-success font-bold">{msg}</p>
+              <p className="text-xs text-green-600 font-bold">{msg}</p>
             )}
 
             <button
               type="submit"
               disabled={saving}
-              className="w-full py-4 rounded-xl text-xs font-black uppercase tracking-wider bg-neon-cyan text-black flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-neon-cyan/20 hover:opacity-95"
+              className="w-full py-4 rounded-xl text-xs font-black uppercase tracking-wider bg-[#2563EB] text-white flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#2563EB]/20 hover:opacity-95"
             >
               {saved ? <Check size={16} /> : <Save size={16} />}
               <span>{saving ? 'Saving...' : saved ? 'Formula Deployed!' : 'Save & Deploy Scoring Formula'}</span>
@@ -172,50 +172,50 @@ export default function PointsFormulaPage() {
         </div>
 
         {/* Live Formula Simulator (5 cols) */}
-        <div className="lg:col-span-5 glass-card p-6 sm:p-8 border border-white/10">
-          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-white/5">
-            <Calculator size={20} className="text-neon-cyan" />
-            <h3 className="text-base font-extrabold text-white">Live Simulator Preview</h3>
+        <div className="lg:col-span-5 prime-card-3d bg-white p-6 sm:p-8 border border-[#CBD5E1]">
+          <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[#E2E8F0]">
+            <Calculator size={20} className="text-[#2563EB]" />
+            <h3 className="text-base font-extrabold text-[#0F172A]">Live Simulator Preview</h3>
           </div>
 
           <div className="space-y-4 mb-6">
             <div>
-              <label className="text-[10px] text-text-muted uppercase font-bold block mb-1">Simulated YT Views Gained</label>
+              <label className="text-[10px] text-[#64748B] uppercase font-bold block mb-1">Simulated YT Views Gained</label>
               <input
                 type="number"
                 value={simViews}
                 onChange={e => setSimViews(parseInt(e.target.value) || 0)}
-                className="w-full !py-2 !text-xs !bg-black/60"
+                className="w-full !py-2 !text-xs !bg-white px-3 border border-[#CBD5E1] rounded-xl text-[#0F172A] focus:outline-none focus:border-[#2563EB]"
               />
             </div>
 
             <div>
-              <label className="text-[10px] text-text-muted uppercase font-bold block mb-1">Simulated IG Likes Gained</label>
+              <label className="text-[10px] text-[#64748B] uppercase font-bold block mb-1">Simulated IG Likes Gained</label>
               <input
                 type="number"
                 value={simLikes}
                 onChange={e => setSimLikes(parseInt(e.target.value) || 0)}
-                className="w-full !py-2 !text-xs !bg-black/60"
+                className="w-full !py-2 !text-xs !bg-white px-3 border border-[#CBD5E1] rounded-xl text-[#0F172A] focus:outline-none focus:border-[#2563EB]"
               />
             </div>
           </div>
 
-          <div className="p-4 rounded-2xl bg-black/60 border border-white/10 space-y-3">
-            <p className="text-[10px] text-text-muted uppercase font-bold tracking-wider">Calculated Points</p>
+          <div className="p-4 rounded-2xl bg-[#F1F5F9] border border-[#CBD5E1] space-y-3">
+            <p className="text-[10px] text-[#64748B] uppercase font-bold tracking-wider">Calculated Points</p>
             
             <div className="flex justify-between items-center text-xs">
-              <span className="text-text-secondary">Standard Player:</span>
-              <span className="font-extrabold text-white">{rawYtPts.toFixed(2)} Pts</span>
+              <span className="text-[#334155]">Standard Player:</span>
+              <span className="font-extrabold text-[#0F172A]">{rawYtPts.toFixed(2)} Pts</span>
             </div>
 
             <div className="flex justify-between items-center text-xs">
-              <span className="text-neon-gold font-bold">👑 Captain (x{formula.captain_multiplier}):</span>
-              <span className="font-black text-neon-gold">{(rawYtPts * formula.captain_multiplier).toFixed(2)} Pts</span>
+              <span className="text-[#D97706] font-bold">👑 Captain (x{formula.captain_multiplier}):</span>
+              <span className="font-black text-[#D97706]">{(rawYtPts * formula.captain_multiplier).toFixed(2)} Pts</span>
             </div>
 
             <div className="flex justify-between items-center text-xs">
-              <span className="text-neon-cyan font-bold">⭐ Vice-Captain (x{formula.vice_captain_multiplier}):</span>
-              <span className="font-black text-neon-cyan">{(rawYtPts * formula.vice_captain_multiplier).toFixed(2)} Pts</span>
+              <span className="text-[#2563EB] font-bold">⭐ Vice-Captain (x{formula.vice_captain_multiplier}):</span>
+              <span className="font-black text-[#2563EB]">{(rawYtPts * formula.vice_captain_multiplier).toFixed(2)} Pts</span>
             </div>
           </div>
         </div>
