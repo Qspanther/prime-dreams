@@ -21,6 +21,10 @@ interface TransactionItem {
 export default function WalletPage() {
   const { user, token } = useAuth();
   const [balance, setBalance] = useState(0);
+  const [depositBalance, setDepositBalance] = useState(0);
+  const [winningsBalance, setWinningsBalance] = useState(0);
+  const [bonusBalance, setBonusBalance] = useState(0);
+  const [withdrawable, setWithdrawable] = useState(0);
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history'>('deposit');
 
@@ -32,12 +36,22 @@ export default function WalletPage() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [kycVerified, setKycVerified] = useState(user?.kycStatus === 'verified');
+  const [kycName, setKycName] = useState('');
+  const [kycPan, setKycPan] = useState('');
+  const [kycLoading, setKycLoading] = useState(false);
+
+  useEffect(() => { setKycVerified(user?.kycStatus === 'verified'); }, [user?.kycStatus]);
 
   const fetchWallet = async () => {
     if (!token) return;
     try {
       const bRes = await apiGet('/wallet/balance', token);
       if (typeof bRes?.balance === 'number') setBalance(bRes.balance);
+      setDepositBalance(Number(bRes?.deposit_balance) || 0);
+      setWinningsBalance(Number(bRes?.winnings_balance) || 0);
+      setBonusBalance(Number(bRes?.bonus_balance) || 0);
+      setWithdrawable(Number(bRes?.withdrawable_balance) || 0);
 
       const tRes = await apiGet('/wallet/transactions', token);
       if (Array.isArray(tRes)) setTransactions(tRes);
@@ -60,14 +74,14 @@ export default function WalletPage() {
     setMessage(null);
 
     try {
-      const res = await apiPost('/wallet/deposit-inr', {
+      const res = await apiPost('/wallet/deposit-request', {
         amount: parseFloat(depositAmount),
-        utr_number: depositUtr.trim(),
-        payment_method: 'UPI',
+        utr: depositUtr.trim(),
+        method: 'UPI',
       }, token);
 
-      if (res?.success) {
-        setMessage('✅ Deposit request submitted successfully! Your balance will update as soon as the UTR is verified.');
+      if (res?.transaction || res?.message) {
+        setMessage('✅ Deposit proof submitted! Your balance will be credited once the UTR is verified.');
         setDepositUtr('');
         fetchWallet();
       } else {
@@ -87,8 +101,8 @@ export default function WalletPage() {
       setError('Minimum withdrawal amount is ₹100');
       return;
     }
-    if (amt > balance) {
-      setError('Insufficient wallet balance');
+    if (amt > withdrawable) {
+      setError('Insufficient withdrawable balance (Winnings + Deposit). Bonus cash is not withdrawable.');
       return;
     }
     if (!withdrawUpi.trim()) {
@@ -101,24 +115,65 @@ export default function WalletPage() {
     setMessage(null);
 
     try {
-      const res = await apiPost('/wallet/withdraw-inr', {
+      const res = await apiPost('/wallet/withdraw', {
         amount: amt,
         upi_id: withdrawUpi.trim(),
+        method: 'UPI',
       }, token);
 
-      if (res?.success) {
-        setMessage('✅ Withdrawal request submitted! Payout will be sent directly to your UPI ID.');
+      if (res?.transaction || res?.message) {
+        const tdsNote = res?.tds_amount > 0
+          ? ` TDS ₹${Number(res.tds_amount).toLocaleString('en-IN')} deducted — payout ₹${Number(res.payout_amount).toLocaleString('en-IN')}.`
+          : '';
+        setMessage(`✅ Withdrawal request submitted!${tdsNote} Payout will be sent to your UPI ID.`);
         setWithdrawAmount('200');
         fetchWallet();
       } else {
         setError(res?.error || 'Withdrawal failed');
       }
     } catch (err: any) {
+      if (/KYC/i.test(err?.message || '')) setKycVerified(false);
       setError(err?.message || 'Error processing withdrawal');
     } finally {
       setLoading(false);
     }
   };
+
+  const handleKyc = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!kycName.trim() || !kycPan.trim()) {
+      setError('Full name and PAN number are required');
+      return;
+    }
+    setKycLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await apiPost('/wallet/kyc', {
+        fullName: kycName.trim(),
+        panNumber: kycPan.trim().toUpperCase(),
+      }, token);
+      if (res?.kycStatus === 'verified' || res?.message) {
+        setKycVerified(true);
+        setMessage('✅ KYC verified! You can now withdraw your winnings.');
+        setKycName('');
+        setKycPan('');
+      } else {
+        setError(res?.error || 'KYC verification failed');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'KYC verification failed');
+    } finally {
+      setKycLoading(false);
+    }
+  };
+
+  const withdrawAmtNum = parseFloat(withdrawAmount) || 0;
+  const winningsPortion = Math.min(winningsBalance, withdrawAmtNum);
+  const tdsPreview = withdrawAmtNum >= 10000 && winningsPortion > 0
+    ? Math.round(winningsPortion * 0.30 * 100) / 100
+    : 0;
+  const payoutPreview = Math.round((withdrawAmtNum - tdsPreview) * 100) / 100;
 
   return (
     <div className="px-3 sm:px-6 py-6 max-w-4xl mx-auto w-full space-y-6 bg-transparent">
@@ -146,13 +201,37 @@ export default function WalletPage() {
           <Zap className="w-32 h-32 text-[#D97706]" />
         </div>
 
-        <span className="text-xs font-black uppercase tracking-widest text-[#D97706] block">Available Liquid Balance</span>
+        <span className="text-xs font-black uppercase tracking-widest text-[#D97706] block">Total Wallet Balance</span>
         <div className="text-3xl sm:text-5xl font-black text-[#D97706] mt-1 font-mono drop-shadow-[0_0_20px_rgba(245,158,11,0.5)]">
           ₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </div>
         <p className="text-xs text-[#64748B] font-bold mt-2">
           100% Guaranteed Reserve • Instant entry into Mega Contests, PUBG rooms, and 1-on-1 H2H duels.
         </p>
+      </div>
+
+      {/* Balance Split: Deposit / Winnings / Bonus */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="prime-card-3d p-4">
+          <span className="pd-eyebrow text-[10px] text-[#64748B] block">Deposit</span>
+          <span className="pd-num font-black text-lg text-[#2563EB] font-mono">₹{depositBalance.toLocaleString('en-IN')}</span>
+          <span className="text-[10px] text-[#64748B] font-bold block mt-0.5">Withdrawable</span>
+        </div>
+        <div className="prime-card-3d p-4">
+          <span className="pd-eyebrow text-[10px] text-[#64748B] block">Winnings</span>
+          <span className="pd-num font-black text-lg text-[#16A34A] font-mono">₹{winningsBalance.toLocaleString('en-IN')}</span>
+          <span className="text-[10px] text-[#64748B] font-bold block mt-0.5">Withdrawable</span>
+        </div>
+        <div className="prime-card-3d p-4">
+          <span className="pd-eyebrow text-[10px] text-[#64748B] block">Cash Bonus</span>
+          <span className="pd-num font-black text-lg text-[#D97706] font-mono">₹{bonusBalance.toLocaleString('en-IN')}</span>
+          <span className="text-[10px] text-[#64748B] font-bold block mt-0.5">Entry only • not withdrawable</span>
+        </div>
+        <div className="prime-card-3d p-4">
+          <span className="pd-eyebrow text-[10px] text-[#64748B] block">Withdrawable</span>
+          <span className="pd-num font-black text-lg text-[#0F172A] font-mono">₹{withdrawable.toLocaleString('en-IN')}</span>
+          <span className="text-[10px] text-[#64748B] font-bold block mt-0.5">Deposit + Winnings</span>
+        </div>
       </div>
 
       {/* Action Tabs (3D Buttons) */}
@@ -277,9 +356,48 @@ export default function WalletPage() {
         <div className="prime-card-3d p-6 space-y-5">
           <div>
             <h3 className="font-black text-[#0F172A] text-base">Withdraw Funds</h3>
-            <p className="text-xs text-[#64748B] font-bold">Withdraw your winnings directly to your UPI ID (Min ₹100)</p>
+            <p className="text-xs text-[#64748B] font-bold">Withdraw your winnings + deposit to your UPI ID (Min ₹100). Bonus cash is not withdrawable.</p>
           </div>
 
+          {!kycVerified ? (
+            <form onSubmit={handleKyc} className="space-y-4 p-4 rounded-xl bg-[#FFFBEB] border-2 border-[#FDE68A]">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-[#D97706]" />
+                <h4 className="font-black text-sm text-[#0F172A]">PAN KYC Required</h4>
+              </div>
+              <p className="text-xs text-[#64748B] font-bold">Withdrawals require a verified PAN. TDS @30% applies to the winnings portion of payouts ₹10,000+.</p>
+              <div>
+                <label className="block text-xs font-black text-[#64748B] uppercase mb-1.5">Full Name (as on PAN)</label>
+                <input
+                  type="text"
+                  value={kycName}
+                  onChange={(e) => setKycName(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#0F172A] text-sm focus:border-[#2563EB] outline-none font-bold"
+                  placeholder="Your full name"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-black text-[#64748B] uppercase mb-1.5">PAN Number</label>
+                <input
+                  type="text"
+                  value={kycPan}
+                  onChange={(e) => setKycPan(e.target.value.toUpperCase())}
+                  maxLength={10}
+                  className="w-full px-3 py-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#0F172A] text-sm focus:border-[#2563EB] outline-none font-mono font-black tracking-widest"
+                  placeholder="ABCDE1234F"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={kycLoading}
+                className="prime-btn-gold-3d w-full !py-3 text-xs font-black uppercase tracking-wider"
+              >
+                {kycLoading ? 'Verifying...' : 'Verify PAN & Unlock Withdrawals'}
+              </button>
+            </form>
+          ) : (
           <form onSubmit={handleWithdraw} className="space-y-4">
             <div>
               <label className="block text-xs font-black text-[#D97706] uppercase mb-1.5">
@@ -294,6 +412,7 @@ export default function WalletPage() {
                 className="w-full px-3 py-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#0F172A] text-sm focus:border-[#2563EB] outline-none font-mono font-black"
                 required
               />
+              <p className="text-[11px] text-[#64748B] font-bold mt-1">Withdrawable: ₹{withdrawable.toLocaleString('en-IN')}</p>
             </div>
 
             <div>
@@ -310,6 +429,13 @@ export default function WalletPage() {
               />
             </div>
 
+            {tdsPreview > 0 && (
+              <div className="p-3 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] text-xs font-bold text-[#1D4ED8] space-y-1">
+                <p>TDS @30% on winnings portion: <span className="font-mono font-black">−₹{tdsPreview.toLocaleString('en-IN')}</span></p>
+                <p>You will receive: <span className="font-mono font-black">₹{payoutPreview.toLocaleString('en-IN')}</span></p>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={loading}
@@ -318,6 +444,7 @@ export default function WalletPage() {
               {loading ? 'Processing...' : `Withdraw ₹${withdrawAmount}`}
             </button>
           </form>
+          )}
         </div>
       )}
 

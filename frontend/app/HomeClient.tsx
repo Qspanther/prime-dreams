@@ -166,13 +166,13 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
               </div>
 
               <div>
-                <span className="text-xs uppercase font-black text-[#64748B] tracking-widest block">
+                <span className="pd-eyebrow block text-[#64748B]">
                   Guaranteed Colosseum Prize Pool
                 </span>
-                <h1 className="text-3xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#1E3A8A] via-[#2563EB] to-[#0284C7] drop-shadow-sm tracking-tight font-['Montserrat',sans-serif]">
+                <h1 className="pd-num text-3xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#1E3A8A] via-[#2563EB] to-[#0284C7] drop-shadow-sm tracking-tight font-['Montserrat',sans-serif]">
                   ₹{heroMatch.total_prize_pool > 0 ? heroMatch.total_prize_pool.toLocaleString('en-IN') : '50,00,000'} MEGA ARENA
                 </h1>
-                <p className="text-xs sm:text-sm text-[#475569] font-bold mt-1">
+                <p className="pd-num text-xs sm:text-sm text-[#475569] font-bold mt-1">
                   1st Prize ₹15,00,000 Guaranteed • Instant UTR/UPI Bank Payouts • 0% Fair-Play Certified
                 </p>
               </div>
@@ -225,13 +225,13 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
             <div className="lg:col-span-5 flex flex-col justify-between h-full prime-card-3d p-6 space-y-5 border-2 border-[#94A3B8]">
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-[11px] text-[#64748B] uppercase font-black tracking-widest block">
+                  <span className="pd-eyebrow block text-[#64748B]">
                     Colosseum Championship
                   </span>
                   <h3 className="text-lg font-black text-[#0F172A] mt-1">Mega Grand Entry Pass</h3>
                 </div>
                 <div className="text-right">
-                  <span className="text-3xl font-black text-[#2563EB] font-mono">
+                  <span className="pd-num text-3xl font-black text-transparent bg-clip-text bg-gradient-to-b from-[#F59E0B] to-[#B45309] drop-shadow-sm font-mono">
                     {heroMatch.min_entry_fee > 0 ? `₹${heroMatch.min_entry_fee}` : '₹49'}
                   </span>
                   <span className="text-[10px] text-[#64748B] font-bold block uppercase">Entry Fee</span>
@@ -323,7 +323,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                   <div className="grid grid-cols-2 gap-3 items-center py-2">
                     <div>
                       <span className="text-xs font-black text-[#0F172A] block truncate">{m.team_a}</span>
-                      <p className="text-2xl font-black text-[#2563EB] font-mono">
+                      <p className="pd-num text-2xl font-black text-[#2563EB] font-mono">
                         {m.score_summary?.team_a
                           ? `${m.score_summary.team_a.runs}/${m.score_summary.team_a.wickets} (${m.score_summary.team_a.overs} ov)`
                           : '146/3 (16.4 ov)'}

@@ -14,9 +14,23 @@ const Wallet = sequelize.define('Wallet', {
   },
   balance: {
     // ASSUMPTION: Using DECIMAL for financial accuracy, stored as string in SQLite
+    // balance = deposit_balance + winnings_balance + bonus_balance (kept in sync)
     type: DataTypes.DECIMAL(12, 4),
     defaultValue: 0,
     allowNull: false,
+  },
+  deposit_balance: {
+    type: DataTypes.DECIMAL(12, 4),
+    defaultValue: 0,
+  },
+  winnings_balance: {
+    type: DataTypes.DECIMAL(12, 4),
+    defaultValue: 0,
+  },
+  bonus_balance: {
+    // Usable for contest entry only — never withdrawable
+    type: DataTypes.DECIMAL(12, 4),
+    defaultValue: 0,
   },
 }, {
   tableName: 'wallets',

@@ -73,6 +73,10 @@ router.get('/balance', authenticate, async (req, res) => {
     }
     res.json({
       balance: parseFloat(wallet.balance),
+      deposit_balance: parseFloat(wallet.deposit_balance) || 0,
+      winnings_balance: parseFloat(wallet.winnings_balance) || 0,
+      bonus_balance: parseFloat(wallet.bonus_balance) || 0,
+      withdrawable_balance: (parseFloat(wallet.deposit_balance) || 0) + (parseFloat(wallet.winnings_balance) || 0),
       currency: 'INR',
       currencySymbol: '₹'
     });
@@ -138,16 +142,19 @@ router.post('/deposit-request', authenticate, async (req, res) => {
 });
 
 // POST /wallet/add-funds — Admin-only manual credit (disabled for normal users)
+// body.source: 'deposit' | 'winnings' | 'bonus' (default deposit)
 router.post('/add-funds', authenticate, async (req, res) => {
   try {
     if (req.user?.role !== 'admin') {
       return res.status(403).json({ error: 'Direct demo funding is disabled. Please add cash using UPI and submit your 12-digit UTR.' });
     }
-    const { amount, method = 'UPI' } = req.body;
+    const { amount, method = 'UPI', source = 'deposit' } = req.body;
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || !isFinite(numAmount) || numAmount <= 0 || numAmount > 1000000) {
       return res.status(400).json({ error: 'Amount must be positive' });
     }
+
+    const bucket = ['deposit', 'winnings', 'bonus'].includes(source) ? source : 'deposit';
 
     const result = await smartEngine.execute('wallet', async () => {
       const t = await sequelize.transaction();
@@ -156,7 +163,10 @@ router.post('/add-funds', authenticate, async (req, res) => {
         const currentBalance = parseFloat(wallet.balance);
         const newBalance = currentBalance + numAmount;
 
-        await wallet.update({ balance: newBalance }, { transaction: t });
+        const updates = { balance: newBalance };
+        updates[`${bucket}_balance`] = (parseFloat(wallet[`${bucket}_balance`]) || 0) + numAmount;
+
+        await wallet.update(updates, { transaction: t });
 
         const tx = await Transaction.create({
           wallet_id: wallet.id,
@@ -230,14 +240,34 @@ router.post('/withdraw', authenticate, async (req, res) => {
       try {
         const wallet = await Wallet.findOne({ where: { user_id: req.userId }, transaction: t });
         const currentBalance = parseFloat(wallet.balance);
+        const winnings = parseFloat(wallet.winnings_balance) || 0;
+        const deposit = parseFloat(wallet.deposit_balance) || 0;
+        const withdrawable = winnings + deposit;
 
-        if (currentBalance < numAmount) {
+        if (withdrawable < numAmount) {
           await t.rollback();
-          return { errorStatus: 400, data: { error: `Insufficient INR balance. Available: ₹${currentBalance.toLocaleString('en-IN')}` } };
+          return { errorStatus: 400, data: { error: `Insufficient withdrawable balance. Winnings + Deposit available: ₹${withdrawable.toLocaleString('en-IN')} (bonus cash is not withdrawable)` } };
+        }
+
+        // Deduct from winnings first, then deposit (bonus untouched)
+        let remaining = numAmount;
+        const useWinnings = Math.min(winnings, remaining); remaining -= useWinnings;
+        const useDeposit = Math.min(deposit, remaining); remaining -= useDeposit;
+
+        // TDS: 30% on the winnings portion of withdrawals of ₹10,000+ (Indian tax rule)
+        let tdsAmount = 0;
+        let payoutAmount = numAmount;
+        if (numAmount >= 10000 && useWinnings > 0) {
+          tdsAmount = Math.round(useWinnings * 0.30 * 100) / 100;
+          payoutAmount = Math.round((numAmount - tdsAmount) * 100) / 100;
         }
 
         const newBalance = currentBalance - numAmount;
-        await wallet.update({ balance: newBalance }, { transaction: t });
+        await wallet.update({
+          balance: newBalance,
+          winnings_balance: winnings - useWinnings,
+          deposit_balance: deposit - useDeposit,
+        }, { transaction: t });
 
         const destination = payMethod === 'UPI' ? upi_id.trim() : `A/C ${account_number.slice(-4)} (${ifsc})`;
         const tx = await Transaction.create({
@@ -247,13 +277,28 @@ router.post('/withdraw', authenticate, async (req, res) => {
           network: payMethod,
           wallet_address: destination,
           status: 'pending',
-          description: `INR (₹${numAmount.toLocaleString('en-IN')}) Payout via ${payMethod} to ${destination}`,
+          description: `INR (₹${numAmount.toLocaleString('en-IN')}) Payout via ${payMethod} to ${destination}${tdsAmount > 0 ? ` — TDS ₹${tdsAmount.toLocaleString('en-IN')} deducted` : ''}`,
         }, { transaction: t });
+
+        if (tdsAmount > 0) {
+          await Transaction.create({
+            wallet_id: wallet.id,
+            type: 'tds',
+            amount: -tdsAmount,
+            network: payMethod,
+            status: 'pending',
+            description: `TDS @30% on winnings portion ₹${useWinnings.toLocaleString('en-IN')} of ₹${numAmount.toLocaleString('en-IN')} withdrawal (₹10,000+ threshold). Payout: ₹${payoutAmount.toLocaleString('en-IN')}`,
+          }, { transaction: t });
+        }
+
+        const tdsNote = tdsAmount > 0
+          ? ` TDS of ₹${tdsAmount.toLocaleString('en-IN')} (30%) has been deducted — you will receive ₹${payoutAmount.toLocaleString('en-IN')}.`
+          : '';
 
         await Notification.create({
           user_id: req.userId,
           title: '₹ Withdrawal Request Submitted',
-          message: `Your payout request of ₹${numAmount.toLocaleString('en-IN')} via ${payMethod} to ${destination} is being processed.`,
+          message: `Your payout request of ₹${numAmount.toLocaleString('en-IN')} via ${payMethod} to ${destination} is being processed.${tdsNote}`,
           type: 'wallet_withdrawal',
         }, { transaction: t });
 
@@ -262,8 +307,10 @@ router.post('/withdraw', authenticate, async (req, res) => {
         return {
           status: 200,
           data: {
-            message: 'Withdrawal request submitted successfully! Processing payout.',
+            message: `Withdrawal request submitted successfully! Processing payout.${tdsNote}`,
             balance: newBalance,
+            tds_amount: tdsAmount,
+            payout_amount: payoutAmount,
             transaction: tx,
           }
         };
@@ -292,8 +339,8 @@ router.post('/kyc', authenticate, async (req, res) => {
     }
 
     const cleanPan = panNumber.trim().toUpperCase();
-    if (cleanPan.length !== 10) {
-      return res.status(400).json({ error: 'PAN number must be exactly 10 characters (e.g. ABCDE1234F)' });
+    if (!/^[A-Z]{5}[0-9]{4}[A-Z]$/.test(cleanPan)) {
+      return res.status(400).json({ error: 'Invalid PAN format. Use 5 letters + 4 digits + 1 letter (e.g. ABCDE1234F)' });
     }
 
     await User.update(

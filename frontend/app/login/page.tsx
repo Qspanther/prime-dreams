@@ -38,8 +38,9 @@ export default function LoginPage() {
 
       <div className="prime-card-3d p-6 sm:p-8 space-y-5">
         <div className="text-center">
-          <h2 className="pd-title text-2xl">Welcome Back</h2>
-          <p className="text-xs text-[#64748B] mt-1">Log in with your Email or Username</p>
+          <span className="pd-eyebrow block text-[#2563EB]">Prime Dreems Arena</span>
+          <h2 className="pd-title text-2xl mt-1">Welcome Back</h2>
+          <p className="text-xs text-[#64748B] mt-1.5">Log in with your Email or Username</p>
         </div>
 
         {error && (

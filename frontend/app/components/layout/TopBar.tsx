@@ -59,7 +59,8 @@ export default function TopBar() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b-2 border-[#CBD5E1] bg-white/90 backdrop-blur-xl px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-4 shadow-[0_4px_20px_rgba(30,58,138,0.06)] text-[#0F172A]">
+      <header className="sticky top-0 z-30 border-b border-[#CBD5E1] bg-white/95 backdrop-blur-xl px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-4 shadow-[0_4px_24px_rgba(30,58,138,0.08)] text-[#0F172A]">
+        <span className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#93C5FD] to-transparent pointer-events-none" />
         {/* Left: Logo & Mobile Toggle */}
         <div className="flex items-center gap-1.5 sm:gap-4 min-w-0 flex-1">
           <button
@@ -95,7 +96,7 @@ export default function TopBar() {
             className="prime-btn-gold-3d !py-1.5 !px-2 sm:!px-3.5 !text-xs font-black shrink-0"
           >
             <Wallet className="w-4 h-4 text-[#92400E] shrink-0" />
-            <span className="font-mono text-xs sm:text-sm whitespace-nowrap">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+            <span className="pd-num font-mono text-xs sm:text-sm whitespace-nowrap">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
           </Link>
 
           {/* Notifications */}

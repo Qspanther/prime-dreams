@@ -12,7 +12,7 @@ const MatchContest = sequelize.define('MatchContest', {
     allowNull: false,
   },
   type: {
-    type: DataTypes.ENUM('standard', 'multi_battlefield', 'h2h'),
+    type: DataTypes.ENUM('standard', 'multi_battlefield', 'h2h', 'private', 'practice'),
     allowNull: false,
     defaultValue: 'standard',
   },
@@ -51,6 +51,19 @@ const MatchContest = sequelize.define('MatchContest', {
   },
   // Type 3 H2H settings
   h2h_challenge_id: {
+    type: DataTypes.UUID,
+    allowNull: true,
+  },
+  // Type 4 Private contest settings
+  is_private: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+  },
+  invite_code: {
+    type: DataTypes.STRING(12),
+    allowNull: true,
+  },
+  creator_id: {
     type: DataTypes.UUID,
     allowNull: true,
   },

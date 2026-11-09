@@ -24,7 +24,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
   const [match, setMatch] = useState<any>(null);
   const [telemetry, setTelemetry] = useState<any>(null);
   const [activeView, setActiveView] = useState<'contests' | 'squads' | 'commentary'>('contests');
-  const [selectedContestTab, setSelectedContestTab] = useState<'all' | 'standard' | 'multi_battlefield' | 'h2h'>('all');
+  const [selectedContestTab, setSelectedContestTab] = useState<'all' | 'standard' | 'multi_battlefield' | 'h2h' | 'private' | 'practice'>('all');
   const [loading, setLoading] = useState(true);
 
   // H2H Custom Challenge Form State
@@ -36,6 +36,92 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
   const [h2hSubmitting, setH2HSubmitting] = useState(false);
   const [h2hMessage, setH2HMessage] = useState<string | null>(null);
   const [h2hError, setH2HError] = useState<string | null>(null);
+
+  // Private Contests State
+  const [privateLoaded, setPrivateLoaded] = useState(false);
+  const [myCreatedPrivate, setMyCreatedPrivate] = useState<any[]>([]);
+  const [joinedPrivate, setJoinedPrivate] = useState<any[]>([]);
+  const [joinCode, setJoinCode] = useState('');
+  const [joinResult, setJoinResult] = useState<any>(null);
+  const [joinCodeError, setJoinCodeError] = useState<string | null>(null);
+  const [joinResolving, setJoinResolving] = useState(false);
+  const [showCreatePrivate, setShowCreatePrivate] = useState(false);
+  const [createForm, setCreateForm] = useState({ title: '', entry_fee: '49', total_spots: '4' });
+  const [createSubmitting, setCreateSubmitting] = useState(false);
+  const [createResult, setCreateResult] = useState<any>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  const fetchPrivateContests = async () => {
+    if (!token) return;
+    try {
+      const res = await apiGet(`/matches/${matchId}/private-contests`, token);
+      if (res?.success) {
+        setMyCreatedPrivate(res.created || []);
+        setJoinedPrivate(res.joined || []);
+      }
+    } catch (err) { /* silent */ }
+    finally { setPrivateLoaded(true); }
+  };
+
+  useEffect(() => {
+    if (selectedContestTab === 'private' && !privateLoaded && token) {
+      fetchPrivateContests();
+    }
+  }, [selectedContestTab, privateLoaded, token, matchId]);
+
+  const handleJoinByCode = async () => {
+    const code = joinCode.trim().toUpperCase();
+    if (!code) { setJoinCodeError('Invite code daalo'); return; }
+    setJoinResolving(true);
+    setJoinCodeError(null);
+    setJoinResult(null);
+    try {
+      const res = await apiGet(`/contests/private/${encodeURIComponent(code)}`, token!);
+      if (res?.success) {
+        setJoinResult(res);
+        fetchPrivateContests();
+      } else {
+        setJoinCodeError(res?.error || 'Invalid code');
+      }
+    } catch (err: any) {
+      setJoinCodeError(err?.message || 'Code resolve nahi hua');
+    } finally {
+      setJoinResolving(false);
+    }
+  };
+
+  const handleCreatePrivate = async () => {
+    setCreateSubmitting(true);
+    setCreateError(null);
+    setCreateResult(null);
+    try {
+      const res = await apiPost(`/matches/${matchId}/private-contests`, {
+        title: createForm.title,
+        entry_fee: parseFloat(createForm.entry_fee) || 0,
+        total_spots: parseInt(createForm.total_spots, 10) || 2,
+      }, token!);
+      if (res?.success) {
+        setCreateResult(res.contest);
+        setCreateForm({ title: '', entry_fee: '49', total_spots: '4' });
+        fetchPrivateContests();
+      } else {
+        setCreateError(res?.error || 'Contest create nahi hua');
+      }
+    } catch (err: any) {
+      setCreateError(err?.message || 'Contest create nahi hua');
+    } finally {
+      setCreateSubmitting(false);
+    }
+  };
+
+  const copyInviteCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopiedCode(code);
+      setTimeout(() => setCopiedCode(null), 2000);
+    } catch (err) { /* clipboard unavailable */ }
+  };
 
   const fetchMatchData = async () => {
     try {
@@ -555,9 +641,11 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
             {[
               { id: 'all', label: 'All Contests' },
+              { id: 'practice', label: 'Practice (Free)' },
               { id: 'standard', label: 'Standard Pools' },
               { id: 'multi_battlefield', label: 'PUBG Battlefield' },
               { id: 'h2h', label: 'H2H Custom' },
+              { id: 'private', label: 'Private 🔒' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -573,6 +661,209 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
             ))}
           </div>
 
+          {/* ─── PRIVATE CONTESTS (Invite Code) VIEW ─── */}
+          {selectedContestTab === 'private' && (
+            <div className="space-y-5">
+              {/* Join by Code */}
+              <div className="prime-card-3d p-5 space-y-4">
+                <div className="flex items-center gap-2">
+                  <Swords className="w-4 h-4 text-[#2563EB]" />
+                  <h3 className="font-black text-sm uppercase text-[#0F172A]">Join Private Contest</h3>
+                </div>
+                <p className="text-xs text-[#64748B] font-bold">Dost se invite code lo aur yahan paste karo.</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    value={joinCode}
+                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. AB7K2M9P"
+                    maxLength={12}
+                    className="pd-input flex-1 min-w-[140px] font-mono font-black tracking-widest uppercase"
+                  />
+                  <button
+                    onClick={handleJoinByCode}
+                    disabled={joinResolving || !token}
+                    className="prime-btn-3d !py-2.5 !px-4 !text-xs shrink-0"
+                  >
+                    {joinResolving ? 'Checking...' : 'Find Contest'}
+                  </button>
+                </div>
+                {joinCodeError && (
+                  <div className="pd-error"><AlertCircle className="w-4 h-4 shrink-0" /><span>{joinCodeError}</span></div>
+                )}
+                {joinResult?.contest && (
+                  <div className="rounded-xl bg-[#EFF6FF] border-2 border-[#93C5FD] p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <h4 className="font-black text-sm text-[#0F172A] truncate">{joinResult.contest.title}</h4>
+                        <p className="text-xs text-[#475569] font-bold mt-0.5">{joinResult.match?.team_a} vs {joinResult.match?.team_b}</p>
+                      </div>
+                      <span className="pd-num font-mono font-black text-sm text-[#1D4ED8] bg-white px-2.5 py-1 rounded-lg border border-[#BFDBFE]">₹{joinResult.contest.entry_fee}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs font-bold text-[#475569]">
+                      <span>Prize Pool: <span className="pd-num font-black text-[#D97706]">₹{Number(joinResult.contest.prize_pool).toLocaleString('en-IN')}</span></span>
+                      <span>{joinResult.contest.filled_spots}/{joinResult.contest.total_spots} joined</span>
+                    </div>
+                    <Link
+                      href={`/team-builder/${joinResult.match?.id || matchId}?contestId=${joinResult.contest.id}`}
+                      className="prime-btn-gold-3d w-full !py-2.5 !text-xs"
+                    >
+                      Join Contest ₹{joinResult.contest.entry_fee}
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* Create Private Contest */}
+              <div className="prime-card-3d p-5 space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Users className="w-4 h-4 text-[#D97706] shrink-0" />
+                    <h3 className="font-black text-sm uppercase text-[#0F172A]">Create Private Contest</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowCreatePrivate(!showCreatePrivate)}
+                    className="prime-btn-dark-3d !py-1.5 !px-3 !text-xs shrink-0"
+                  >
+                    {showCreatePrivate ? 'Close' : '+ Create'}
+                  </button>
+                </div>
+
+                {showCreatePrivate && (
+                  <div className="space-y-3 rounded-xl bg-[#FFF7E6] border-2 border-[#FDE68A] p-4">
+                    <div>
+                      <label className="pd-label">Contest Name</label>
+                      <input
+                        value={createForm.title}
+                        onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
+                        placeholder="Dosto ke sath jung"
+                        maxLength={40}
+                        className="pd-input"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="pd-label">Entry Fee (₹)</label>
+                        <input
+                          type="number" min="0" step="1"
+                          value={createForm.entry_fee}
+                          onChange={(e) => setCreateForm({ ...createForm, entry_fee: e.target.value })}
+                          className="pd-input pd-num"
+                        />
+                      </div>
+                      <div>
+                        <label className="pd-label">Total Spots</label>
+                        <input
+                          type="number" min="2" max="100" step="1"
+                          value={createForm.total_spots}
+                          onChange={(e) => setCreateForm({ ...createForm, total_spots: e.target.value })}
+                          className="pd-input pd-num"
+                        />
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-[#92400E] font-bold">
+                      Prize Pool auto-calculate hoga: spots × fee − 10% platform fee = <span className="pd-num font-black">₹{Math.round((parseFloat(createForm.entry_fee) || 0) * (parseInt(createForm.total_spots, 10) || 2) * 0.9)}</span>
+                    </p>
+                    {createError && (
+                      <div className="pd-error"><AlertCircle className="w-4 h-4 shrink-0" /><span>{createError}</span></div>
+                    )}
+                    <button
+                      onClick={handleCreatePrivate}
+                      disabled={createSubmitting || !token}
+                      className="prime-btn-gold-3d w-full !py-2.5 !text-xs"
+                    >
+                      {createSubmitting ? 'Creating...' : 'Create Private Contest'}
+                    </button>
+                  </div>
+                )}
+
+                {createResult?.invite_code && (
+                  <div className="rounded-xl bg-[#ECFDF5] border-2 border-[#6EE7B7] p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <h4 className="font-black text-sm text-[#065F46] truncate">{createResult.title}</h4>
+                        <p className="text-xs text-[#047857] font-bold">Contest ban gaya! Code dost ko share karo:</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="pd-num flex-1 text-center font-mono font-black text-lg tracking-[0.3em] text-[#065F46] bg-white rounded-xl border-2 border-[#6EE7B7] px-3 py-2 select-all">
+                        {createResult.invite_code}
+                      </span>
+                      <button
+                        onClick={() => copyInviteCode(createResult.invite_code)}
+                        className="prime-btn-3d !py-2 !px-3 !text-xs shrink-0"
+                      >
+                        {copiedCode === createResult.invite_code ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    <Link
+                      href={`/team-builder/${matchId}?contestId=${createResult.id}`}
+                      className="prime-btn-gold-3d w-full !py-2.5 !text-xs"
+                    >
+                      Join with your Team ₹{createResult.entry_fee}
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* My Created Private Contests */}
+              {myCreatedPrivate.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="font-black text-xs uppercase tracking-wider text-[#475569] flex items-center gap-2">
+                    <Shield className="w-3.5 h-3.5 text-[#2563EB]" /> Created by you ({myCreatedPrivate.length})
+                  </h4>
+                  {myCreatedPrivate.map((c: any) => (
+                    <div key={c.id} className="contest-card-3d p-4 flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <h5 className="font-black text-sm text-[#0F172A] truncate">{c.title}</h5>
+                        <p className="text-xs text-[#64748B] font-bold">₹{c.entry_fee} entry • ₹{Number(c.prize_pool).toLocaleString('en-IN')} pool • {c.filled_spots}/{c.total_spots} joined</p>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <button
+                          onClick={() => copyInviteCode(c.invite_code)}
+                          className="prime-btn-dark-3d !py-1.5 !px-2.5 !text-[10px] font-mono shrink-0"
+                          title={c.invite_code}
+                        >
+                          {copiedCode === c.invite_code ? 'Copied!' : c.invite_code}
+                        </button>
+                        <Link href={`/team-builder/${matchId}?contestId=${c.id}`} className="prime-btn-3d !py-1.5 !px-3 !text-[10px] shrink-0">
+                          Join
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Joined Private Contests */}
+              {joinedPrivate.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="font-black text-xs uppercase tracking-wider text-[#475569] flex items-center gap-2">
+                    <Trophy className="w-3.5 h-3.5 text-[#D97706]" /> Joined via code ({joinedPrivate.length})
+                  </h4>
+                  {joinedPrivate.map((c: any) => (
+                    <div key={c.id} className="contest-card-3d p-4 flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <h5 className="font-black text-sm text-[#0F172A] truncate">{c.title}</h5>
+                        <p className="text-xs text-[#64748B] font-bold">₹{c.entry_fee} entry • {c.filled_spots}/{c.total_spots} joined</p>
+                      </div>
+                      <span className="pd-num font-mono font-black text-xs text-[#065F46] bg-[#ECFDF5] px-2.5 py-1 rounded-lg border border-[#6EE7B7] shrink-0">
+                        Joined ✓
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {privateLoaded && myCreatedPrivate.length === 0 && joinedPrivate.length === 0 && !joinResult && (
+                <div className="text-center py-6 text-xs text-[#64748B] font-bold">
+                  Abhi koi private contest nahi — code se join karo ya apna banao! 🔒
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ─── PUBLIC CONTESTS GRID ─── */}
+          {selectedContestTab !== 'private' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredContests.map((c: any) => {
               const spotsLeft = Math.max(0, (c.total_spots || 100) - (c.filled_spots || 0));
@@ -584,7 +875,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                     <div className="flex items-center justify-between mb-3">
                       <CategoryBadge category={match.category} size="xs" />
                       <span className="font-mono font-black text-sm text-[#1D4ED8] bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-[#BFDBFE]">
-                        ₹{c.entry_fee}
+                        {c.type === 'practice' || Number(c.entry_fee) === 0 ? 'FREE' : `₹${c.entry_fee}`}
                       </span>
                     </div>
 
@@ -609,19 +900,20 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
 
                   <div className="mt-5 pt-3 border-t border-[#E2E8F0] flex items-center justify-between">
                     <span className="text-[11px] text-[#64748B] font-bold">
-                      {c.type === 'multi_battlefield' ? 'Auto-clones' : 'Guaranteed'}
+                      {c.type === 'practice' ? 'Practice • No cash risk' : c.type === 'multi_battlefield' ? 'Auto-clones' : 'Guaranteed'}
                     </span>
                     <Link
                       href={`/team-builder/${matchId}?contestId=${c.id}`}
                       className="prime-btn-3d !py-2 !px-4 text-xs font-black uppercase tracking-wider"
                     >
-                      Join Contest ₹{c.entry_fee}
+                      {c.type === 'practice' || Number(c.entry_fee) === 0 ? 'Join Free' : `Join Contest ₹${c.entry_fee}`}
                     </Link>
                   </div>
                 </div>
               );
             })}
           </div>
+          )}
         </div>
       )}
 

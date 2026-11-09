@@ -17,6 +17,10 @@ interface Player {
   credits: number;
   points: number;
   photo_url?: string;
+  selected_by_pct?: number;
+  last_match_points?: number | null;
+  avg_points?: number | null;
+  form?: string | null;
 }
 
 const TOTAL_CREDITS = 105;
@@ -42,6 +46,63 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [myTeams, setMyTeams] = useState<any[]>([]);
+
+  const loadTeamIntoBuilder = (t: any) => {
+    setEditingTeamId(t.id);
+    setSelectedPlayerIds((t.players || []).map((p: Player) => p.id));
+    setCaptainId(t.captain_id);
+    setViceCaptainId(t.vice_captain_id);
+    setTeamName(t.team_name || 'My Prime XI');
+  };
+
+  const startNewTeam = () => {
+    setEditingTeamId(null);
+    setSelectedPlayerIds([]);
+    setCaptainId(null);
+    setViceCaptainId(null);
+    setTeamName(`My Prime XI ${myTeams.length + 1 > 1 ? 'T' + (myTeams.length + 1) : ''}`.trim());
+  };
+
+  const fetchMyTeams = async () => {
+    if (!token) return;
+    try {
+      const res = await apiGet(`/matches/${matchId}/my-teams`, token);
+      if (res?.success) setMyTeams(res.teams || []);
+    } catch (err) { /* silent */ }
+  };
+
+  useEffect(() => { fetchMyTeams(); }, [matchId, token]);
+
+  const handleSelectExistingTeam = async (t: any) => {
+    try {
+      const res = await apiGet(`/matches/${matchId}/teams/${t.id}`, token!);
+      if (res?.team) loadTeamIntoBuilder(res.team);
+    } catch (err: any) {
+      setError(err?.message || 'Could not load team.');
+    }
+  };
+
+  const handleCloneTeam = async (t: any) => {
+    if (!token) { router.push('/login'); return; }
+    if (myTeams.length >= 6) { setError('Maximum 6 teams per match.'); return; }
+    setError(null);
+    try {
+      const res = await apiPost(`/matches/${matchId}/teams/${t.id}/clone`, {}, token);
+      if (res?.success) {
+        await fetchMyTeams();
+        const newId = res.team?.id;
+        if (newId) {
+          const full = await apiGet(`/matches/${matchId}/teams/${newId}`, token);
+          if (full?.team) loadTeamIntoBuilder(full.team);
+        }
+      } else {
+        setError(res?.error || 'Could not clone team.');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Could not clone team.');
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -279,8 +340,8 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
             </div>
 
             <div className="text-right">
-              <span className="text-[10px] text-[#64748B] uppercase font-black block">Credits Left</span>
-              <span className={`text-xl font-black font-mono ${creditsLeft < 9 ? 'text-[#DC2626]' : 'text-[#D97706] drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]'}`}>
+              <span className="pd-eyebrow block text-[#64748B]">Credits Left</span>
+              <span className={`pd-num text-xl font-black font-mono ${creditsLeft < 9 ? 'text-[#DC2626]' : 'text-[#D97706] drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]'}`}>
                 {creditsLeft} / {TOTAL_CREDITS}
               </span>
             </div>
@@ -289,28 +350,72 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
           {/* 11 Players Count Meter */}
           <div className="grid grid-cols-4 gap-2 pt-1 text-center text-xs">
             <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
-              <span className="text-[10px] text-[#64748B] font-bold block">Selected</span>
-              <span className="font-black text-base text-[#2563EB] font-mono">
+              <span className="pd-eyebrow !tracking-normal text-[10px] text-[#64748B] block">Selected</span>
+              <span className="pd-num font-black text-base text-[#2563EB] font-mono">
                 {selectedPlayerIds.length} / 11
               </span>
             </div>
             <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
-              <span className="text-[10px] text-[#64748B] font-bold block truncate">{match.team_a}</span>
-              <span className="font-black text-base text-[#0F172A] font-mono">
+              <span className="pd-eyebrow !tracking-normal text-[10px] text-[#64748B] block truncate" title={match.team_a}>{match.team_a_code || match.team_a}</span>
+              <span className="pd-num font-black text-base text-[#0F172A] font-mono">
                 {teamCounts[match.team_a] || 0} / 7
               </span>
             </div>
             <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
-              <span className="text-[10px] text-[#64748B] font-bold block truncate">{match.team_b}</span>
-              <span className="font-black text-base text-[#0F172A] font-mono">
+              <span className="pd-eyebrow !tracking-normal text-[10px] text-[#64748B] block truncate" title={match.team_b}>{match.team_b_code || match.team_b}</span>
+              <span className="pd-num font-black text-base text-[#0F172A] font-mono">
                 {teamCounts[match.team_b] || 0} / 7
               </span>
             </div>
             <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
-              <span className="text-[10px] text-[#64748B] font-bold block">Squad Pool</span>
-              <span className="font-black text-base text-[#0F172A] font-mono">30 Total</span>
+              <span className="pd-eyebrow !tracking-normal text-[10px] text-[#64748B] block">Squad Pool</span>
+              <span className="pd-num font-black text-base text-[#0F172A] font-mono">30 Total</span>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* My Teams — up to 6 per match: select, clone, or start new */}
+      {token && (
+        <div className="prime-card-3d p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-black text-xs uppercase text-[#0F172A]">My Teams ({myTeams.length}/6)</h3>
+            <button
+              onClick={startNewTeam}
+              disabled={myTeams.length >= 6 || isLocked}
+              className="prime-btn-3d !py-1.5 !px-3 text-[11px] font-black uppercase disabled:opacity-40"
+            >
+              + New Team
+            </button>
+          </div>
+          {myTeams.length === 0 ? (
+            <p className="text-xs text-[#64748B] font-bold">No saved teams yet. Build your first XI below.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {myTeams.map((t) => (
+                <div
+                  key={t.id}
+                  className={`flex items-center gap-1.5 rounded-lg border-2 px-2.5 py-1.5 ${editingTeamId === t.id ? 'border-[#2563EB] bg-[#EFF6FF]' : 'border-[#CBD5E1] bg-white'}`}
+                >
+                  <button
+                    onClick={() => handleSelectExistingTeam(t)}
+                    className="text-[11px] font-black text-[#0F172A] hover:text-[#2563EB]"
+                    title="Edit this team"
+                  >
+                    {t.team_name || 'Team'}
+                  </button>
+                  <button
+                    onClick={() => handleCloneTeam(t)}
+                    disabled={myTeams.length >= 6 || isLocked}
+                    className="text-[10px] font-black text-[#D97706] hover:text-[#B45309] disabled:opacity-40"
+                    title="Duplicate this team"
+                  >
+                    Clone
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -369,9 +474,25 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
               <span className="text-[9px] text-[#64748B] font-bold mt-0.5 truncate w-full">
                 {p.team_name} • <span className="text-[#D97706]">{p.points || 0} pts</span>
               </span>
-              <span className="mt-1 px-2 py-0.5 rounded-md bg-[#FFFBEB] border border-[#FDE68A] font-mono font-black text-[10px] text-[#B45309]">
-                {p.credits} CR
-              </span>
+              <div className="mt-1 grid grid-cols-3 gap-1 w-full text-[8px] font-bold text-[#475569]">
+                <span className="rounded bg-[#F1F5F9] border border-[#E2E8F0] py-0.5" title="Selected by">
+                  {p.selected_by_pct != null ? `${Math.round(p.selected_by_pct)}%` : '—'}
+                </span>
+                <span className="rounded bg-[#F1F5F9] border border-[#E2E8F0] py-0.5" title="Last match points">
+                  {p.last_match_points != null ? `${p.last_match_points}` : '—'}
+                </span>
+                <span className="rounded bg-[#F1F5F9] border border-[#E2E8F0] py-0.5" title="Average points">
+                  {p.avg_points != null ? `${Math.round(p.avg_points)}` : '—'}
+                </span>
+              </div>
+              <div className="mt-0.5 flex items-center justify-between w-full gap-1">
+                <span className="text-[8px] font-bold text-[#64748B] truncate" title="Recent form">
+                  {p.form ? `Form: ${p.form}` : 'Form: —'}
+                </span>
+                <span className="px-2 py-0.5 rounded-md bg-[#FFFBEB] border border-[#FDE68A] font-mono font-black text-[10px] text-[#B45309] shrink-0">
+                  {p.credits} CR
+                </span>
+              </div>
             </button>
           );
         })}

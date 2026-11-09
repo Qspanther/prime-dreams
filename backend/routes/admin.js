@@ -567,7 +567,10 @@ router.post('/deposits/:id/approve', async (req, res) => {
     }
 
     const newBalance = parseFloat(wallet.balance) + parseFloat(tx.amount);
-    await wallet.update({ balance: newBalance }, { transaction: t });
+    await wallet.update({
+      balance: newBalance,
+      deposit_balance: (parseFloat(wallet.deposit_balance) || 0) + parseFloat(tx.amount),
+    }, { transaction: t });
     await tx.update({ status: 'completed' }, { transaction: t });
 
     // Send notification to user
@@ -684,7 +687,10 @@ router.post('/withdrawals/:id/reject', async (req, res) => {
     const wallet = tx.Wallet;
     if (wallet) {
       const refundAmt = Math.abs(parseFloat(tx.amount));
-      await wallet.update({ balance: parseFloat(wallet.balance) + refundAmt }, { transaction: t });
+      await wallet.update({
+        balance: parseFloat(wallet.balance) + refundAmt,
+        deposit_balance: (parseFloat(wallet.deposit_balance) || 0) + refundAmt,
+      }, { transaction: t });
     }
 
     await tx.update({
