@@ -24,8 +24,73 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
   const [match, setMatch] = useState<any>(null);
   const [telemetry, setTelemetry] = useState<any>(null);
   const [activeView, setActiveView] = useState<'contests' | 'squads' | 'commentary'>('contests');
-  const [selectedContestTab, setSelectedContestTab] = useState<'all' | 'standard' | 'multi_battlefield' | 'h2h' | 'private' | 'practice'>('all');
+  const [selectedContestTab, setSelectedContestTab] = useState<'all' | 'standard' | 'multi_battlefield' | 'h2h' | 'private' | 'practice' | 'rookie' | 'guru'>('all');
   const [loading, setLoading] = useState(true);
+
+  // Win probability + prize breakup + Guru marketplace
+  const [winProb, setWinProb] = useState<any>(null);
+  const [breakupContest, setBreakupContest] = useState<any>(null);
+  const [breakupData, setBreakupData] = useState<any>(null);
+  const [breakupLoading, setBreakupLoading] = useState(false);
+  const [guruTeams, setGuruTeams] = useState<any[]>([]);
+  const [guruLoaded, setGuruLoaded] = useState(false);
+  const [guruCopying, setGuruCopying] = useState<string | null>(null);
+  const [guruError, setGuruError] = useState<string | null>(null);
+
+  const fetchWinProbability = async () => {
+    if (!token) return;
+    try {
+      const res = await apiGet(`/matches/${matchId}/win-probability`, token);
+      if (res?.success) setWinProb(res);
+    } catch (err) { /* silent */ }
+  };
+
+  const fetchGuruTeams = async () => {
+    try {
+      const res = await apiGet(`/guru/teams?match_id=${matchId}`);
+      if (res?.success) setGuruTeams(res.teams || []);
+    } catch (err) { /* silent */ }
+    finally { setGuruLoaded(true); }
+  };
+
+  const openPrizeBreakup = async (c: any) => {
+    setBreakupContest(c);
+    setBreakupData(null);
+    setBreakupLoading(true);
+    try {
+      const res = await apiGet(`/contests/${c.id}/prize-breakup`);
+      if (res?.success) setBreakupData(res);
+    } catch (err) { /* silent */ }
+    finally { setBreakupLoading(false); }
+  };
+
+  const handleCopyGuruTeam = async (g: any) => {
+    if (!token) { router.push('/login'); return; }
+    setGuruCopying(g.id);
+    setGuruError(null);
+    try {
+      const res = await apiPost(`/guru/teams/${g.id}/copy`, {}, token);
+      if (res?.success && res.team_id) {
+        router.push(`/team-builder/${matchId}?teamId=${res.team_id}`);
+      } else {
+        setGuruError(res?.error || 'Could not copy team');
+      }
+    } catch (err: any) {
+      setGuruError(err?.message || 'Could not copy team');
+    } finally {
+      setGuruCopying(null);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedContestTab === 'guru' && !guruLoaded) fetchGuruTeams();
+  }, [selectedContestTab, guruLoaded, matchId]);
+
+  useEffect(() => {
+    if (token && match && (match.status === 'live' || match.status === 'completed')) {
+      fetchWinProbability();
+    }
+  }, [token, match?.status, matchId]);
 
   // H2H Custom Challenge Form State
   const [showH2HModal, setShowH2HModal] = useState(false);
@@ -320,6 +385,8 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
 
   const filteredContests = (match.contests || []).filter((c: any) => {
     if (selectedContestTab === 'all') return true;
+    if (selectedContestTab === 'rookie') return /rookie/i.test(c.title || '') || (c.type === 'standard' && Number(c.entry_fee) <= 49);
+    if (selectedContestTab === 'guru') return false;
     return c.type === selectedContestTab;
   });
 
@@ -642,10 +709,12 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
             {[
               { id: 'all', label: 'All Contests' },
               { id: 'practice', label: 'Practice (Free)' },
+              { id: 'rookie', label: 'Rookie' },
               { id: 'standard', label: 'Standard Pools' },
               { id: 'multi_battlefield', label: 'PUBG Battlefield' },
               { id: 'h2h', label: 'H2H Custom' },
               { id: 'private', label: 'Private 🔒' },
+              { id: 'guru', label: 'Guru Experts' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -660,6 +729,85 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               </button>
             ))}
           </div>
+
+          {/* ─── LIVE WIN PROBABILITY TRACKER ─── */}
+          {winProb?.teams?.length > 0 && (
+            <div className="prime-card-3d p-5 space-y-3 border-2 border-[#2563EB]">
+              <div className="flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-[#D97706]" />
+                <h3 className="font-black text-sm uppercase text-[#0F172A]">Live Winning Tracker</h3>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {winProb.teams.map((t: any) => (
+                  <div key={t.team_id} className={`p-3 rounded-xl border-2 ${t.is_winning ? 'bg-green-50 border-green-300' : 'bg-[#F1F5F9] border-[#CBD5E1]'}`}>
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-xs text-[#0F172A] truncate">{t.team_name}</span>
+                      <span className="text-[10px] font-black text-[#64748B]">Rank #{t.rank}/{t.total_teams}</span>
+                    </div>
+                    <p className="text-[11px] text-[#64748B] font-bold truncate">{t.contest_title}</p>
+                    {t.is_winning ? (
+                      <p className="mt-1 font-black text-sm text-[#16A34A]">🎉 Aap jeet rahe ho ₹{Number(t.projected_winnings || 0).toLocaleString('en-IN')}</p>
+                    ) : (
+                      <p className="mt-1 text-xs font-bold text-[#475569]">
+                        {t.win_probability != null ? `Win probability: ${t.win_probability}%` : (t.note || 'Match live nahi hai')}
+                        {t.projected_winnings > 0 && <span className="text-[#D97706]"> • Target ₹{Number(t.projected_winnings).toLocaleString('en-IN')}</span>}
+                      </p>
+                    )}
+                    {t.win_probability != null && (
+                      <div className="mt-1.5 h-1.5 w-full bg-[#E2E8F0] rounded-full overflow-hidden">
+                        <div className="h-full bg-gradient-to-r from-[#2563EB] to-[#16A34A]" style={{ width: `${t.win_probability}%` }} />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ─── GURU EXPERT MARKETPLACE VIEW ─── */}
+          {selectedContestTab === 'guru' && (
+            <div className="space-y-4">
+              <div className="prime-card-3d p-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <Shield className="w-4 h-4 text-[#D97706]" />
+                  <h3 className="font-black text-sm uppercase text-[#0F172A]">Guru Expert Teams</h3>
+                </div>
+                <p className="text-xs text-[#64748B] font-bold">Experts ki banayi teams copy karo aur apna XI fatafat banao.</p>
+              </div>
+              {guruError && (
+                <div className="pd-error"><AlertCircle className="w-4 h-4 shrink-0" /><span>{guruError}</span></div>
+              )}
+              {!guruLoaded ? (
+                <p className="text-xs text-[#64748B] font-bold text-center py-6">Loading expert teams...</p>
+              ) : guruTeams.length === 0 ? (
+                <p className="text-xs text-[#64748B] font-bold text-center py-6">Is match ke liye abhi koi expert team nahi hai.</p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {guruTeams.map((g) => (
+                    <div key={g.id} className="contest-card-3d p-5 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-sm text-[#0F172A]">{g.guru_name}</span>
+                        <span className="text-[11px] font-black text-[#D97706]">★ {Number(g.rating || 0).toFixed(1)}</span>
+                      </div>
+                      <h4 className="font-black text-base text-[#0F172A]">{g.title}</h4>
+                      {g.description && <p className="text-xs text-[#64748B] font-bold">{g.description}</p>}
+                      <p className="text-[11px] text-[#64748B] font-bold">
+                        C: <span className="text-[#2563EB] font-black">{g.captain_name || '—'}</span> • VC: <span className="text-[#2563EB] font-black">{g.vice_captain_name || '—'}</span>
+                      </p>
+                      <p className="text-[11px] text-[#64748B] font-bold">{(g.player_names || []).length} players • {g.followers || 0} followers</p>
+                      <button
+                        onClick={() => handleCopyGuruTeam(g)}
+                        disabled={guruCopying === g.id || match.is_locked}
+                        className="prime-btn-3d w-full !py-2 text-xs font-black uppercase tracking-wider disabled:opacity-40"
+                      >
+                        {guruCopying === g.id ? 'Copying...' : 'Copy Team'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* ─── PRIVATE CONTESTS (Invite Code) VIEW ─── */}
           {selectedContestTab === 'private' && (
@@ -863,7 +1011,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
           )}
 
           {/* ─── PUBLIC CONTESTS GRID ─── */}
-          {selectedContestTab !== 'private' && (
+          {selectedContestTab !== 'private' && selectedContestTab !== 'guru' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredContests.map((c: any) => {
               const spotsLeft = Math.max(0, (c.total_spots || 100) - (c.filled_spots || 0));
@@ -898,16 +1046,24 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                     </div>
                   </div>
 
-                  <div className="mt-5 pt-3 border-t border-[#E2E8F0] flex items-center justify-between">
-                    <span className="text-[11px] text-[#64748B] font-bold">
-                      {c.type === 'practice' ? 'Practice • No cash risk' : c.type === 'multi_battlefield' ? 'Auto-clones' : 'Guaranteed'}
-                    </span>
-                    <Link
-                      href={`/team-builder/${matchId}?contestId=${c.id}`}
-                      className="prime-btn-3d !py-2 !px-4 text-xs font-black uppercase tracking-wider"
+                  <div className="mt-5 pt-3 border-t border-[#E2E8F0] space-y-2">
+                    <button
+                      onClick={() => openPrizeBreakup(c)}
+                      className="w-full text-[11px] font-black text-[#2563EB] hover:text-[#1D4ED8] uppercase tracking-wider flex items-center justify-center gap-1"
                     >
-                      {c.type === 'practice' || Number(c.entry_fee) === 0 ? 'Join Free' : `Join Contest ₹${c.entry_fee}`}
-                    </Link>
+                      <Trophy className="w-3.5 h-3.5" /> Prize Breakup &amp; Winners
+                    </button>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-[#64748B] font-bold">
+                        {c.type === 'practice' ? 'Practice • No cash risk' : /rookie/i.test(c.title || '') ? 'Rookie • Beginner' : c.type === 'multi_battlefield' ? 'Auto-clones' : 'Guaranteed'}
+                      </span>
+                      <Link
+                        href={`/team-builder/${matchId}?contestId=${c.id}`}
+                        className="prime-btn-3d !py-2 !px-4 text-xs font-black uppercase tracking-wider"
+                      >
+                        {c.type === 'practice' || Number(c.entry_fee) === 0 ? 'Join Free' : `Join Contest ₹${c.entry_fee}`}
+                      </Link>
+                    </div>
                   </div>
                 </div>
               );
@@ -986,6 +1142,49 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                 ))}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Prize Breakup & Winners Modal */}
+      {breakupContest && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-lg prime-card-3d p-6 space-y-4 border-2 border-[#D97706] bg-white text-[#0F172A] max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
+              <div>
+                <h3 className="font-black text-base flex items-center gap-2"><Trophy className="w-5 h-5 text-[#D97706]" /> Prize Breakup</h3>
+                <p className="text-xs text-[#64748B] font-bold">{breakupContest.title} • Pool ₹{Number(breakupContest.prize_pool || 0).toLocaleString('en-IN')}</p>
+              </div>
+              <button onClick={() => { setBreakupContest(null); setBreakupData(null); }} className="text-[#64748B] hover:text-[#0F172A] text-lg">✕</button>
+            </div>
+            {breakupLoading ? (
+              <p className="text-xs text-[#64748B] font-bold text-center py-6">Loading breakup...</p>
+            ) : breakupData ? (
+              <>
+                <div className="space-y-1.5">
+                  <h4 className="font-black text-xs uppercase text-[#64748B]">Rank-wise Prizes</h4>
+                  {(breakupData.breakup || []).map((b: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-[#F1F5F9] border border-[#E2E8F0] text-xs font-bold">
+                      <span className="text-[#475569]">Rank {b.rank_from}{b.rank_to !== b.rank_from ? `–${b.rank_to}` : ''}</span>
+                      <span className="font-mono font-black text-[#D97706]">₹{Number(b.prize || 0).toLocaleString('en-IN')}</span>
+                    </div>
+                  ))}
+                </div>
+                {(breakupData.winners || []).length > 0 && (
+                  <div className="space-y-1.5">
+                    <h4 className="font-black text-xs uppercase text-[#64748B]">Current Winners</h4>
+                    {breakupData.winners.map((w: any) => (
+                      <div key={w.rank} className="flex items-center justify-between p-2 rounded-lg bg-green-50 border border-green-200 text-xs font-bold">
+                        <span className="text-[#0F172A]">#{w.rank} {w.team_name} <span className="text-[#64748B]">({w.user_name})</span></span>
+                        <span className="font-mono font-black text-[#16A34A]">{w.points} pts • ₹{Number(w.prize || 0).toLocaleString('en-IN')}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-[#64748B] font-bold text-center py-6">Breakup unavailable.</p>
+            )}
           </div>
         </div>
       )}

@@ -89,6 +89,9 @@ const walletRoutes = require('./routes/wallet');
 const adminRoutes = require('./routes/admin');
 const notifRoutes = require('./routes/notifications');
 const subRoutes = require('./routes/subscription');
+const rewardsRoutes = require('./routes/rewards');
+const guruRoutes = require('./routes/guru');
+const gamificationRoutes = require('./routes/gamification');
 
 // Dual mounting: direct and /api prefixed to guarantee zero 404s
 app.use('/auth', authRoutes);
@@ -105,6 +108,15 @@ app.use('/api/notifications', notifRoutes);
 
 app.use('/subscription', subRoutes);
 app.use('/api/subscription', subRoutes);
+
+app.use('/rewards', rewardsRoutes);
+app.use('/api/rewards', rewardsRoutes);
+
+app.use('/guru', guruRoutes);
+app.use('/api/guru', guruRoutes);
+
+app.use('/gamification', gamificationRoutes);
+app.use('/api/gamification', gamificationRoutes);
 
 app.use('/api/config', require('./routes/config'));
 

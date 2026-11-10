@@ -1,4 +1,5 @@
 // ─── Creator 11 Progressive Web App Service Worker ───
+// Handles offline caching + Web Push (FCM-style) notifications.
 const CACHE_NAME = 'creator11-v1';
 const PRECACHE_URLS = [
   '/',
@@ -51,3 +52,46 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
+// ─── Web Push (FCM-style) — display notification ───
+self.addEventListener('push', (event) => {
+  let data = { title: 'Prime Dreems', message: 'You have a new notification', type: 'system' };
+  try {
+    if (event.data) {
+      const parsed = event.data.json();
+      data = { ...data, ...parsed };
+    }
+  } catch (_) {
+    // fall back to defaults if payload is not valid JSON
+  }
+
+  const options = {
+    body: data.message || data.body || '',
+    icon: '/globe.svg',
+    badge: '/globe.svg',
+    data: { url: data.url || '/' },
+    tag: data.type || 'notification',
+    requireInteraction: false,
+    vibrate: [100, 50, 100],
+  };
+
+  event.waitUntil(self.registration.showNotification(data.title || 'Prime Dreems', options));
+});
+
+// ─── Notification click → navigate to target ───
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url && 'focus' in client) {
+          client.navigate(url);
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(url);
+      }
+    })
+  );
+});

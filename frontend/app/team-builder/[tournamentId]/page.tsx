@@ -21,6 +21,7 @@ interface Player {
   last_match_points?: number | null;
   avg_points?: number | null;
   form?: string | null;
+  is_playing_xi?: boolean;
 }
 
 const TOTAL_CREDITS = 105;
@@ -47,6 +48,8 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const [error, setError] = useState<string | null>(null);
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [myTeams, setMyTeams] = useState<any[]>([]);
+  const [switchContestId, setSwitchContestId] = useState('');
+  const [switching, setSwitching] = useState(false);
 
   const loadTeamIntoBuilder = (t: any) => {
     setEditingTeamId(t.id);
@@ -101,6 +104,27 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
       }
     } catch (err: any) {
       setError(err?.message || 'Could not clone team.');
+    }
+  };
+
+  const handleSwitchContest = async () => {
+    if (!token) { router.push('/login'); return; }
+    if (!editingTeamId || !switchContestId) { setError('Select a contest to switch into.'); return; }
+    setSwitching(true);
+    setError(null);
+    try {
+      const res = await apiPost(`/matches/${matchId}/teams/${editingTeamId}/switch-contest`, { contest_id: switchContestId }, token);
+      if (res?.success) {
+        setSwitchContestId('');
+        await fetchMyTeams();
+        router.push('/my-teams');
+      } else {
+        setError(res?.error || 'Could not switch contest.');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Could not switch contest.');
+    } finally {
+      setSwitching(false);
     }
   };
 
@@ -416,6 +440,33 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
               ))}
             </div>
           )}
+          {editingTeamId && !isLocked && (match?.contests || []).length > 0 && (
+            <div className="pt-2 border-t border-[#E2E8F0] space-y-2">
+              <label className="pd-label">Switch this team to another contest</label>
+              <div className="flex flex-wrap gap-2">
+                <select
+                  value={switchContestId}
+                  onChange={(e) => setSwitchContestId(e.target.value)}
+                  className="pd-input flex-1 min-w-[160px] text-xs font-bold"
+                >
+                  <option value="">Select contest...</option>
+                  {(match.contests || [])
+                    .filter((c: any) => c.is_active && !c.is_private && c.status === 'open' && (c.filled_spots || 0) < (c.total_spots || 0))
+                    .map((c: any) => (
+                      <option key={c.id} value={c.id}>{c.title} (₹{c.entry_fee})</option>
+                    ))}
+                </select>
+                <button
+                  onClick={handleSwitchContest}
+                  disabled={switching || !switchContestId}
+                  className="prime-btn-gold-3d !py-2 !px-4 text-[11px] font-black uppercase disabled:opacity-40"
+                >
+                  {switching ? 'Switching...' : 'Switch Contest'}
+                </button>
+              </div>
+              <p className="text-[10px] text-[#64748B] font-bold">Entry fee difference auto-adjust hoti hai (refund/extra deduction).</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -471,6 +522,9 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                 </span>
               </div>
               <span className="font-black text-[11px] text-[#0F172A] leading-tight line-clamp-2 min-h-[2rem] flex items-center">{p.name}</span>
+              {p.is_playing_xi && (
+                <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-green-100 border border-green-300 text-green-700">Playing XI</span>
+              )}
               <span className="text-[9px] text-[#64748B] font-bold mt-0.5 truncate w-full">
                 {p.team_name} • <span className="text-[#D97706]">{p.points || 0} pts</span>
               </span>

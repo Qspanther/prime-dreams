@@ -2,9 +2,10 @@
 
 import React, { useState } from 'react';
 import { useAuth } from '../lib/auth-context';
-import { Settings, User, Mail, Shield, LogOut, KeyRound, Check, AlertCircle } from 'lucide-react';
+import { Settings, User, Mail, Shield, LogOut, KeyRound, Check, AlertCircle, Bell } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { apiPut } from '../lib/api';
+import PushNotificationSwitch from '../components/PushNotificationSwitch';
 
 export default function SettingsPage() {
   const { user, token, logout, login } = useAuth();
@@ -166,6 +167,14 @@ export default function SettingsPage() {
             {passLoading ? 'Updating...' : 'Update Password'}
           </button>
         </form>
+      </div>
+
+      {/* Push Notifications (Web Push / FCM) */}
+      <div className="prime-card-3d p-6 space-y-4">
+        <h3 className="text-xs font-black uppercase tracking-widest text-[#D97706] flex items-center gap-2">
+          <Bell className="w-4 h-4 text-[#2563EB]" /> Push Notifications
+        </h3>
+        <PushNotificationSwitch />
       </div>
 
       {/* Sign Out Button */}

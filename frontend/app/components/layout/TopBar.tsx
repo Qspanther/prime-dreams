@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { 
-  Bell, LogOut, Menu, X, Home, Users, Wallet, Settings, Radio, Shield 
+  Bell, LogOut, Menu, X, Home, Users, Wallet, Settings, Radio, Shield, Coins 
 } from 'lucide-react';
 import { apiGet } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
@@ -90,6 +90,16 @@ export default function TopBar() {
 
         {/* Right: Wallet Balance, Notifications & User */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
+          {/* 3D Gold Rewards (DreamCoins) Pill */}
+          <Link
+            href="/rewards"
+            className="prime-btn-gold-3d !py-1.5 !px-2 sm:!px-3 !text-xs font-black shrink-0"
+            title="DreamCoins Rewards"
+          >
+            <Coins className="w-4 h-4 text-[#92400E] shrink-0" />
+            <span className="pd-num font-mono text-xs hidden sm:inline">Rewards</span>
+          </Link>
+
           {/* 3D Gold Wallet Balance Pill */}
           <Link
             href="/wallet"

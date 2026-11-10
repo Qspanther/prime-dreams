@@ -5,7 +5,8 @@ const router = express.Router();
 const { Op } = require('sequelize');
 const { 
   CricketMatch, CricketPlayer, MatchContest, 
-  CricketTeam, TeamPlayer, H2HChallenge, User, Wallet 
+  CricketTeam, TeamPlayer, H2HChallenge, User, Wallet,
+  Transaction, Notification
 } = require('../db/models');
 const sequelize = require('../db');
 const { authenticate, isAdmin } = require('../middleware/auth');
@@ -306,6 +307,25 @@ router.get('/matches/:id', async (req, res) => {
       } catch (err) { /* seeding is best-effort */ }
     }
 
+    // ─── Rookie (beginner) contest: auto-seed one per upcoming match ───
+    if (match.status === 'upcoming' && !contests.some((c) => /rookie/i.test(c.title || ''))) {
+      try {
+        await MatchContest.create({
+          match_id: match.id,
+          type: 'standard',
+          title: 'Rookie Contest (Beginner)',
+          prize_pool: 1000,
+          entry_fee: 19,
+          total_spots: 100,
+          filled_spots: 0,
+          is_active: true,
+          status: 'open',
+        });
+        const refreshed = await MatchContest.findAll({ where: { match_id: match.id, is_active: true, is_private: false } });
+        contests = refreshed;
+      } catch (err) { /* seeding is best-effort */ }
+    }
+
     // ─── Player stats: "Selected by X%", last match & avg points, form ───
     const [selRows] = await sequelize.query(
       `SELECT tp.player_id, COUNT(*) AS cnt FROM cricket_team_players tp
@@ -322,7 +342,8 @@ router.get('/matches/:id', async (req, res) => {
 
     const playersWithStats = (match.players || []).map((p) => {
       let statsObj = {};
-      try { statsObj = p.stats ? JSON.parse(p.stats) : {}; } catch (e) { statsObj = {}; }
+      try { statsObj = p.stats ? (typeof p.stats === 'string' ? JSON.parse(p.stats) : p.stats) : {}; } catch (e) { statsObj = {}; }
+      if (!statsObj || typeof statsObj !== 'object') statsObj = {};
       const cnt = selectedCount.get(p.id) || 0;
       return {
         ...p.toJSON(),
@@ -331,6 +352,7 @@ router.get('/matches/:id', async (req, res) => {
         last_match_points: statsObj.last_match_points ?? null,
         avg_points: statsObj.avg_points ?? null,
         form: statsObj.form || null,
+        is_playing_xi: !!statsObj.playing_xi,
       };
     });
 
@@ -390,6 +412,125 @@ router.get('/matches/:id/live', async (req, res) => {
         updated_tag: 'Standby',
       },
     });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/matches/:id/playing-xi
+ * Admin: mark the announced Playing XI for a match. Sets stats.playing_xi on
+ * every CricketPlayer of the match (true if in player_ids, false otherwise),
+ * preserving all other stats keys. Body: { player_ids: [uuid, ...] }.
+ */
+router.post('/matches/:id/playing-xi', authenticate, isAdmin, async (req, res) => {
+  try {
+    const match = await CricketMatch.findByPk(req.params.id);
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+
+    const { player_ids } = req.body;
+    if (!Array.isArray(player_ids)) {
+      return res.status(400).json({ error: 'player_ids must be an array of player UUIDs.' });
+    }
+    const playingSet = new Set(player_ids.map((id) => String(id)));
+
+    const players = await CricketPlayer.findAll({ where: { match_id: match.id } });
+    let updated = 0;
+    for (const p of players) {
+      let statsObj = {};
+      try { statsObj = p.stats ? (typeof p.stats === 'string' ? JSON.parse(p.stats) : p.stats) : {}; } catch (e) { statsObj = {}; }
+      if (!statsObj || typeof statsObj !== 'object') statsObj = {};
+      statsObj.playing_xi = playingSet.has(String(p.id));
+      await p.update({ stats: statsObj });
+      updated++;
+    }
+
+    res.json({ success: true, updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * GET /api/matches/:id/win-probability
+ * Per-team win probability + projected winnings for the user's teams in a match.
+ * Probability is a heuristic based on contest rank and points gap to the leader;
+ * it is null (with note "Live nahi hai") until the match is live/completed.
+ */
+router.get('/matches/:id/win-probability', authenticate, async (req, res) => {
+  try {
+    const match = await CricketMatch.findByPk(req.params.id);
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+
+    const myTeams = await CricketTeam.findAll({
+      where: { user_id: req.user.id, match_id: match.id },
+      order: [['created_at', 'ASC']],
+    });
+
+    const liveOrCompleted = match.status === 'live' || match.status === 'completed';
+    const teams = [];
+
+    for (const team of myTeams) {
+      if (!team.contest_id) {
+        teams.push({
+          team_id: team.id,
+          team_name: team.team_name,
+          contest_id: null,
+          contest_title: null,
+          current_points: team.total_points,
+          rank: null,
+          total_teams: 0,
+          win_probability: null,
+          projected_winnings: 0,
+          is_winning: false,
+          note: liveOrCompleted ? 'No contest joined' : 'Live nahi hai',
+        });
+        continue;
+      }
+
+      const contest = await MatchContest.findByPk(team.contest_id);
+      const contestTeams = await CricketTeam.findAll({
+        where: { contest_id: team.contest_id },
+        order: [['total_points', 'DESC']],
+      });
+      const totalTeams = contestTeams.length;
+      let rank = contestTeams.findIndex((t) => t.id === team.id) + 1;
+      if (rank < 1) rank = totalTeams || 1;
+
+      const leaderPoints = totalTeams > 0 ? (parseFloat(contestTeams[0].total_points) || 0) : 0;
+      const myPoints = parseFloat(team.total_points) || 0;
+      const gap = Math.max(0, leaderPoints - myPoints);
+
+      let winProbability = null;
+      let note = null;
+      if (!liveOrCompleted) {
+        note = 'Live nahi hai';
+      } else {
+        const raw = 100 - ((rank - 1) * 100) / Math.max(totalTeams, 1) - gap * 0.5;
+        winProbability = Math.min(99, Math.max(1, Math.round(raw)));
+      }
+
+      const breakup = contest
+        ? buildPrizeBreakup(parseFloat(contest.prize_pool) || 0, parseInt(contest.total_spots, 10) || 0)
+        : [];
+      const bucket = breakup.find((b) => rank >= b.rank_from && rank <= b.rank_to);
+
+      teams.push({
+        team_id: team.id,
+        team_name: team.team_name,
+        contest_id: team.contest_id,
+        contest_title: contest ? contest.title : null,
+        current_points: team.total_points,
+        rank,
+        total_teams: totalTeams,
+        win_probability: winProbability,
+        projected_winnings: bucket ? bucket.prize : 0,
+        is_winning: liveOrCompleted && rank === 1,
+        ...(note ? { note } : {}),
+      });
+    }
+
+    res.json({ success: true, match_status: match.status, teams });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -630,6 +771,109 @@ router.post('/matches/:id/teams/:teamId/clone', authenticate, async (req, res) =
 
     res.json({ success: true, message: 'Team cloned!', team: clone });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * POST /api/matches/:id/teams/:teamId/switch-contest
+ * Move an existing team into a different public contest of the same match
+ * before lock time. The entry-fee difference is settled atomically:
+ * extra fee is deducted bonus -> winnings -> deposit; a lower fee refunds the
+ * difference to deposit_balance. Body: { contest_id }.
+ */
+router.post('/matches/:id/teams/:teamId/switch-contest', authenticate, async (req, res) => {
+  const t = await sequelize.transaction();
+  try {
+    const match = await CricketMatch.findByPk(req.params.id, { transaction: t });
+    if (!match) { await t.rollback(); return res.status(404).json({ error: 'Match not found' }); }
+
+    const team = await CricketTeam.findByPk(req.params.teamId, { transaction: t });
+    if (!team || team.match_id !== match.id) { await t.rollback(); return res.status(404).json({ error: 'Team not found' }); }
+    if (team.user_id !== req.user.id) { await t.rollback(); return res.status(403).json({ error: 'Not your team' }); }
+
+    const now = new Date();
+    if (now >= matchLockTime(match)) {
+      await t.rollback();
+      return res.status(400).json({ error: 'Contest is locked. Teams can no longer be switched.' });
+    }
+
+    const { contest_id } = req.body;
+    if (!contest_id) { await t.rollback(); return res.status(400).json({ error: 'Target contest_id is required.' }); }
+
+    const target = await MatchContest.findByPk(contest_id, { transaction: t });
+    if (!target) { await t.rollback(); return res.status(404).json({ error: 'Target contest not found' }); }
+    if (target.match_id !== match.id) { await t.rollback(); return res.status(400).json({ error: 'Target contest does not belong to this match.' }); }
+    if (!target.is_active) { await t.rollback(); return res.status(400).json({ error: 'Target contest is not active.' }); }
+    if (target.is_private) { await t.rollback(); return res.status(400).json({ error: 'Cannot switch into a private contest.' }); }
+    if (target.status !== 'open') { await t.rollback(); return res.status(400).json({ error: `Target contest is ${target.status}.` }); }
+    if (target.filled_spots >= target.total_spots) { await t.rollback(); return res.status(400).json({ error: 'Target contest is full.' }); }
+    if (target.id === team.contest_id) { await t.rollback(); return res.status(400).json({ error: 'Team is already in this contest.' }); }
+
+    const oldContest = team.contest_id ? await MatchContest.findByPk(team.contest_id, { transaction: t }) : null;
+    const oldFee = oldContest ? (parseFloat(oldContest.entry_fee) || 0) : 0;
+    const newFee = parseFloat(target.entry_fee) || 0;
+    const diff = Math.round((newFee - oldFee) * 100) / 100;
+
+    // ─── Settle the entry-fee difference (bonus -> winnings -> deposit) ───
+    if (diff !== 0) {
+      const wallet = await Wallet.findOne({ where: { user_id: req.user.id }, transaction: t });
+      if (!wallet) { await t.rollback(); return res.status(400).json({ error: 'Wallet not found' }); }
+      const bonus = parseFloat(wallet.bonus_balance) || 0;
+      const winnings = parseFloat(wallet.winnings_balance) || 0;
+      const deposit = parseFloat(wallet.deposit_balance) || 0;
+      const balance = parseFloat(wallet.balance) || 0;
+
+      if (diff > 0) {
+        const available = bonus + winnings + deposit; // withdrawable + bonus
+        if (available < diff) {
+          await t.rollback();
+          return res.status(400).json({ error: `Insufficient wallet balance. Additional entry fee is ₹${diff}.` });
+        }
+        let remaining = diff;
+        const useBonus = Math.min(bonus, remaining); remaining -= useBonus;
+        const useWinnings = Math.min(winnings, remaining); remaining -= useWinnings;
+        const useDeposit = Math.min(deposit, remaining); remaining -= useDeposit;
+        await wallet.update({
+          bonus_balance: bonus - useBonus,
+          winnings_balance: winnings - useWinnings,
+          deposit_balance: deposit - useDeposit,
+          balance: balance - diff,
+        }, { transaction: t });
+        await Transaction.create({
+          wallet_id: wallet.id,
+          amount: -diff,
+          type: 'contest_switch',
+          status: 'completed',
+          description: `Contest switch fee: "${oldContest ? oldContest.title : 'No contest'}" → "${target.title}"`,
+        }, { transaction: t });
+      } else {
+        const refund = Math.abs(diff);
+        await wallet.update({
+          deposit_balance: deposit + refund,
+          balance: balance + refund,
+        }, { transaction: t });
+        await Transaction.create({
+          wallet_id: wallet.id,
+          amount: refund,
+          type: 'contest_switch',
+          status: 'completed',
+          description: `Contest switch refund: "${oldContest ? oldContest.title : 'No contest'}" → "${target.title}"`,
+        }, { transaction: t });
+      }
+    }
+
+    // ─── Move the spot from the old contest to the target, then re-point the team ───
+    if (oldContest) {
+      await oldContest.update({ filled_spots: Math.max(0, (parseInt(oldContest.filled_spots, 10) || 0) - 1) }, { transaction: t });
+    }
+    await target.update({ filled_spots: (parseInt(target.filled_spots, 10) || 0) + 1 }, { transaction: t });
+    await team.update({ contest_id: target.id }, { transaction: t });
+
+    await t.commit();
+    res.json({ success: true, message: 'Team switched to new contest', team });
+  } catch (err) {
+    await t.rollback();
     res.status(500).json({ error: err.message });
   }
 });
@@ -999,6 +1243,119 @@ router.get('/contests/private/:code', authenticate, async (req, res) => {
         invite_code: contest.invite_code,
       },
       match: { id: match.id, title: match.title, team_a: match.team_a, team_b: match.team_b },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * Deterministic rank-wise prize distribution.
+ * Returns buckets { rank_from, rank_to, prize, percentage } where `prize` and
+ * `percentage` are PER RANK (each rank inside the range wins the same amount) and
+ * rank_to is clipped to the contest size. Per-rank amounts use the full ladder
+ * range size so prizes stay monotonic regardless of contest size. Prizes are
+ * floored to 2 decimals, guaranteeing the total distributed never exceeds the pool.
+ *
+ * Ladder (share of pool): rank 1 = 20%, 2-3 = 15%, 4-10 = 15%, 11-30 = 15%,
+ * 31-60 = 12%, 61-100 = 8%, ranks beyond 100 share the 15% remainder.
+ * Small contests: 1 -> winner 100%; 2 -> 90/10; <=10 -> top 3 get 50/30/20.
+ */
+function buildPrizeBreakup(prizePool, totalSpots) {
+  const pool = Math.max(0, parseFloat(prizePool) || 0);
+  const spots = Math.max(0, parseInt(totalSpots, 10) || 0);
+  if (pool <= 0 || spots <= 0) return [];
+
+  const floor2 = (n) => Math.floor((Number(n) || 0) * 100) / 100;
+  const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+
+  // sharePct is the pool share for the FULL range [from..to] (fullCount ranks).
+  const makeBucket = (from, to, sharePct, fullCount) => {
+    const count = fullCount || (to - from + 1);
+    const perRankPct = sharePct / count;
+    return {
+      rank_from: from,
+      rank_to: Math.min(to, spots),
+      prize: floor2((pool * perRankPct) / 100),
+      percentage: round2(perRankPct),
+    };
+  };
+
+  if (spots === 1) return [makeBucket(1, 1, 100, 1)];
+  if (spots === 2) return [makeBucket(1, 1, 90, 1), makeBucket(2, 2, 10, 1)];
+  if (spots <= 10) {
+    const out = [makeBucket(1, 1, 50, 1), makeBucket(2, 2, 30, 1)];
+    if (spots >= 3) out.push(makeBucket(3, 3, 20, 1));
+    return out;
+  }
+
+  const ladder = [
+    [1, 1, 20],
+    [2, 3, 15],
+    [4, 10, 15],
+    [11, 30, 15],
+    [31, 60, 12],
+    [61, 100, 8],
+  ];
+  const out = [];
+  let usedShare = 0;
+  for (const [from, to, share] of ladder) {
+    if (from > spots) break;
+    out.push(makeBucket(from, to, share, to - from + 1));
+    usedShare += share;
+  }
+  const remainder = 100 - usedShare;
+  if (spots > 100 && remainder > 0) {
+    out.push(makeBucket(101, spots, remainder, spots - 100));
+  }
+  return out;
+}
+
+/**
+ * GET /api/contests/:id/prize-breakup
+ * Public: deterministic prize breakup + current top-20 winners for a contest.
+ */
+router.get('/contests/:id/prize-breakup', async (req, res) => {
+  try {
+    const contest = await MatchContest.findByPk(req.params.id);
+    if (!contest) return res.status(404).json({ error: 'Contest not found' });
+
+    const prizePool = parseFloat(contest.prize_pool) || 0;
+    const totalSpots = parseInt(contest.total_spots, 10) || 0;
+    const breakup = buildPrizeBreakup(prizePool, totalSpots);
+
+    const topTeams = await CricketTeam.findAll({
+      where: { contest_id: contest.id },
+      order: [['total_points', 'DESC']],
+      include: [{ model: User, as: 'user', attributes: ['id', 'name'] }],
+      limit: 20,
+    });
+
+    const winners = topTeams.map((team, idx) => {
+      const rank = idx + 1;
+      const bucket = breakup.find((b) => rank >= b.rank_from && rank <= b.rank_to);
+      return {
+        rank,
+        team_name: team.team_name,
+        user_name: team.user?.name || 'Player',
+        points: team.total_points,
+        prize: bucket ? bucket.prize : 0,
+      };
+    });
+
+    res.json({
+      success: true,
+      contest: {
+        id: contest.id,
+        title: contest.title,
+        prize_pool: prizePool,
+        total_spots: totalSpots,
+        filled_spots: contest.filled_spots,
+        entry_fee: contest.entry_fee,
+      },
+      total_prize: prizePool,
+      breakup,
+      winners,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

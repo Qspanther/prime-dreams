@@ -5,6 +5,7 @@ const Transaction = require('./Transaction');
 const Notification = require('./Notification');
 const ReferralLog = require('./ReferralLog');
 const ShareLog = require('./ShareLog');
+const PushSubscription = require('./PushSubscription');
 
 // ─── Cricket Models ───
 const CricketMatch = require('./CricketMatch');
@@ -15,6 +16,8 @@ const TeamPlayer = require('./TeamPlayer');
 const H2HChallenge = require('./H2HChallenge');
 const ScoreAuditLog = require('./ScoreAuditLog');
 const PlayerPointsLog = require('./PlayerPointsLog');
+const UserReward = require('./UserReward');
+const GuruTeam = require('./GuruTeam');
 
 // ─── Associations ───
 
@@ -92,6 +95,7 @@ module.exports = {
   Notification,
   ReferralLog,
   ShareLog,
+  PushSubscription,
   CricketMatch,
   CricketPlayer,
   MatchContest,
@@ -100,4 +104,6 @@ module.exports = {
   H2HChallenge,
   ScoreAuditLog,
   PlayerPointsLog,
+  UserReward,
+  GuruTeam,
 };

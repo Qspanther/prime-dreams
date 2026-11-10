@@ -22,6 +22,13 @@ function AppShell({ children }: { children: ReactNode }) {
   const isAuthPage = authOnlyPaths.includes(pathname || '');
   const isAdminRoute = pathname?.startsWith('/admin');
 
+  // Register Service Worker for offline caching + Web Push (FCM-style) notifications.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  }, []);
+
   useEffect(() => {
     if (!loading) {
       if (!isAuthenticated && !isPublicPage) {
