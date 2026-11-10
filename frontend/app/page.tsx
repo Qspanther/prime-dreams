@@ -1,11 +1,12 @@
 import React from 'react';
 import HomeClient from './HomeClient';
+import { getApiBase } from './lib/api';
 
 export const dynamic = 'force-dynamic';
 
 async function getInitialMatches() {
   try {
-    const res = await fetch('http://127.0.0.1:5000/api/matches', {
+    const res = await fetch(`${getApiBase()}/api/matches`, {
       cache: 'no-store',
     });
     if (!res.ok) return [];

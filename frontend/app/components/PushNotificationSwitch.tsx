@@ -148,13 +148,14 @@ export default function PushNotificationSwitch() {
 }
 
 // Convert base64url public key (VAPID) to Uint8Array for pushManager.subscribe
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
+function urlBase64ToUint8Array(base64String: string): ArrayBuffer {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
   const rawData = atob(base64);
-  const outputArray = new Uint8Array(rawData.length);
+  const outputArray = new ArrayBuffer(rawData.length);
+  const outputBytes = new Uint8Array(outputArray);
   for (let i = 0; i < rawData.length; ++i) {
-    outputArray[i] = rawData.charCodeAt(i);
+    outputBytes[i] = rawData.charCodeAt(i);
   }
   return outputArray;
 }

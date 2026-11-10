@@ -176,8 +176,10 @@ async function start() {
     await sequelize.sync();
     console.log('📦 Database synced');
 
-    // Seed cricket matches & squads if empty
-    await seedCricketMatches();
+    // Seed sample matches only for local SQLite development.
+    if (!process.env.DATABASE_URL && process.env.NODE_ENV !== 'production') {
+      await seedCricketMatches();
+    }
 
     // Attach WebSocket Gateway on /ws (Section 3)
     wsGateway.initialize(server);

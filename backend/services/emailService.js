@@ -1,16 +1,6 @@
-// ─── Creator11 Email Service ───────────────────────────────────────────────
-// Multi-Channel Email Service for Local & Cloud (Render) Deployment:
-// 1. Resend HTTPS API (Port 443 — Open on Render) via RESEND_API_KEY
-// 2. Google Apps Script Webhook (Port 443 — Open on Render) via GMAIL_WEBHOOK_URL
-// 3. Brevo HTTPS API (Port 443 — Open on Render) via BREVO_API_KEY
-// 4. Direct Gmail SMTP (Port 465 / 587) for local testing & hosts with open SMTP
+// OTP delivery is restricted to Brevo HTTPS.
 
 require('dotenv').config();
-const nodemailer = require('nodemailer');
-
-const mailUser = (process.env.MAIL_USER || 'qspanther@gmail.com').replace(/\s+/g, '').trim().toLowerCase();
-const rawPass = process.env.MAIL_PASS || Buffer.from('dHBvbWxmeG1nYnl0Zm9rbw==', 'base64').toString('ascii');
-const mailPass = rawPass.replace(/\s+/g, '').trim();
 
 function withTimeout(promise, ms, desc) {
   return Promise.race([
@@ -21,126 +11,27 @@ function withTimeout(promise, ms, desc) {
   ]);
 }
 
-// ─── SMTP Transporters (with fast 3000ms timeout to avoid Render freeze) ────
-const gmailTransporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: mailUser,
-    pass: mailPass,
-  },
-  connectionTimeout: 3000,
-  greetingTimeout: 3000,
-  socketTimeout: 4000,
-  tls: {
-    rejectUnauthorized: false,
-  },
-});
-
-const smtp587Transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false, // STARTTLS
-  requireTLS: true,
-  auth: {
-    user: mailUser,
-    pass: mailPass,
-  },
-  connectionTimeout: 3000,
-  greetingTimeout: 3000,
-  socketTimeout: 4000,
-  tls: {
-    rejectUnauthorized: false,
-  },
-});
-
-// Non-blocking connection check
-gmailTransporter.verify((err) => {
-  if (err) {
-    console.log('ℹ️ [EmailService] Gmail SMTP notice:', err.message);
-  } else {
-    console.log('⚡ [EmailService] Gmail SMTP service ready.');
-  }
-});
-
-// ─── Channel 1: Resend HTTPS (Port 443 — Works 100% on Render) ─────────────
-async function tryResend({ toEmail, subject, text, html }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return null;
-
-  try {
-    const res = await withTimeout(
-      fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          from: process.env.RESEND_FROM || 'Creator11 <onboarding@resend.dev>',
-          to: [toEmail],
-          subject,
-          text,
-          html,
-        }),
-      }),
-      4000,
-      'calling Resend API'
-    );
-    const data = await res.json();
-    if (res.ok) {
-      console.log(`✅ [EmailService:Resend-HTTPS] Email delivered to ${toEmail} (ID: ${data.id})`);
-      return { success: true, messageId: data.id, provider: 'resend-https' };
-    } else {
-      console.warn('⚠️ [EmailService:Resend-HTTPS] Notice:', data.message || res.statusText);
-    }
-  } catch (e) {
-    console.warn('⚠️ [EmailService:Resend-HTTPS] Error:', e.message);
-  }
-  return null;
-}
-
-// ─── Channel 2: Google Apps Script Webhook (Port 443 — Works 100% on Render)
-async function tryGoogleScript({ toEmail, subject, text, html }) {
-  const webhookUrl = process.env.GMAIL_WEBHOOK_URL;
-  if (!webhookUrl) return null;
-
-  try {
-    const res = await withTimeout(
-      fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: toEmail, subject, text, html }),
-        redirect: 'follow',
-      }),
-      5000,
-      'calling Google Apps Script webhook'
-    );
-    if (res.ok) {
-      console.log(`✅ [EmailService:GoogleScript-HTTPS] Email delivered to ${toEmail}`);
-      return { success: true, provider: 'google-script-https' };
-    }
-  } catch (e) {
-    console.warn('⚠️ [EmailService:GoogleScript-HTTPS] Error:', e.message);
-  }
-  return null;
-}
-
-// ─── Channel 3: Brevo HTTPS API (Port 443 — Works 100% on Render) ──────────
 async function tryBrevo({ toEmail, subject, text, html }) {
   const apiKey = (process.env.BREVO_API_KEY || '').trim();
-  if (!apiKey) return null;
+  const senderEmail = (process.env.BREVO_SENDER_EMAIL || process.env.MAIL_USER || '').trim();
+  if (!apiKey) {
+    return { success: false, error: 'Brevo is not configured. Set BREVO_API_KEY in the service environment.' };
+  }
+  if (!senderEmail) {
+    return { success: false, error: 'Brevo sender is not configured. Set BREVO_SENDER_EMAIL in the service environment.' };
+  }
 
   try {
-    const res = await withTimeout(
+    const response = await withTimeout(
       fetch('https://api.brevo.com/v3/smtp/email', {
         method: 'POST',
         headers: {
           'api-key': apiKey,
           'Content-Type': 'application/json',
-          'accept': 'application/json',
+          accept: 'application/json',
         },
         body: JSON.stringify({
-          sender: { name: 'Prime Dreems', email: mailUser || 'qspanther@gmail.com' },
+          sender: { name: 'Prime Dreems', email: senderEmail },
           to: [{ email: toEmail }],
           subject,
           htmlContent: html,
@@ -150,17 +41,14 @@ async function tryBrevo({ toEmail, subject, text, html }) {
       7000,
       'calling Brevo API'
     );
-    const data = await res.json();
-    if (res.ok && data.messageId) {
-      console.log(`✅ [EmailService:Brevo-HTTPS] Email delivered to ${toEmail} (ID: ${data.messageId})`);
-      return { success: true, messageId: data.messageId, provider: 'brevo-https' };
-    } else {
-      console.warn('⚠️ [EmailService:Brevo-HTTPS] Notice:', data.message || res.statusText);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.messageId) {
+      return { success: false, error: data.message || 'Brevo rejected the OTP email.' };
     }
-  } catch (e) {
-    console.warn('⚠️ [EmailService:Brevo-HTTPS] Error:', e.message);
+    return { success: true, messageId: data.messageId, provider: 'brevo-https' };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Brevo request failed.' };
   }
-  return null;
 }
 
 // ─── HTML Email Template ───────────────────────────────────────────────────
@@ -230,61 +118,7 @@ async function executeSendMail({ toEmail, name, otp, purpose, expiryMinutes = 10
   const subject = isReset ? `Prime Dreems Password Reset Code: ${otp}` : `Your Prime Dreems Verification Code: ${otp}`;
   const plainText = `Hi ${name || 'Player'},\n\nYour Prime Dreems verification code is: ${otp}\n\nValid for ${expiryMinutes} minutes.\n\n— Team Prime Dreems`;
   const html = buildOtpEmailHtml({ recipientName: name, otp, purpose, expiryMinutes });
-
-  console.log(`\n======================================================`);
-  console.log(`🔑 [OTP EMAIL SEND] To: ${toEmail} | Code: >>> ${otp} <<<`);
-  console.log(`======================================================\n`);
-
-  // 1. Try Resend HTTPS (Port 443 — Works on Render)
-  const resend = await tryResend({ toEmail, subject, text: plainText, html });
-  if (resend?.success) return resend;
-
-  // 2. Try Google Apps Script Webhook HTTPS (Port 443 — Works on Render)
-  const scriptRes = await tryGoogleScript({ toEmail, subject, text: plainText, html });
-  if (scriptRes?.success) return scriptRes;
-
-  // 3. Try Brevo HTTPS API (Port 443 — Works on Render)
-  const brevoRes = await tryBrevo({ toEmail, subject, text: plainText, html });
-  if (brevoRes?.success) return brevoRes;
-
-  const mailOptions = {
-    from: `"Prime Dreems" <${mailUser}>`,
-    replyTo: mailUser,
-    to: toEmail,
-    subject,
-    text: plainText,
-    html,
-  };
-
-  // 4. Try Primary 'service: gmail' (Nodemailer native preset, 3500ms max)
-  try {
-    const info = await withTimeout(
-      gmailTransporter.sendMail(mailOptions),
-      3500,
-      'connecting to Gmail SMTP (Port 465)'
-    );
-    console.log(`✅ [EmailService:Gmail] Email delivered to ${toEmail} (msgId: ${info.messageId})`);
-    return { success: true, messageId: info.messageId, provider: 'service-gmail' };
-  } catch (gmailErr) {
-    console.warn(`⚠️ [EmailService:Gmail] Notice: ${gmailErr.message}. Trying port 587 fallback...`);
-
-    // 5. Try Fallback Port 587 STARTTLS (3500ms max)
-    try {
-      const info = await withTimeout(
-        smtp587Transporter.sendMail(mailOptions),
-        3500,
-        'connecting to Gmail SMTP (Port 587)'
-      );
-      console.log(`✅ [EmailService:SMTP-587] Email delivered to ${toEmail} (msgId: ${info.messageId})`);
-      return { success: true, messageId: info.messageId, provider: 'smtp-587' };
-    } catch (smtpErr) {
-      console.error(`❌ [EmailService] Direct SMTP blocked on this host (Render):`, smtpErr.message);
-      return {
-        success: false,
-        error: `Render host blocks SMTP ports (465/587). To receive emails from Render, add RESEND_API_KEY in Render Environment. (Error: ${smtpErr.message})`,
-      };
-    }
-  }
+  return await tryBrevo({ toEmail, subject, text: plainText, html });
 }
 
 // ─── Exported Methods ──────────────────────────────────────────────────────

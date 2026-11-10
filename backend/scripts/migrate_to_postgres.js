@@ -4,7 +4,8 @@ const { Sequelize } = require('sequelize');
 const path = require('path');
 
 const sqlitePath = path.resolve(__dirname, '../creator11.sqlite');
-const postgresUrl = 'postgresql://creator11_db_user:052zGrGmGvOZGZ1b4dCVvnCUBlyGK6gw@dpg-dbjo40fb9u1s73ejvoo0-a.oregon-postgres.render.com:5432/creator11_db';
+const postgresUrl = process.env.DATABASE_URL;
+if (!postgresUrl) throw new Error('Set DATABASE_URL before migrating.');
 
 console.log('🚀 Starting SQLite -> Render Cloud PostgreSQL migration...');
 console.log('📂 Source SQLite:', sqlitePath);
