@@ -3,15 +3,24 @@
 // notifications to stored browser subscriptions. Falls back gracefully when
 // web-push is unavailable or the subscription is stale.
 
-const webpush = require('web-push');
 const { SystemSetting } = require('../db/models');
 
 const VAPID_SUBJECT = 'mailto:no-reply@primedreems.com';
 
 let vapidKeysCache = null;
+let webPushModule;
+
+async function getWebPush() {
+  if (!webPushModule) {
+    const module = await import('web-push');
+    webPushModule = module.default || module;
+  }
+  return webPushModule;
+}
 
 async function getVapidKeys() {
   if (vapidKeysCache) return vapidKeysCache;
+  const webpush = await getWebPush();
   try {
     const [setting] = await SystemSetting.findOrCreate({
       where: { key: 'vapid_keys' },
@@ -31,6 +40,7 @@ async function getVapidKeys() {
 }
 
 async function ensureConfigured() {
+  const webpush = await getWebPush();
   const keys = await getVapidKeys();
   webpush.setVapidDetails(VAPID_SUBJECT, keys.publicKey, keys.privateKey);
   return keys;
@@ -42,6 +52,7 @@ async function ensureConfigured() {
 async function sendToSubscription(subscription, payload) {
   try {
     await ensureConfigured();
+    const webpush = await getWebPush();
     await webpush.sendNotification(
       { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
       JSON.stringify(payload)
