@@ -1,6 +1,5 @@
 const express = require('express');
 const multer = require('multer');
-const path = require('path');
 const { authenticate, isAdmin } = require('../middleware/auth');
 const { purgeCache } = require('../middleware/cache');
 const {
@@ -14,18 +13,8 @@ const { deleteMatchPermanently } = require('../services/cricketDeleteHelper');
 
 const router = express.Router();
 
-// Setup Multer for image uploads
-const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, path.join(__dirname, '../uploads/'));
-  },
-  filename: function (req, file, cb) {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
-  }
-});
 const upload = multer({
-  storage: storage,
+  storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // Max 5MB
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -774,13 +763,25 @@ router.put('/points-formula', async (req, res) => {
 });
 
 // POST /upload image
-router.post('/upload', upload.single('image'), (req, res) => {
+router.post('/upload', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
-    const imageUrl = `/uploads/${req.file.filename}`;
-    res.json({ success: true, url: imageUrl, filename: req.file.filename });
+    const extensions = {
+      'image/jpeg': '.jpg',
+      'image/png': '.png',
+      'image/webp': '.webp',
+      'image/gif': '.gif',
+    };
+    const filename = `${Date.now()}-${Math.round(Math.random() * 1E9)}${extensions[req.file.mimetype]}`;
+    const imageData = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+    await SystemSetting.create({
+      key: `uploaded_media:${filename}`,
+      value: imageData,
+      description: 'Uploaded match poster or team artwork',
+    });
+    res.json({ success: true, url: `/uploads/${filename}`, filename });
   } catch (error) {
     console.error('Upload error:', error);
     res.status(500).json({ error: 'Failed to upload image' });

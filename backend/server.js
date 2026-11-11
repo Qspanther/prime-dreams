@@ -10,7 +10,7 @@ const compression = require('compression');
 const path = require('path');
 const config = require('./config');
 const sequelize = require('./db/index');
-require('./db/models'); // Load all models and associations
+const { SystemSetting } = require('./db/models'); // Load all models and associations
 const { seedCricketMatches } = require('./db/seedCricket');
 const { startLiveMatchWorker } = require('./services/cricbuzzService');
 const { startIngestionService } = require('./services/ingestion/ingestionWorker');
@@ -73,6 +73,28 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Static uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.get('/uploads/:filename', async (req, res) => {
+  const filename = String(req.params.filename || '');
+  if (!/^[a-z0-9_-]+\.(?:jpe?g|png|webp|gif)$/i.test(filename)) {
+    return res.sendStatus(404);
+  }
+
+  try {
+    const asset = await SystemSetting.findOne({ where: { key: `uploaded_media:${filename}` } });
+    const imageData = asset?.value?.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,([a-z0-9+/=]+)$/i);
+    if (!imageData) return res.sendStatus(404);
+
+    res.set({
+      'Content-Type': imageData[1],
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff',
+    });
+    return res.send(Buffer.from(imageData[2], 'base64'));
+  } catch (error) {
+    console.error('Uploaded image lookup error:', error.message);
+    return res.sendStatus(500);
+  }
+});
 
 // Request logging (development)
 app.use((req, res, next) => {
