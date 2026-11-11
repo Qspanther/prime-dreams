@@ -49,6 +49,38 @@ function getLatestInnings(teamScore) {
     .at(-1) || null;
 }
 
+function getScorecardHtmlInnings(html, teamA, teamACode, teamB, teamBCode) {
+  const innings = { team_a: [], team_b: [] };
+  const headerRegex = /bg-cbGrnCyn text-cbWhite">/g;
+  const clean = value => String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  let header;
+  while ((header = headerRegex.exec(html)) !== null) {
+    const block = html.slice(header.index, header.index + 1000);
+    const headingEnd = block.indexOf('</div>');
+    const heading = block.slice(0, headingEnd === -1 ? 250 : headingEnd + 6).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    const inningNumber = Number(heading.match(/\b(\d+)(?:st|nd|rd|th)\s+Innings/i)?.[1]);
+    const score = block.match(/<span class="font-bold">([\d,]+)-(\d+)(?:\s*(d))?<\/span>/);
+    const overs = block.match(/\(([\d.]+)\s*Ov\)/);
+    if (!inningNumber || !score || !overs) continue;
+    const normalizedHeading = clean(heading);
+    const side = normalizedHeading.includes(clean(teamA)) || normalizedHeading.includes(clean(teamACode))
+      ? 'team_a'
+      : normalizedHeading.includes(clean(teamB)) || normalizedHeading.includes(clean(teamBCode))
+        ? 'team_b'
+        : null;
+    if (!side) continue;
+    innings[side].push({
+      inningsId: inningNumber,
+      runs: Number(score[1].replace(/,/g, '')),
+      wickets: Number(score[2]),
+      overs: Number(overs[1]),
+      isDeclared: score[3] === 'd',
+    });
+  }
+  const latest = values => values.sort((a, b) => a.inningsId - b.inningsId).at(-1) || null;
+  return { team_a: latest(innings.team_a), team_b: latest(innings.team_b) };
+}
+
 function fetchUrl(url) {
   return new Promise((resolve, reject) => {
     const options = {
@@ -222,8 +254,10 @@ async function fetchLiveFeed() {
       series: seriesName,
       category,
       team_a: team1,
+      team_a_id: team1Id,
       team_a_code: team1Code,
       team_b: team2,
+      team_b_id: team2Id,
       team_b_code: team2Code,
       venue,
       start_time_ms: startTimeMs,
@@ -253,29 +287,40 @@ async function fetchLiveFeed() {
       const scorecardHtml = await fetchWithBackoff(`https://www.cricbuzz.com/live-cricket-scorecard/${match.raw_id}`, 2);
       const scorecardData = decodeNextData(scorecardHtml);
       const matchMarker = `"matchId":${match.raw_id}`;
-      const matchIndex = scorecardData.indexOf(matchMarker);
+      let matchIndex = scorecardData.indexOf(matchMarker);
       if (matchIndex === -1) {
         console.warn(`[Cricbuzz] Scorecard response for ${match.raw_id} had no hydrated match data (HTTP body ${scorecardHtml.length} chars).`);
         return;
       }
-      const nextMatchIndex = scorecardData.indexOf('"matchId":', matchIndex + matchMarker.length);
-      const chunk = scorecardData.slice(matchIndex, nextMatchIndex === -1 ? matchIndex + 30000 : nextMatchIndex);
-      const scoreIndex = chunk.indexOf('"matchScore":');
-      if (scoreIndex === -1) {
-        console.warn(`[Cricbuzz] Scorecard response for ${match.raw_id} had match metadata but no score block.`);
-        return;
+      let chunk = '';
+      let scoreIndex = -1;
+      while (matchIndex !== -1) {
+        const nextMatchIndex = scorecardData.indexOf('"matchId":', matchIndex + matchMarker.length);
+        const candidate = scorecardData.slice(matchIndex, nextMatchIndex === -1 ? matchIndex + 30000 : nextMatchIndex);
+        const candidateScoreIndex = candidate.indexOf('"matchScore":');
+        if (candidateScoreIndex !== -1) {
+          chunk = candidate;
+          scoreIndex = candidateScoreIndex;
+          break;
+        }
+        matchIndex = scorecardData.indexOf(matchMarker, matchIndex + matchMarker.length);
       }
-      const matchScoreJson = extractJsonObject(chunk, scoreIndex);
+      const matchScoreJson = scoreIndex === -1 ? null : extractJsonObject(chunk, scoreIndex);
       const matchScore = matchScoreJson ? JSON.parse(matchScoreJson) : null;
-      const teamA = getLatestInnings(matchScore?.team1Score);
-      const teamB = getLatestInnings(matchScore?.team2Score);
+      let teamA = getLatestInnings(matchScore?.team1Score);
+      let teamB = getLatestInnings(matchScore?.team2Score);
       if (!teamA && !teamB) {
-        console.warn(`[Cricbuzz] Scorecard response for ${match.raw_id} had an empty innings score block.`);
+        const htmlScores = getScorecardHtmlInnings(scorecardHtml, match.team_a, match.team_a_code, match.team_b, match.team_b_code);
+        teamA = htmlScores.team_a;
+        teamB = htmlScores.team_b;
+      }
+      if (!teamA && !teamB) {
+        console.warn(`[Cricbuzz] Scorecard response for ${match.raw_id} had no parseable JSON or HTML innings scores.`);
         return;
       }
-      const teamAId = Number(chunk.match(/"team1":\{"teamId":(\d+)/)?.[1]);
-      const teamBId = Number(chunk.match(/"team2":\{"teamId":(\d+)/)?.[1]);
-      const currentBattingTeamId = Number(chunk.match(/"currBatTeamId":(\d+)/)?.[1]) || null;
+      const teamAId = Number(chunk.match(/"team1":\{"teamId":(\d+)/)?.[1]) || match.team_a_id;
+      const teamBId = Number(chunk.match(/"team2":\{"teamId":(\d+)/)?.[1]) || match.team_b_id;
+      const currentBattingTeamId = Number(chunk.match(/"currBatTeamId":(\d+)/)?.[1]) || match.current_batting_team_id || null;
       const toScore = innings => innings ? {
         runs: Number(innings.runs),
         wickets: Number(innings.wickets) || 0,
