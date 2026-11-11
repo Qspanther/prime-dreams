@@ -76,23 +76,38 @@ async function fetchLiveFeed() {
     const seriesName = mi[3];
     const matchDesc = mi[4];
     const format = mi[5];
+    const startDate = mi[6];
+    const endDate = mi[7];
     const state = mi[8];
     const status = mi[9];
+    const team1Id = Number(mi[10]);
     const team1 = mi[11];
     const team1Code = mi[12];
+    const team2Id = Number(mi[13]);
     const team2 = mi[14];
     const team2Code = mi[15];
 
     let score1 = { runs: 0, wickets: 0, overs: 0 };
     let score2 = { runs: 0, wickets: 0, overs: 0 };
+    let currentBattingTeamId = null;
+    let venue = null;
 
     const scoreIdx = fullStr.indexOf(`"matchId":${rawId}`);
     if (scoreIdx !== -1) {
-      const chunk = fullStr.slice(scoreIdx, scoreIdx + 1200);
-      const s1m = chunk.match(/"team1Score":\{"inngs1":\{"inningsId":\d+,"runs":(\d+),"wickets":(\d+),"overs":([0-9.]+)\}/);
-      if (s1m) score1 = { runs: Number(s1m[1]), wickets: Number(s1m[2]), overs: Number(s1m[3]) };
-      const s2m = chunk.match(/"team2Score":\{"inngs1":\{"inningsId":\d+,"runs":(\d+),"wickets":(\d+),"overs":([0-9.]+)\}/);
-      if (s2m) score2 = { runs: Number(s2m[1]), wickets: Number(s2m[2]), overs: Number(s2m[3]) };
+      const nextMatchIdx = fullStr.indexOf('"matchId":', scoreIdx + 10);
+      const chunk = fullStr.slice(scoreIdx, nextMatchIdx === -1 ? scoreIdx + 10000 : nextMatchIdx);
+      const findLatestInnings = (teamKey) => {
+        const teamMatch = chunk.match(new RegExp(`"${teamKey}Score":\\{([\\s\\S]*?)\\}(?=,\\"team[12]Score\\"|,\\"matchTeam\\"|,\\"matchVideos\\"|\\}\\}\\})`));
+        const scoreBlock = teamMatch?.[1] || chunk.slice(chunk.indexOf(`"${teamKey}Score"`));
+        const innings = [...scoreBlock.matchAll(/"inngs\d+":\{"inningsId":\d+,"runs":(\d+),"wickets":(\d+),"overs":([0-9.]+)/g)];
+        const latest = innings.at(-1);
+        return latest ? { runs: Number(latest[1]), wickets: Number(latest[2]), overs: Number(latest[3]) } : null;
+      };
+      score1 = findLatestInnings('team1') || score1;
+      score2 = findLatestInnings('team2') || score2;
+      currentBattingTeamId = Number(chunk.match(/"currBatTeamId":(\d+)/)?.[1]) || null;
+      const ground = chunk.match(/"venueInfo":\{"id":\d+,"ground":"([^"\\]*(?:\\.[^"\\]*)*)","city":"([^"\\]*(?:\\.[^"\\]*)*)"/);
+      if (ground) venue = `${JSON.parse(`"${ground[1]}"`)}${ground[2] ? `, ${JSON.parse(`"${ground[2]}"`)}` : ''}`;
     }
 
     let category = 'League';
@@ -100,7 +115,22 @@ async function fetchLiveFeed() {
     else if (seriesName.toLowerCase().includes('women') || team1.toLowerCase().includes('women')) category = "Women's";
     else if (format.toUpperCase() === 'T20' || matchDesc.toUpperCase().includes('T20')) category = 'T20';
 
-    const isLive = state.toLowerCase() === 'in progress' || state.toLowerCase() === 'innings break';
+    const normalizedState = state.toLowerCase();
+    const isAbandoned = /abandon|cancel|no result/i.test(status);
+    const isPaused = /stumps|lunch|tea|rain|weather|delay|bad light|break/i.test(status);
+    const matchStatus = isAbandoned
+      ? 'abandoned'
+      : normalizedState === 'complete' || normalizedState === 'completed'
+        ? 'completed'
+        : (normalizedState === 'in progress' || normalizedState === 'innings break') && !isPaused
+          ? 'live'
+          : 'upcoming';
+    const startTimeMs = Number(String(startDate).replace(/^"|"$/g, '')) || null;
+    const currentInnings = currentBattingTeamId === team1Id
+      ? 'team_a'
+      : currentBattingTeamId === team2Id
+        ? 'team_b'
+        : score2.runs > 0 ? 'team_b' : 'team_a';
 
     matches.push({
       cricbuzz_id: 'cb-' + rawId,
@@ -112,15 +142,18 @@ async function fetchLiveFeed() {
       team_a_code: team1Code,
       team_b: team2,
       team_b_code: team2Code,
-      venue: `${team1} International Stadium`,
-      status: isLive ? 'live' : 'upcoming',
+      venue,
+      start_time_ms: startTimeMs,
+      end_time_ms: Number(String(endDate).replace(/^"|"$/g, '')) || null,
+      current_batting_team_id: currentBattingTeamId,
+      status: matchStatus,
       match_format: `${format} • Cricket`,
       cricbuzz_status: status,
       cricbuzz_state: state,
       score_summary: {
         team_a: score1,
         team_b: score2,
-        current_innings: score2.runs > 0 ? 'team_b' : 'team_a',
+        current_innings: currentInnings,
       },
       live_commentary: status,
     });

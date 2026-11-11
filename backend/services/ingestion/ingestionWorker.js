@@ -10,9 +10,83 @@ const { createNormalizedScore, validateScoreUpdate } = require('./normalizedSche
 const { calculateFantasyPoints, auditPointsChange } = require('../scoring/scoringEngine');
 const wsGateway = require('../websocket/wsGateway');
 const config = require('../../config');
+const { Op } = require('sequelize');
 
 let workerInterval = null;
 let isProcessing = false;
+const missingFeedPolls = new Map();
+const MISSING_FEED_POLLS_BEFORE_END = 12;
+
+function normalizeTeamName(value) {
+  return String(value || '').toLowerCase().replace(/\b(women|womens|men|u\d{2})\b/g, '').replace(/[^a-z0-9]/g, '');
+}
+
+function findMatchingFeedMatch(match, feed) {
+  if (match.cricbuzz_id) {
+    const byId = feed.find(item => item.cricbuzz_id === match.cricbuzz_id);
+    if (byId) return byId;
+  }
+  const teamA = normalizeTeamName(match.team_a);
+  const teamB = normalizeTeamName(match.team_b);
+  const teamACode = normalizeTeamName(match.team_a_code);
+  const teamBCode = normalizeTeamName(match.team_b_code);
+  return feed.find(item => {
+    const feedA = normalizeTeamName(item.team_a);
+    const feedB = normalizeTeamName(item.team_b);
+    const feedACode = normalizeTeamName(item.team_a_code);
+    const feedBCode = normalizeTeamName(item.team_b_code);
+    return (
+      (teamA === feedA && teamB === feedB) ||
+      (teamA === feedB && teamB === feedA) ||
+      (teamACode && teamBCode && teamACode === feedACode && teamBCode === feedBCode) ||
+      (teamACode && teamBCode && teamACode === feedBCode && teamBCode === feedACode)
+    );
+  });
+}
+
+function getSourceLiveData(feedMatch, timestamp = new Date().toISOString()) {
+  return {
+    status_text: feedMatch.cricbuzz_status || 'Live score from Cricbuzz',
+    commentary: [feedMatch.cricbuzz_status || 'Live score from Cricbuzz'],
+    source: 'Cricbuzz',
+    last_source_sync_at: timestamp,
+  };
+}
+
+async function createDiscoveredLiveMatch(feedMatch) {
+  const startTime = feedMatch.start_time_ms ? new Date(feedMatch.start_time_ms) : new Date();
+  const now = new Date();
+  const match = await CricketMatch.create({
+    cricbuzz_id: feedMatch.cricbuzz_id,
+    title: feedMatch.title,
+    category: feedMatch.category,
+    team_a: feedMatch.team_a,
+    team_a_code: feedMatch.team_a_code,
+    team_b: feedMatch.team_b,
+    team_b_code: feedMatch.team_b_code,
+    venue: feedMatch.venue,
+    match_date: startTime.toISOString().slice(0, 10),
+    match_time: startTime.toISOString().slice(11, 16),
+    start_time: startTime,
+    status: 'live',
+    score_summary: feedMatch.score_summary || {},
+    live_data: getSourceLiveData(feedMatch),
+    last_live_poll_at: now,
+  });
+  const normalized = createNormalizedScore({
+    match_id: match.id,
+    ...feedMatch.score_summary,
+    last_ball_event: feedMatch.cricbuzz_status,
+    commentary: [feedMatch.cricbuzz_status || 'Live score from Cricbuzz'],
+  });
+  hotStore.setSnapshot(match.id, normalized, {
+    source: 'Cricbuzz Ingestion Engine',
+    cross_check_status: 'PRIMARY_ACCEPTED',
+    is_degraded: false,
+  });
+  console.log(`🆕 [Ingestion] Discovered live match "${match.title}" from Cricbuzz.`);
+  return match;
+}
 
 /**
  * Main ingestion loop tick (runs every 6-8 seconds for live ball fidelity)
@@ -44,8 +118,10 @@ async function processLiveIngestionTick() {
 
     // 2. Load all active matches from Database
     const dbMatches = await CricketMatch.findAll({
-      where: { status: ['live', 'upcoming'] }
+      where: { status: { [Op.in]: ['live', 'upcoming'] } }
     });
+    const matchedFeedIds = new Set();
+    const sourceFeedHealthy = liveMatchesFeed.length > 0;
 
     for (const match of dbMatches) {
       // Check if this specific match is paused by Admin
@@ -53,28 +129,71 @@ async function processLiveIngestionTick() {
         continue;
       }
 
-      // Find matching Cricbuzz record by cricbuzz_id or fuzzy team match
-      const cricbuzzMatch = liveMatchesFeed.find(m => {
-        if (match.cricbuzz_id && m.cricbuzz_id === match.cricbuzz_id) return true;
-        if (m.raw_id && match.cricbuzz_id === `cb-${m.raw_id}`) return true;
-        // Fuzzy team name match
-        const teamAMatch = m.team_a.toLowerCase().includes(match.team_a.toLowerCase()) || match.team_a.toLowerCase().includes(m.team_a.toLowerCase());
-        const teamBMatch = m.team_b.toLowerCase().includes(match.team_b.toLowerCase()) || match.team_b.toLowerCase().includes(m.team_b.toLowerCase());
-        return teamAMatch && teamBMatch;
-      });
+      const cricbuzzMatch = findMatchingFeedMatch(match, liveMatchesFeed);
+
+      if (!cricbuzzMatch) {
+        if (match.status === 'live') {
+          const lastEvidence = match.last_live_poll_at || match.updatedAt || match.createdAt;
+          const lastSuccessfulPoll = lastEvidence ? new Date(lastEvidence).getTime() : 0;
+          if (!sourceFeedHealthy && lastSuccessfulPoll && Date.now() - lastSuccessfulPoll >= 60000) {
+            await match.update({
+              status: 'upcoming',
+              live_data: {
+                ...(match.live_data || {}),
+                status_text: 'Live status unconfirmed: Cricbuzz feed is unavailable.',
+                source: 'Cricbuzz',
+              },
+            });
+            console.warn(`⚠️ [Ingestion] Hid LIVE status for "${match.title}" because its score feed is stale.`);
+            continue;
+          }
+        }
+
+        if (sourceFeedHealthy && match.status === 'live') {
+          const misses = (missingFeedPolls.get(match.id) || 0) + 1;
+          missingFeedPolls.set(match.id, misses);
+          if (misses >= MISSING_FEED_POLLS_BEFORE_END) {
+            await match.update({
+              status: 'upcoming',
+              live_data: {
+                ...(match.live_data || {}),
+                status_text: 'Live status unconfirmed: Cricbuzz no longer reports this fixture as live.',
+                source: 'Cricbuzz',
+                last_source_sync_at: new Date().toISOString(),
+              },
+            });
+            missingFeedPolls.delete(match.id);
+            console.warn(`⏹️ [Ingestion] Hid stale LIVE status for "${match.title}" after ${misses} successful source polls without the fixture.`);
+          }
+        }
+        continue;
+      }
+
+      matchedFeedIds.add(cricbuzzMatch.cricbuzz_id);
+      missingFeedPolls.delete(match.id);
+
+      if (match.cricbuzz_id !== cricbuzzMatch.cricbuzz_id) {
+        await match.update({ cricbuzz_id: cricbuzzMatch.cricbuzz_id });
+      }
+
+      if (cricbuzzMatch.status !== 'live') {
+        if (match.status !== cricbuzzMatch.status) {
+          await match.update({
+            status: cricbuzzMatch.status,
+            score_summary: cricbuzzMatch.score_summary || match.score_summary,
+            live_data: getSourceLiveData(cricbuzzMatch),
+            last_live_poll_at: match.status === 'live' ? new Date() : match.last_live_poll_at,
+          });
+          console.log(`🔄 [Ingestion] Match "${match.title}" is now ${cricbuzzMatch.status}: ${cricbuzzMatch.cricbuzz_status || cricbuzzMatch.cricbuzz_state}.`);
+        }
+        continue;
+      }
 
       // ─── CASE A: Upcoming Match Real-World Transition to LIVE ───
       if (match.status === 'upcoming') {
-        if (cricbuzzMatch && cricbuzzMatch.status === 'live') {
-          console.log(`⚡ [Ingestion] Auto-Transitioning match "${match.title}" to LIVE (Real-world in-play detected)!`);
-          await match.update({
-            status: 'live',
-            cricbuzz_id: cricbuzzMatch.cricbuzz_id,
-          });
-          match.status = 'live'; // proceed to live score processing
-        } else {
-          continue; // Match is not yet live
-        }
+        console.log(`⚡ [Ingestion] Auto-Transitioning match "${match.title}" to LIVE (Cricbuzz confirms in-play).`);
+        await match.update({ status: 'live' });
+        match.status = 'live';
       }
 
       // ─── CASE B: Live In-Play Match Telemetry Update ───
@@ -118,7 +237,27 @@ async function processLiveIngestionTick() {
         );
 
         if (deduplicator.isDuplicate(eventId)) {
-          // Already processed this exact ball state, skip duplicate DB writes
+          // The score is unchanged, but refresh source freshness and live status.
+          const lastSnapshot = hotStore.getSnapshot(match.id);
+          hotStore.setSnapshot(match.id, normalized, {
+            source: 'Cricbuzz Ingestion Engine',
+            cross_check_status: lastSnapshot?.cross_check_status || 'PRIMARY_ACCEPTED',
+            is_degraded: lastSnapshot?.is_degraded || false,
+          });
+          await match.update({
+            score_summary: {
+              team_a: normalized.team_a,
+              team_b: normalized.team_b,
+              current_innings: normalized.current_innings,
+            },
+            live_data: {
+              ...(match.live_data || {}),
+              status_text: commentaryText,
+              source: 'Cricbuzz',
+              last_source_sync_at: new Date().toISOString(),
+            },
+            last_live_poll_at: new Date(),
+          });
           continue;
         }
 
@@ -169,6 +308,9 @@ async function processLiveIngestionTick() {
             required_rate: normalized.required_rate,
             partnership: normalized.partnership,
             commentary: normalized.commentary,
+            status_text: commentaryText,
+            source: 'Cricbuzz',
+            last_source_sync_at: new Date().toISOString(),
             last_ball_time: new Date().toISOString(),
           },
           last_live_poll_at: new Date(),
@@ -193,6 +335,14 @@ async function processLiveIngestionTick() {
           cross_check_status: verificationResult.status,
         });
       }
+    }
+
+    // Import only source-confirmed live fixtures that the dashboard does not know yet.
+    // This does not seed sample data or alter existing users, wallets, or contests.
+    for (const feedMatch of liveMatchesFeed) {
+      if (feedMatch.status !== 'live' || matchedFeedIds.has(feedMatch.cricbuzz_id)) continue;
+      const existing = await CricketMatch.findOne({ where: { cricbuzz_id: feedMatch.cricbuzz_id } });
+      if (!existing) await createDiscoveredLiveMatch(feedMatch);
     }
   } catch (err) {
     console.error('❌ [Ingestion Worker] Error in tick:', err);

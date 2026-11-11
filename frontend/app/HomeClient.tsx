@@ -12,6 +12,19 @@ import CategoryFilterTabs from './components/ui/CategoryFilterTabs';
 import CategoryBadge from './components/ui/CategoryBadge';
 import PrimeLogo from './components/ui/PrimeLogo';
 
+function getLiveScoreText(match: any, side: 'team_a' | 'team_b') {
+  const score = match.score_summary?.[side];
+  if (!score) return 'Score unavailable';
+  const isBatting = match.score_summary?.current_innings === side;
+  const hasScore = Number(score.runs) > 0 || Number(score.wickets) > 0 || Number(score.overs) > 0;
+  if (!hasScore && !isBatting) return 'Yet to bat';
+  return `${Number(score.runs) || 0}/${Number(score.wickets) || 0} (${Number(score.overs) || 0} ov)`;
+}
+
+function getLiveScoreSummary(match: any) {
+  return `${getLiveScoreText(match, 'team_a')}  •  ${getLiveScoreText(match, 'team_b')}`;
+}
+
 interface HomeClientProps {
   initialMatches?: any[];
 }
@@ -167,13 +180,17 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
               <div>
                 <span className="pd-eyebrow block text-[#64748B]">
-                  Guaranteed Colosseum Prize Pool
+                  {heroMatch.status === 'live' ? 'Current Live Score' : 'Guaranteed Colosseum Prize Pool'}
                 </span>
                 <h1 className="pd-num text-3xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#1E3A8A] via-[#2563EB] to-[#0284C7] drop-shadow-sm tracking-tight font-['Montserrat',sans-serif]">
-                  ₹{heroMatch.total_prize_pool > 0 ? heroMatch.total_prize_pool.toLocaleString('en-IN') : '50,00,000'} MEGA ARENA
+                  {heroMatch.status === 'live'
+                    ? getLiveScoreSummary(heroMatch)
+                    : `₹${heroMatch.total_prize_pool > 0 ? heroMatch.total_prize_pool.toLocaleString('en-IN') : '50,00,000'} MEGA ARENA`}
                 </h1>
                 <p className="pd-num text-xs sm:text-sm text-[#475569] font-bold mt-1">
-                  1st Prize ₹15,00,000 Guaranteed • Instant UTR/UPI Bank Payouts • 0% Fair-Play Certified
+                  {heroMatch.status === 'live'
+                    ? heroMatch.live_data?.status_text || 'Live status confirmed by the score feed.'
+                    : '1st Prize ₹15,00,000 Guaranteed • Instant UTR/UPI Bank Payouts • 0% Fair-Play Certified'}
                 </p>
               </div>
 
@@ -190,7 +207,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                     <span className="font-black text-base text-[#0F172A] truncate drop-shadow-sm">{heroMatch.team_a}</span>
                     <span className="text-[10px] sm:text-xs text-emerald-600 font-extrabold flex items-center gap-1 min-w-0 max-w-full">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                      <span className="truncate">Form: W • W • L • W</span>
+                      <span className="truncate">{heroMatch.status === 'live' ? getLiveScoreText(heroMatch, 'team_a') : 'Form: W • W • L • W'}</span>
                     </span>
                   </div>
                 </div>
@@ -208,7 +225,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                   <div className="flex flex-col min-w-0 items-end">
                     <span className="font-black text-base text-[#0F172A] truncate drop-shadow-sm">{heroMatch.team_b}</span>
                     <span className="text-[10px] sm:text-xs text-emerald-600 font-extrabold flex items-center gap-1 min-w-0 max-w-full">
-                      <span className="truncate">Form: W • W • W • L</span>
+                      <span className="truncate">{heroMatch.status === 'live' ? getLiveScoreText(heroMatch, 'team_b') : 'Form: W • W • W • L'}</span>
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
                     </span>
                   </div>
@@ -223,6 +240,23 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
             {/* Right Action Card & Prize Structure Column (3D Distinct Border Box) */}
             <div className="lg:col-span-5 flex flex-col justify-between h-full prime-card-3d p-6 space-y-5 border-2 border-[#94A3B8]">
+              {heroMatch.status === 'live' ? (
+                <>
+                  <div>
+                    <span className="pd-eyebrow block text-[#64748B]">Live match status</span>
+                    <h3 className="text-lg font-black text-[#0F172A] mt-1">{heroMatch.live_data?.status_text || 'Live score syncing'}</h3>
+                    <p className="text-xs text-[#64748B] mt-3">
+                      Source: {heroMatch.live_data?.source || 'Cricbuzz'}
+                      {heroMatch.last_live_poll_at ? ` · Updated ${Math.max(0, Math.round((Date.now() - new Date(heroMatch.last_live_poll_at).getTime()) / 1000))}s ago` : ''}
+                    </p>
+                  </div>
+                  <Link href={`/match/${heroMatch.id}`} className="prime-btn-3d text-center text-xs font-black uppercase tracking-wider">
+                    <span>View Live Score</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+                </>
+              ) : (
+                <>
               <div className="flex items-start justify-between">
                 <div>
                   <span className="pd-eyebrow block text-[#64748B]">
@@ -270,6 +304,8 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                   <ArrowRight className="w-4 h-4" />
                 </Link>
               </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -324,16 +360,17 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                     <div>
                       <span className="text-xs font-black text-[#0F172A] block truncate">{m.team_a}</span>
                       <p className="pd-num text-2xl font-black text-[#2563EB] font-mono">
-                        {m.score_summary?.team_a
-                          ? `${m.score_summary.team_a.runs}/${m.score_summary.team_a.wickets} (${m.score_summary.team_a.overs} ov)`
-                          : '146/3 (16.4 ov)'}
+                        {getLiveScoreText(m, 'team_a')}
                       </p>
                     </div>
                     <div className="text-right">
                       <span className="text-xs font-black text-[#0F172A] block truncate">{m.team_b}</span>
-                      <p className="text-xs font-bold text-[#64748B]">Yet to bat</p>
+                      <p className="text-xs font-bold text-[#64748B]">{getLiveScoreText(m, 'team_b')}</p>
                     </div>
                   </div>
+                  <p className="text-xs font-semibold text-[#64748B] mt-1" aria-live="polite">
+                    {m.live_data?.status_text || 'Live score syncing'}
+                  </p>
 
                   {/* Striker & Bowler Live Telemetry Snippet */}
                   {m.live_data?.current_striker && (
@@ -348,7 +385,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                         </span>
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        {(m.live_data.recent_balls || ['1', '4', '0', 'W']).slice(-4).map((b: string, i: number) => (
+                        {(m.live_data.recent_balls || []).slice(-4).map((b: string, i: number) => (
                           <span
                             key={i}
                             className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shadow-sm ${
@@ -369,10 +406,10 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
                 <div className="pt-4 border-t border-[#E2E8F0] mt-4 flex items-center justify-between">
                   <span className="text-xs font-bold text-[#64748B]">
-                    🏆 {m.contests_count || 3} Contests Active
+                    {m.contests_count ? `🏆 ${m.contests_count} Contests Active` : `Score source · ${m.live_data?.source || 'Cricbuzz'}`}
                   </span>
                   <span className="prime-btn-3d !py-1.5 !px-3 !text-xs group-hover:scale-105">
-                    <span>Enter Live Arena</span>
+                    <span>View Live Score</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </span>
                 </div>
