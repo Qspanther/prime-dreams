@@ -113,8 +113,9 @@ async function processLiveIngestionTick() {
       hotStore.recordSourceResult('primary', true);
       hotStore.metrics.last_sync_time = new Date().toISOString();
       if (Date.now() - lastFeedDiagnosticAt >= 60000) {
-        const confirmedLive = liveMatchesFeed.filter(item => item.status === 'live');
-        console.info(`[Ingestion] Cricbuzz primary feed: ${liveMatchesFeed.length} fixtures, ${confirmedLive.length} live with scores (${confirmedLive.map(item => item.raw_id).join(',') || 'none'}).`);
+        const scoreReady = liveMatchesFeed.filter(item => item.score_data_available);
+        const inProgress = liveMatchesFeed.filter(item => /in progress|innings break/i.test(item.cricbuzz_state || ''));
+        console.info(`[Ingestion] Cricbuzz primary feed: ${liveMatchesFeed.length} fixtures, ${scoreReady.length} with score data, ${inProgress.length} in progress (${inProgress.map(item => `${item.raw_id}:${item.status}:${item.score_data_available ? 'score' : 'no-score'}`).join(',') || 'none'}).`);
         lastFeedDiagnosticAt = Date.now();
       }
     } catch (err) {
@@ -186,13 +187,32 @@ async function processLiveIngestionTick() {
       }
 
       if (cricbuzzMatch.status !== 'live') {
-        if (match.status !== cricbuzzMatch.status) {
-          await match.update({
-            status: cricbuzzMatch.status,
-            score_summary: cricbuzzMatch.score_summary || match.score_summary,
-            live_data: getSourceLiveData(cricbuzzMatch),
-            last_live_poll_at: match.status === 'live' ? new Date() : match.last_live_poll_at,
+        const update = {};
+        if (match.status !== cricbuzzMatch.status) update.status = cricbuzzMatch.status;
+        if (cricbuzzMatch.score_data_available) {
+          const sourceScore = createNormalizedScore({
+            match_id: match.id,
+            current_innings: cricbuzzMatch.score_summary?.current_innings,
+            team_a: cricbuzzMatch.score_summary?.team_a,
+            team_b: cricbuzzMatch.score_summary?.team_b,
           });
+          const validation = validateScoreUpdate(sourceScore, match.score_summary);
+          if (validation.valid) {
+            update.score_summary = {
+              team_a: sourceScore.team_a,
+              team_b: sourceScore.team_b,
+              current_innings: sourceScore.current_innings,
+            };
+            update.last_live_poll_at = new Date();
+          } else {
+            console.warn(`🛡️ [Ingestion Validation REJECTED] ${match.title}: ${validation.reason}`);
+          }
+        }
+        if (Object.keys(update).length > 0 || match.status !== cricbuzzMatch.status || cricbuzzMatch.score_data_available) {
+          update.live_data = getSourceLiveData(cricbuzzMatch);
+          await match.update(update);
+        }
+        if (match.status !== cricbuzzMatch.status) {
           console.log(`🔄 [Ingestion] Match "${match.title}" is now ${cricbuzzMatch.status}: ${cricbuzzMatch.cricbuzz_status || cricbuzzMatch.cricbuzz_state}.`);
         }
         continue;
