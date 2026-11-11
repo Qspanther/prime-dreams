@@ -28,6 +28,27 @@ function extractJsonObject(text, fromIndex) {
   return null;
 }
 
+function decodeNextData(html) {
+  const regex = /self\.__next_f\.push\(\[1,"([\s\S]*?)"\]\)/g;
+  let fullStr = '';
+  let match;
+  while ((match = regex.exec(html)) !== null) {
+    try {
+      fullStr += JSON.parse('"' + match[1] + '"');
+    } catch (_) {
+      fullStr += match[1];
+    }
+  }
+  return fullStr;
+}
+
+function getLatestInnings(teamScore) {
+  return Object.values(teamScore || {})
+    .filter(item => item && Number.isFinite(Number(item.inningsId)) && Number.isFinite(Number(item.runs)))
+    .sort((a, b) => Number(a.inningsId) - Number(b.inningsId))
+    .at(-1) || null;
+}
+
 function fetchUrl(url) {
   return new Promise((resolve, reject) => {
     const options = {
@@ -76,16 +97,7 @@ async function fetchLiveFeed() {
   const html = await fetchWithBackoff('https://www.cricbuzz.com/cricket-match/live-scores');
 
   // Next.js hydration parser
-  const regex = /self\.__next_f\.push\(\[1,"([\s\S]*?)"\]\)/g;
-  let fullStr = '';
-  let m;
-  while ((m = regex.exec(html)) !== null) {
-    try {
-      fullStr += JSON.parse('"' + m[1] + '"');
-    } catch (e) {
-      fullStr += m[1];
-    }
-  }
+  const fullStr = decodeNextData(html);
 
   const infoRegex = /\{"matchId":(\d+),"seriesId":(\d+),"seriesName":"([^"]+)","matchDesc":"([^"]+)","matchFormat":"([^"]+)","startDate":(\d+|"[^"]+"),"endDate":(\d+|"[^"]+"),"state":"([^"]+)","status":"([^"]+)"[\s\S]*?"team1":\{"teamId":(\d+),"teamName":"([^"]+)","teamSName":"([^"]+)"[\s\S]*?"team2":\{"teamId":(\d+),"teamName":"([^"]+)","teamSName":"([^"]+)"/g;
 
@@ -134,9 +146,8 @@ async function fetchLiveFeed() {
       };
 
       const findLatestInnings = (teamKey, teamScore) => {
-        let innings = Object.values(teamScore || {})
-          .filter(item => item && Number.isFinite(Number(item.inningsId)) && Number.isFinite(Number(item.runs)))
-          .sort((a, b) => Number(a.inningsId) - Number(b.inningsId));
+        let latest = getLatestInnings(teamScore);
+        let innings = latest ? [latest] : [];
         if (innings.length === 0) {
           const scoreKey = `"${teamKey}Score":`;
           const scoreStart = chunk.indexOf(scoreKey);
@@ -155,7 +166,7 @@ async function fetchLiveFeed() {
               .sort((a, b) => a.inningsId - b.inningsId);
           }
         }
-        const latest = innings.at(-1);
+        latest = innings.at(-1);
         if (!latest) return null;
         scoreDataAvailable = true;
         return {
@@ -227,6 +238,57 @@ async function fetchLiveFeed() {
       live_commentary: status,
     });
   }
+
+  // Some Cricbuzz live-scores responses omit matchScore in the hydration payload.
+  // Fetch the official scorecard for those in-progress fixtures before classifying them.
+  const scorecardFallbacks = matches.filter(match =>
+    !match.score_data_available && /in progress|innings break/i.test(match.cricbuzz_state || '')
+  );
+  await Promise.all(scorecardFallbacks.map(async match => {
+    try {
+      const scorecardHtml = await fetchWithBackoff(`https://www.cricbuzz.com/live-cricket-scorecard/${match.raw_id}`, 2);
+      const scorecardData = decodeNextData(scorecardHtml);
+      const matchMarker = `"matchId":${match.raw_id}`;
+      const matchIndex = scorecardData.indexOf(matchMarker);
+      if (matchIndex === -1) return;
+      const nextMatchIndex = scorecardData.indexOf('"matchId":', matchIndex + matchMarker.length);
+      const chunk = scorecardData.slice(matchIndex, nextMatchIndex === -1 ? matchIndex + 30000 : nextMatchIndex);
+      const scoreIndex = chunk.indexOf('"matchScore":');
+      if (scoreIndex === -1) return;
+      const matchScoreJson = extractJsonObject(chunk, scoreIndex);
+      const matchScore = matchScoreJson ? JSON.parse(matchScoreJson) : null;
+      const teamA = getLatestInnings(matchScore?.team1Score);
+      const teamB = getLatestInnings(matchScore?.team2Score);
+      if (!teamA && !teamB) return;
+      const teamAId = Number(chunk.match(/"team1":\{"teamId":(\d+)/)?.[1]);
+      const teamBId = Number(chunk.match(/"team2":\{"teamId":(\d+)/)?.[1]);
+      const currentBattingTeamId = Number(chunk.match(/"currBatTeamId":(\d+)/)?.[1]) || null;
+      const toScore = innings => innings ? {
+        runs: Number(innings.runs),
+        wickets: Number(innings.wickets) || 0,
+        overs: Number(innings.overs) || 0,
+        ...(innings.isDeclared ? { declared: true } : {}),
+      } : { runs: 0, wickets: 0, overs: 0 };
+      match.score_summary = {
+        team_a: toScore(teamA),
+        team_b: toScore(teamB),
+        current_innings: currentBattingTeamId === teamBId ? 'team_b' : currentBattingTeamId === teamAId ? 'team_a' : teamB ? 'team_b' : 'team_a',
+      };
+      match.current_batting_team_id = currentBattingTeamId;
+      match.score_data_available = true;
+      if (match.cricbuzz_state.toLowerCase() === 'in progress' && !/stumps|lunch|tea|rain|weather|delay|bad light|break/i.test(match.cricbuzz_status || '')) {
+        match.status = 'live';
+      }
+      const venueIndex = chunk.indexOf('"venueInfo":');
+      if (venueIndex !== -1) {
+        const venueJson = extractJsonObject(chunk, venueIndex);
+        const venueInfo = venueJson ? JSON.parse(venueJson) : null;
+        if (venueInfo?.ground) match.venue = `${venueInfo.ground}${venueInfo.city ? `, ${venueInfo.city}` : ''}`;
+      }
+    } catch (error) {
+      console.warn(`[Cricbuzz] Scorecard fallback failed for ${match.raw_id}: ${error.message}`);
+    }
+  }));
 
   return matches;
 }
