@@ -62,13 +62,17 @@ function fetchUrl(url) {
     const req = https.get(url, options, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
-      res.on('end', () => resolve({ status: res.statusCode, data }));
+      res.on('end', () => {
+        clearTimeout(totalTimeout);
+        resolve({ status: res.statusCode, data });
+      });
     });
-    req.on('error', reject);
-    req.on('timeout', () => {
-      req.destroy();
-      reject(new Error('Cricbuzz fetch timeout'));
+    const totalTimeout = setTimeout(() => req.destroy(new Error('Cricbuzz fetch timeout')), options.timeout);
+    req.on('error', error => {
+      clearTimeout(totalTimeout);
+      reject(error);
     });
+    req.on('timeout', () => req.destroy(new Error('Cricbuzz fetch timeout')));
   });
 }
 
