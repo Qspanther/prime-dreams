@@ -133,10 +133,28 @@ async function fetchLiveFeed() {
         }
       };
 
-      const findLatestInnings = (teamScore) => {
-        const innings = Object.values(teamScore || {})
+      const findLatestInnings = (teamKey, teamScore) => {
+        let innings = Object.values(teamScore || {})
           .filter(item => item && Number.isFinite(Number(item.inningsId)) && Number.isFinite(Number(item.runs)))
           .sort((a, b) => Number(a.inningsId) - Number(b.inningsId));
+        if (innings.length === 0) {
+          const scoreKey = `"${teamKey}Score":`;
+          const scoreStart = chunk.indexOf(scoreKey);
+          if (scoreStart !== -1) {
+            const nextTeam = teamKey === 'team1' ? '"team2Score":' : '"matchTeam":';
+            const nextTeamStart = chunk.indexOf(nextTeam, scoreStart + scoreKey.length);
+            const scoreChunk = chunk.slice(scoreStart, nextTeamStart === -1 ? chunk.length : nextTeamStart);
+            innings = [...scoreChunk.matchAll(/"inngs(\d+)":\{"inningsId":(\d+),"runs":(\d+),"wickets":(\d+),"overs":([0-9.]+)(?:,"isDeclared":(true|false))?/g)]
+              .map(item => ({
+                inningsId: Number(item[2]),
+                runs: Number(item[3]),
+                wickets: Number(item[4]),
+                overs: Number(item[5]),
+                isDeclared: item[6] === 'true',
+              }))
+              .sort((a, b) => a.inningsId - b.inningsId);
+          }
+        }
         const latest = innings.at(-1);
         if (!latest) return null;
         scoreDataAvailable = true;
@@ -149,11 +167,15 @@ async function fetchLiveFeed() {
       };
 
       const matchScore = readObject('matchScore');
-      score1 = findLatestInnings(matchScore?.team1Score) || score1;
-      score2 = findLatestInnings(matchScore?.team2Score) || score2;
+      score1 = findLatestInnings('team1', matchScore?.team1Score) || score1;
+      score2 = findLatestInnings('team2', matchScore?.team2Score) || score2;
       currentBattingTeamId = Number(chunk.match(/"currBatTeamId":(\d+)/)?.[1]) || null;
       const venueInfo = readObject('venueInfo');
       if (venueInfo?.ground) venue = `${venueInfo.ground}${venueInfo.city ? `, ${venueInfo.city}` : ''}`;
+      else {
+        const ground = chunk.match(/"venueInfo":\{"id":\d+,"ground":"([^"\\]*(?:\\.[^"\\]*)*)","city":"([^"\\]*(?:\\.[^"\\]*)*)"/);
+        if (ground) venue = `${JSON.parse(`"${ground[1]}"`)}${ground[2] ? `, ${JSON.parse(`"${ground[2]}"`)}` : ''}`;
+      }
     }
 
     let category = 'League';
