@@ -14,6 +14,7 @@ const { Op } = require('sequelize');
 
 let workerInterval = null;
 let isProcessing = false;
+let lastFeedDiagnosticAt = 0;
 const missingFeedPolls = new Map();
 const MISSING_FEED_POLLS_BEFORE_END = 12;
 
@@ -111,6 +112,11 @@ async function processLiveIngestionTick() {
       liveMatchesFeed = await cricbuzzSource.fetchLiveFeed();
       hotStore.recordSourceResult('primary', true);
       hotStore.metrics.last_sync_time = new Date().toISOString();
+      if (Date.now() - lastFeedDiagnosticAt >= 60000) {
+        const confirmedLive = liveMatchesFeed.filter(item => item.status === 'live');
+        console.info(`[Ingestion] Cricbuzz primary feed: ${liveMatchesFeed.length} fixtures, ${confirmedLive.length} live with scores (${confirmedLive.map(item => item.raw_id).join(',') || 'none'}).`);
+        lastFeedDiagnosticAt = Date.now();
+      }
     } catch (err) {
       hotStore.recordSourceResult('primary', false, err.message);
       console.warn('⚠️ [Ingestion] Primary source fetch warning:', err.message);
