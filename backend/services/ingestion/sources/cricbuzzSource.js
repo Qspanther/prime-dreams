@@ -3,6 +3,31 @@
 
 const https = require('https');
 
+function extractJsonObject(text, fromIndex) {
+  const start = text.indexOf('{', fromIndex);
+  if (start === -1) return null;
+
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const char = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
+    else if (char === '{') depth += 1;
+    else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
 function fetchUrl(url) {
   return new Promise((resolve, reject) => {
     const options = {
@@ -91,23 +116,44 @@ async function fetchLiveFeed() {
     let score2 = { runs: 0, wickets: 0, overs: 0 };
     let currentBattingTeamId = null;
     let venue = null;
+    let scoreDataAvailable = false;
 
     const scoreIdx = fullStr.indexOf(`"matchId":${rawId}`);
     if (scoreIdx !== -1) {
       const nextMatchIdx = fullStr.indexOf('"matchId":', scoreIdx + 10);
       const chunk = fullStr.slice(scoreIdx, nextMatchIdx === -1 ? scoreIdx + 10000 : nextMatchIdx);
-      const findLatestInnings = (teamKey) => {
-        const teamMatch = chunk.match(new RegExp(`"${teamKey}Score":\\{([\\s\\S]*?)\\}(?=,\\"team[12]Score\\"|,\\"matchTeam\\"|,\\"matchVideos\\"|\\}\\}\\})`));
-        const scoreBlock = teamMatch?.[1] || chunk.slice(chunk.indexOf(`"${teamKey}Score"`));
-        const innings = [...scoreBlock.matchAll(/"inngs\d+":\{"inningsId":\d+,"runs":(\d+),"wickets":(\d+),"overs":([0-9.]+)/g)];
-        const latest = innings.at(-1);
-        return latest ? { runs: Number(latest[1]), wickets: Number(latest[2]), overs: Number(latest[3]) } : null;
+      const readObject = (key) => {
+        const keyIdx = chunk.indexOf(`"${key}":`);
+        if (keyIdx === -1) return null;
+        try {
+          const rawObject = extractJsonObject(chunk, keyIdx);
+          return rawObject ? JSON.parse(rawObject) : null;
+        } catch (_) {
+          return null;
+        }
       };
-      score1 = findLatestInnings('team1') || score1;
-      score2 = findLatestInnings('team2') || score2;
+
+      const findLatestInnings = (teamScore) => {
+        const innings = Object.values(teamScore || {})
+          .filter(item => item && Number.isFinite(Number(item.inningsId)) && Number.isFinite(Number(item.runs)))
+          .sort((a, b) => Number(a.inningsId) - Number(b.inningsId));
+        const latest = innings.at(-1);
+        if (!latest) return null;
+        scoreDataAvailable = true;
+        return {
+          runs: Number(latest.runs),
+          wickets: Number(latest.wickets) || 0,
+          overs: Number(latest.overs) || 0,
+          ...(latest.isDeclared ? { declared: true } : {}),
+        };
+      };
+
+      const matchScore = readObject('matchScore');
+      score1 = findLatestInnings(matchScore?.team1Score) || score1;
+      score2 = findLatestInnings(matchScore?.team2Score) || score2;
       currentBattingTeamId = Number(chunk.match(/"currBatTeamId":(\d+)/)?.[1]) || null;
-      const ground = chunk.match(/"venueInfo":\{"id":\d+,"ground":"([^"\\]*(?:\\.[^"\\]*)*)","city":"([^"\\]*(?:\\.[^"\\]*)*)"/);
-      if (ground) venue = `${JSON.parse(`"${ground[1]}"`)}${ground[2] ? `, ${JSON.parse(`"${ground[2]}"`)}` : ''}`;
+      const venueInfo = readObject('venueInfo');
+      if (venueInfo?.ground) venue = `${venueInfo.ground}${venueInfo.city ? `, ${venueInfo.city}` : ''}`;
     }
 
     let category = 'League';
@@ -122,7 +168,7 @@ async function fetchLiveFeed() {
       ? 'abandoned'
       : normalizedState === 'complete' || normalizedState === 'completed'
         ? 'completed'
-        : (normalizedState === 'in progress' || normalizedState === 'innings break') && !isPaused
+        : (normalizedState === 'in progress' || normalizedState === 'innings break') && !isPaused && scoreDataAvailable
           ? 'live'
           : 'upcoming';
     const startTimeMs = Number(String(startDate).replace(/^"|"$/g, '')) || null;
@@ -146,6 +192,7 @@ async function fetchLiveFeed() {
       start_time_ms: startTimeMs,
       end_time_ms: Number(String(endDate).replace(/^"|"$/g, '')) || null,
       current_batting_team_id: currentBattingTeamId,
+      score_data_available: scoreDataAvailable,
       status: matchStatus,
       match_format: `${format} • Cricket`,
       cricbuzz_status: status,

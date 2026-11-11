@@ -42,11 +42,13 @@ function createNormalizedScore(raw) {
       runs: Math.max(0, parseInt(teamAScore.runs, 10) || 0),
       wickets: Math.max(0, Math.min(10, parseInt(teamAScore.wickets, 10) || 0)),
       overs: Math.max(0, parseFloat(teamAScore.overs) || 0.0),
+      ...(teamAScore.declared ? { declared: true } : {}),
     },
     team_b: {
       runs: Math.max(0, parseInt(teamBScore.runs, 10) || 0),
       wickets: Math.max(0, Math.min(10, parseInt(teamBScore.wickets, 10) || 0)),
       overs: Math.max(0, parseFloat(teamBScore.overs) || 0.0),
+      ...(teamBScore.declared ? { declared: true } : {}),
     },
     current_striker: raw.current_striker ? {
       name: String(raw.current_striker.name || 'Striker').trim(),

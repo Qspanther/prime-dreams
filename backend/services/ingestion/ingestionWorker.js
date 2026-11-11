@@ -175,6 +175,9 @@ async function processLiveIngestionTick() {
       if (match.cricbuzz_id !== cricbuzzMatch.cricbuzz_id) {
         await match.update({ cricbuzz_id: cricbuzzMatch.cricbuzz_id });
       }
+      if (cricbuzzMatch.venue && match.venue !== cricbuzzMatch.venue) {
+        await match.update({ venue: cricbuzzMatch.venue });
+      }
 
       if (cricbuzzMatch.status !== 'live') {
         if (match.status !== cricbuzzMatch.status) {

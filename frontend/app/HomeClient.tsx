@@ -18,7 +18,7 @@ function getLiveScoreText(match: any, side: 'team_a' | 'team_b') {
   const isBatting = match.score_summary?.current_innings === side;
   const hasScore = Number(score.runs) > 0 || Number(score.wickets) > 0 || Number(score.overs) > 0;
   if (!hasScore && !isBatting) return 'Yet to bat';
-  return `${Number(score.runs) || 0}/${Number(score.wickets) || 0} (${Number(score.overs) || 0} ov)`;
+  return `${Number(score.runs) || 0}/${Number(score.wickets) || 0}${score.declared ? 'd' : ''} (${Number(score.overs) || 0} ov)`;
 }
 
 function getLiveScoreSummary(match: any) {
