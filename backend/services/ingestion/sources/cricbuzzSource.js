@@ -254,16 +254,25 @@ async function fetchLiveFeed() {
       const scorecardData = decodeNextData(scorecardHtml);
       const matchMarker = `"matchId":${match.raw_id}`;
       const matchIndex = scorecardData.indexOf(matchMarker);
-      if (matchIndex === -1) return;
+      if (matchIndex === -1) {
+        console.warn(`[Cricbuzz] Scorecard response for ${match.raw_id} had no hydrated match data (HTTP body ${scorecardHtml.length} chars).`);
+        return;
+      }
       const nextMatchIndex = scorecardData.indexOf('"matchId":', matchIndex + matchMarker.length);
       const chunk = scorecardData.slice(matchIndex, nextMatchIndex === -1 ? matchIndex + 30000 : nextMatchIndex);
       const scoreIndex = chunk.indexOf('"matchScore":');
-      if (scoreIndex === -1) return;
+      if (scoreIndex === -1) {
+        console.warn(`[Cricbuzz] Scorecard response for ${match.raw_id} had match metadata but no score block.`);
+        return;
+      }
       const matchScoreJson = extractJsonObject(chunk, scoreIndex);
       const matchScore = matchScoreJson ? JSON.parse(matchScoreJson) : null;
       const teamA = getLatestInnings(matchScore?.team1Score);
       const teamB = getLatestInnings(matchScore?.team2Score);
-      if (!teamA && !teamB) return;
+      if (!teamA && !teamB) {
+        console.warn(`[Cricbuzz] Scorecard response for ${match.raw_id} had an empty innings score block.`);
+        return;
+      }
       const teamAId = Number(chunk.match(/"team1":\{"teamId":(\d+)/)?.[1]);
       const teamBId = Number(chunk.match(/"team2":\{"teamId":(\d+)/)?.[1]);
       const currentBattingTeamId = Number(chunk.match(/"currBatTeamId":(\d+)/)?.[1]) || null;
@@ -283,6 +292,7 @@ async function fetchLiveFeed() {
       if (match.cricbuzz_state.toLowerCase() === 'in progress' && !/stumps|lunch|tea|rain|weather|delay|bad light|break/i.test(match.cricbuzz_status || '')) {
         match.status = 'live';
       }
+      console.info(`[Cricbuzz] Scorecard fallback loaded scores for match ${match.raw_id}.`);
       const venueIndex = chunk.indexOf('"venueInfo":');
       if (venueIndex !== -1) {
         const venueJson = extractJsonObject(chunk, venueIndex);
