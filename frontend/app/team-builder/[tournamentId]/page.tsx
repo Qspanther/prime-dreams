@@ -31,6 +31,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const searchParams = useSearchParams();
   const contestId = searchParams.get('contestId');
   const teamId = searchParams.get('teamId');
+  const h2hFlow = searchParams.get('h2h') === '1';
   const { tournamentId: matchId } = use(params);
   const { token } = useAuth();
 
@@ -283,10 +284,14 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
       };
       const res = editingTeamId
         ? await apiPut(`/matches/${matchId}/teams/${editingTeamId}`, payload, token)
-        : await apiPost(`/matches/${matchId}/teams`, { ...payload, contest_id: contestId || null }, token);
+        : await apiPost(`/matches/${matchId}/teams`, { ...payload, contest_id: h2hFlow ? null : contestId || null }, token);
 
       if (res?.success) {
-        router.push('/my-teams');
+        if (h2hFlow && !editingTeamId && res.team?.id) {
+          router.push(`/h2h/challenge?matchId=${matchId}&teamId=${res.team.id}`);
+        } else {
+          router.push('/my-teams');
+        }
       } else {
         setError(res?.error || 'Failed to submit team');
       }

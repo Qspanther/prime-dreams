@@ -21,6 +21,7 @@ router.get('/', authenticate, async (req, res) => {
 
     const notifications = await Notification.findAll({
       where: {
+        [Op.or]: [{ user_id: actualUserId }, { user_id: null }],
         createdAt: { [Op.gte]: thirtyDaysAgo }
       },
       order: [['createdAt', 'DESC']],

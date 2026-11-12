@@ -16,14 +16,20 @@ export default function H2HChallengePopup() {
   useEffect(() => {
     if (!token) return;
 
-    // Check for any pending H2H challenge on login/mount
-    apiGet('/h2h/pending', token)
-      .then((res) => {
-        if (res?.challenge) {
-          setChallenge(res.challenge);
-        }
-      })
-      .catch(() => {});
+    let active = true;
+    const checkPendingChallenge = async () => {
+      try {
+        const res = await apiGet('/h2h/pending', token);
+        if (active) setChallenge(res?.challenge || null);
+      } catch { /* retry on the next poll */ }
+    };
+
+    checkPendingChallenge();
+    const interval = setInterval(checkPendingChallenge, 10000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [token]);
 
   if (!challenge) return null;
@@ -110,7 +116,7 @@ export default function H2HChallengePopup() {
             </div>
           )}
 
-          {/* Action Buttons (§7: [Accept], [Give Up]) */}
+          {/* Action Buttons */}
           <div className="grid grid-cols-2 gap-3 pt-2">
             <button
               onClick={handleGiveUp}
@@ -118,7 +124,7 @@ export default function H2HChallengePopup() {
               className="prime-btn-secondary py-2.5 font-bold text-sm text-[#D1C7B7] hover:text-white"
             >
               <X className="w-4 h-4" />
-              Give Up
+              Decline challenge
             </button>
             <button
               onClick={handleAccept}

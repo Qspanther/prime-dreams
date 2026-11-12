@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Trophy, Swords, Users, Clock, Shield, Radio,
-  ArrowLeft, Search, Check, AlertCircle, Zap, Calendar, MapPin
+  ArrowLeft, AlertCircle, Zap, Calendar, MapPin
 } from 'lucide-react';
 import { apiGet, apiPost, resolveImageUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
@@ -91,16 +91,6 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
       fetchWinProbability();
     }
   }, [token, match?.status, matchId]);
-
-  // H2H Custom Challenge Form State
-  const [showH2HModal, setShowH2HModal] = useState(false);
-  const [h2hAmount, setH2HAmount] = useState('100');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [selectedOpponent, setSelectedOpponent] = useState<any>(null);
-  const [h2hSubmitting, setH2HSubmitting] = useState(false);
-  const [h2hMessage, setH2HMessage] = useState<string | null>(null);
-  const [h2hError, setH2HError] = useState<string | null>(null);
 
   // Private Contests State
   const [privateLoaded, setPrivateLoaded] = useState(false);
@@ -292,71 +282,6 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
       clearInterval(interval);
     };
   }, [matchId]);
-
-  // Search users for H2H opponent
-  useEffect(() => {
-    if (!searchQuery.trim() || !token) {
-      setSearchResults([]);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      try {
-        const res = await apiGet(`/users/search?q=${encodeURIComponent(searchQuery)}`, token);
-        if (res?.users) setSearchResults(res.users);
-      } catch (err) {
-        console.error(err);
-      }
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery, token]);
-
-  const handleSendH2HChallenge = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-    const amt = parseFloat(h2hAmount);
-    if (!amt || amt < 10) {
-      setH2HError('Minimum H2H challenge entry fee is ₹10.');
-      return;
-    }
-    if (!selectedOpponent) {
-      setH2HError('Please select an opponent to challenge.');
-      return;
-    }
-
-    setH2HSubmitting(true);
-    setH2HError(null);
-    setH2HMessage(null);
-
-    try {
-      const res = await apiPost('/h2h/challenge', {
-        match_id: matchId,
-        receiver_id: selectedOpponent.id,
-        opponent_id: selectedOpponent.id,
-        amount: amt,
-        entry_fee: amt,
-      }, token);
-
-      if (res?.success) {
-        setH2HMessage('✅ H2H Challenge sent! Opponent notified. Once accepted, your contest will be active.');
-        setTimeout(() => {
-          setShowH2HModal(false);
-          setH2HMessage(null);
-          setSelectedOpponent(null);
-          setSearchQuery('');
-          fetchMatchData();
-        }, 1500);
-      } else {
-        setH2HError(res?.error || 'Failed to send challenge. Please check your wallet balance.');
-      }
-    } catch (err: any) {
-      setH2HError(err?.message || 'Error initiating challenge. Check your wallet balance.');
-    } finally {
-      setH2HSubmitting(false);
-    }
-  };
 
   if (loading) {
     return (
@@ -683,7 +608,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         {/* Action Buttons */}
         <div className="flex items-center gap-3">
           <button
-            onClick={() => setShowH2HModal(true)}
+            onClick={() => router.push(`/team-builder/${matchId}?h2h=1`)}
             className="prime-btn-dark-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"
           >
             <Swords className="w-4 h-4 text-[#D97706]" />
@@ -1058,10 +983,10 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                         {c.type === 'practice' ? 'Practice • No cash risk' : /rookie/i.test(c.title || '') ? 'Rookie • Beginner' : c.type === 'multi_battlefield' ? 'Auto-clones' : 'Guaranteed'}
                       </span>
                       <Link
-                        href={`/team-builder/${matchId}?contestId=${c.id}`}
+                        href={c.type === 'h2h' ? `/team-builder/${matchId}?h2h=1` : `/team-builder/${matchId}?contestId=${c.id}`}
                         className="prime-btn-3d !py-2 !px-4 text-xs font-black uppercase tracking-wider"
                       >
-                        {c.type === 'practice' || Number(c.entry_fee) === 0 ? 'Join Free' : `Join Contest ₹${c.entry_fee}`}
+                        {c.type === 'h2h' ? 'Create team & challenge' : c.type === 'practice' || Number(c.entry_fee) === 0 ? 'Join Free' : `Join Contest ₹${c.entry_fee}`}
                       </Link>
                     </div>
                   </div>
@@ -1189,118 +1114,6 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         </div>
       )}
 
-      {/* H2H Challenge Modal */}
-      {showH2HModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md prime-card-3d p-6 space-y-5 border-2 border-[#2563EB] shadow-2xl bg-white text-[#0F172A]">
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
-              <div className="flex items-center gap-2">
-                <Swords className="w-5 h-5 text-[#2563EB]" />
-                <h3 className="font-black text-[#0F172A] text-base">H2H 1-on-1 Challenge</h3>
-              </div>
-              <button onClick={() => setShowH2HModal(false)} className="text-[#64748B] hover:text-[#0F172A]">✕</button>
-            </div>
-
-            {h2hError && (
-              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold flex items-center gap-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                <span>{h2hError}</span>
-              </div>
-            )}
-            {h2hMessage && (
-              <div className="p-3 rounded-xl bg-green-50 border border-green-200 text-green-700 text-xs font-bold flex items-center gap-2">
-                <Check className="w-4 h-4 shrink-0 text-green-500" />
-                <span>{h2hMessage}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSendH2HChallenge} className="space-y-4">
-              <div>
-                <label className="block text-xs font-black text-[#1E3A8A] uppercase mb-1.5">
-                  Set Challenge Amount (₹)
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2.5 text-base font-black text-[#2563EB]">₹</span>
-                  <input
-                    type="number"
-                    min="10"
-                    step="10"
-                    value={h2hAmount}
-                    onChange={(e) => setH2HAmount(e.target.value)}
-                    className="w-full pl-8 pr-3 py-2.5 rounded-xl bg-[#F8FAFC] border-2 border-[#CBD5E1] text-[#0F172A] text-base font-black focus:border-[#2563EB] outline-none"
-                    required
-                  />
-                </div>
-                <p className="text-[11px] text-[#64748B] font-bold mt-1">
-                  Winner takes 85% of total pool (₹{(parseFloat(h2hAmount || '0') * 2 * 0.85).toFixed(0)}), platform keeps 15%.
-                </p>
-              </div>
-
-              <div>
-                <label className="block text-xs font-black text-[#1E3A8A] uppercase mb-1.5">
-                  Search Opponent (Username or Email)
-                </label>
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-3 text-[#64748B]" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Type username..."
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-[#F8FAFC] border-2 border-[#CBD5E1] text-[#0F172A] text-xs font-bold focus:border-[#2563EB] outline-none"
-                  />
-                </div>
-
-                {searchResults.length > 0 && (
-                  <div className="mt-2 max-h-40 overflow-y-auto space-y-1 rounded-xl bg-white border border-[#CBD5E1] p-1.5 shadow-sm">
-                    {searchResults.map((opp) => (
-                      <button
-                        key={opp.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedOpponent(opp);
-                          setSearchQuery(opp.username);
-                          setSearchResults([]);
-                        }}
-                        className={`w-full p-2 text-left rounded-lg text-xs font-bold flex items-center justify-between ${
-                          selectedOpponent?.id === opp.id ? 'bg-[#2563EB] text-white' : 'hover:bg-[#F1F5F9] text-[#0F172A]'
-                        }`}
-                      >
-                        <span>@{opp.username}</span>
-                        <span className="text-[10px] text-[#64748B]">{opp.email}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {selectedOpponent && (
-                  <div className="mt-2 p-2.5 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-between text-xs">
-                    <span className="text-[#0F172A] font-black">Challenging: @{selectedOpponent.username}</span>
-                    <span className="text-[#2563EB] font-black">Ready</span>
-                  </div>
-                )}
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowH2HModal(false)}
-                  className="prime-btn-dark-3d text-xs !py-2 !px-4"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={h2hSubmitting}
-                  className="prime-btn-3d text-xs !py-2 !px-5"
-                >
-                  {h2hSubmitting ? 'Delivering...' : `Send Challenge (₹${h2hAmount})`}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

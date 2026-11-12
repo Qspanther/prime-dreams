@@ -12,7 +12,7 @@ const sequelize = require('../db');
 const { authenticate, isAdmin } = require('../middleware/auth');
 const config = require('../config');
 const { syncLiveMatch, getCachedMatchLive } = require('../services/cricbuzzService');
-const { createH2HChallenge, acceptH2HChallenge, rejectH2HChallenge, handleBattlefieldFill } = require('../services/contestService');
+const { createH2HChallenge, acceptH2HChallenge, rejectH2HChallenge, handleBattlefieldFill, chargeWalletEntry } = require('../services/contestService');
 const { deleteMatchPermanently } = require('../services/cricketDeleteHelper');
 const dns = require('dns').promises;
 
@@ -540,7 +540,7 @@ router.get('/matches/:id/win-probability', authenticate, async (req, res) => {
  * POST /api/matches/:id/teams
  * Create 11-player fantasy team (§4)
  */
-async function validateCricketSelection(match, player_ids, captain_id, vice_captain_id) {
+async function validateCricketSelection(match, player_ids, captain_id, vice_captain_id, transaction = undefined) {
   if (!Array.isArray(player_ids) || player_ids.length !== 11) {
     return { error: 'You must select exactly 11 players for your team.' };
   }
@@ -553,6 +553,7 @@ async function validateCricketSelection(match, player_ids, captain_id, vice_capt
 
   const players = await CricketPlayer.findAll({
     where: { id: { [Op.in]: player_ids }, match_id: match.id },
+    transaction,
   });
 
   if (players.length !== 11) {
@@ -591,69 +592,73 @@ function matchLockTime(match) {
 }
 
 router.post('/matches/:id/teams', authenticate, async (req, res) => {
+  let transaction;
+  let filledContest = null;
   try {
-    const match = await CricketMatch.findByPk(req.params.id);
-    if (!match) return res.status(404).json({ error: 'Match not found' });
+    transaction = await sequelize.transaction();
+    const match = await CricketMatch.findByPk(req.params.id, { transaction });
+    if (!match) {
+      await transaction.rollback();
+      return res.status(404).json({ error: 'Match not found' });
+    }
 
     // Lock check (§15)
     const now = new Date();
     if (now >= matchLockTime(match)) {
+      await transaction.rollback();
       return res.status(400).json({ error: 'Contest selection is locked. Match starts shortly!' });
     }
 
     // Max 6 teams per user per match (Dream11-style)
-    const myTeamCount = await CricketTeam.count({ where: { user_id: req.user.id, match_id: match.id } });
+    const myTeamCount = await CricketTeam.count({ where: { user_id: req.user.id, match_id: match.id }, transaction });
     if (myTeamCount >= 6) {
+      await transaction.rollback();
       return res.status(400).json({ error: 'Maximum 6 teams allowed per match.' });
     }
 
     const { team_name, player_ids, captain_id, vice_captain_id, contest_id } = req.body;
 
-    const validation = await validateCricketSelection(match, player_ids, captain_id, vice_captain_id);
+    const validation = await validateCricketSelection(match, player_ids, captain_id, vice_captain_id, transaction);
     if (validation.error) {
+      await transaction.rollback();
       return res.status(400).json({ error: validation.error });
     }
     const players = validation.players;
 
-    // Handle contest entry fee deduction if contest_id provided
     let contest = null;
     if (contest_id) {
-      contest = await MatchContest.findByPk(contest_id);
-      if (contest && contest.filled_spots >= contest.total_spots) {
+      contest = await MatchContest.findByPk(contest_id, { transaction, lock: transaction.LOCK.UPDATE });
+      if (!contest) {
+        await transaction.rollback();
+        return res.status(404).json({ error: 'Contest not found.' });
+      }
+      if (contest.match_id !== match.id) {
+        await transaction.rollback();
+        return res.status(400).json({ error: 'Contest does not belong to this match.' });
+      }
+      if (!contest.is_active || contest.status !== 'open') {
+        await transaction.rollback();
+        return res.status(400).json({ error: `Contest is ${contest.status}.` });
+      }
+      if (contest.filled_spots >= contest.total_spots) {
+        await transaction.rollback();
         return res.status(400).json({ error: 'Contest is full.' });
       }
-      if (contest && contest.entry_fee > 0) {
-        const wallet = await Wallet.findOne({ where: { user_id: req.user.id } });
-        if (!wallet || wallet.balance < contest.entry_fee) {
-          return res.status(400).json({ error: `Insufficient wallet balance. Contest entry fee is ₹${contest.entry_fee}.` });
+
+      if (contest.type === 'h2h') {
+        const challenge = await H2HChallenge.findOne({ where: { contest_id: contest.id }, transaction, lock: transaction.LOCK.UPDATE });
+        if (!challenge || challenge.status !== 'accepted' || challenge.receiver_id !== req.user.id || challenge.receiver_team_id) {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'Accept an H2H challenge before registering a team in this contest.' });
         }
-        // Bucket deduction: bonus first, then winnings, then deposit
-        const fee = parseFloat(contest.entry_fee);
-        const bonus = parseFloat(wallet.bonus_balance) || 0;
-        const winnings = parseFloat(wallet.winnings_balance) || 0;
-        const deposit = parseFloat(wallet.deposit_balance) || 0;
-        let remaining = fee;
-        const useBonus = Math.min(bonus, remaining); remaining -= useBonus;
-        const useWinnings = Math.min(winnings, remaining); remaining -= useWinnings;
-        const useDeposit = Math.min(deposit, remaining); remaining -= useDeposit;
-        await wallet.update({
-          bonus_balance: bonus - useBonus,
-          winnings_balance: winnings - useWinnings,
-          deposit_balance: deposit - useDeposit,
-          balance: parseFloat(wallet.balance) - fee,
-        });
-        await require('../db/models').Transaction.create({
-          wallet_id: wallet.id,
-          amount: -contest.entry_fee,
-          type: 'contest_entry',
-          description: `Entry fee for "${contest.title}"`,
-        });
-        await contest.update({ filled_spots: contest.filled_spots + 1 });
-        await handleBattlefieldFill(contest);
+      }
+
+      const fee = Number(contest.entry_fee) || 0;
+      if (fee > 0) {
+        await chargeWalletEntry(req.user.id, fee, `Entry fee for "${contest.title}"`, transaction);
       }
     }
 
-    // Create Team
     const newTeam = await CricketTeam.create({
       user_id: req.user.id,
       match_id: match.id,
@@ -662,26 +667,48 @@ router.post('/matches/:id/teams', authenticate, async (req, res) => {
       captain_id,
       vice_captain_id,
       total_points: 0,
-    });
+    }, { transaction });
 
-    // Create Team Players mapping
-    for (const p of players) {
-      await TeamPlayer.create({
+    await TeamPlayer.bulkCreate(players.map(p => ({
         team_id: newTeam.id,
         player_id: p.id,
         is_captain: p.id === captain_id,
         is_vice_captain: p.id === vice_captain_id,
         points_earned: 0,
-      });
+    })), { transaction });
+
+    if (contest) {
+      const filledSpots = (Number(contest.filled_spots) || 0) + 1;
+      const isFull = filledSpots >= Number(contest.total_spots);
+      await contest.update({
+        filled_spots: filledSpots,
+        ...(isFull ? { status: 'locked' } : {}),
+      }, { transaction });
+      if (contest.type === 'h2h') {
+        await H2HChallenge.update(
+          { receiver_team_id: newTeam.id },
+          { where: { contest_id: contest.id, receiver_id: req.user.id, status: 'accepted' }, transaction }
+        );
+      }
+      if (contest.type === 'multi_battlefield' && isFull) filledContest = contest;
     }
 
+    await transaction.commit();
+    if (filledContest) {
+      try { await handleBattlefieldFill(filledContest); }
+      catch (error) { console.error('[Contest] Filled-room rollover failed:', error.message); }
+    }
     res.json({
       success: true,
-      message: 'Team successfully submitted! Best of luck 🏏',
+      message: contest
+        ? 'Team entered into the contest successfully! Best of luck 🏏'
+        : 'Team successfully submitted! Best of luck 🏏',
       team: newTeam,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (transaction && !transaction.finished) await transaction.rollback();
+    const isDatabaseError = String(err.name || '').startsWith('Sequelize');
+    res.status(isDatabaseError ? 500 : 400).json({ error: err.message });
   }
 });
 
@@ -1023,6 +1050,7 @@ router.post('/h2h/challenge', authenticate, async (req, res) => {
     const team_id = req.body.team_id || null;
 
     if (!receiver_id) return res.status(400).json({ error: 'Challenger opponent is required' });
+    if (!team_id) return res.status(400).json({ error: 'Create your team before sending an H2H challenge.' });
     if (!amount || Number(amount) < 10) return res.status(400).json({ error: 'Minimum H2H amount is ₹10' });
 
     const receiver = await User.findByPk(receiver_id);
