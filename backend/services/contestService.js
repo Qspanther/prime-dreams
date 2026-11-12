@@ -4,6 +4,7 @@
 const { MatchContest, CricketMatch, H2HChallenge, Wallet, Transaction, Notification } = require('../db/models');
 const CricketTeam = require('../db/models/CricketTeam');
 const sequelize = require('../db');
+const { Op } = require('sequelize');
 
 async function chargeWalletEntry(userId, amount, description, transaction) {
   const fee = Math.round((Number(amount) || 0) * 100) / 100;
@@ -56,14 +57,14 @@ async function chargeWalletEntry(userId, amount, description, transaction) {
 async function checkContestLocks() {
   try {
     const now = new Date();
-    const upcomingMatches = await CricketMatch.findAll({
-      where: { status: 'upcoming' },
+    const lockableMatches = await CricketMatch.findAll({
+      where: { status: { [Op.in]: ['upcoming', 'live', 'completed'] } },
       include: [{ model: MatchContest, as: 'contests' }],
     });
 
-    for (const match of upcomingMatches) {
+    for (const match of lockableMatches) {
       const lockTime = new Date(match.start_time.getTime() - (match.lock_time_minutes || 15) * 60000);
-      if (now >= lockTime) {
+      if (now >= lockTime || ['live', 'completed'].includes(match.status)) {
         // Lock all open contests for this match
         for (const contest of match.contests) {
           if (contest.status === 'open') {

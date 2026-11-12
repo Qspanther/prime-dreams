@@ -36,6 +36,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const { token } = useAuth();
 
   const [match, setMatch] = useState<any>(null);
+  const [lockClockNow, setLockClockNow] = useState(() => Date.now());
   const [players, setPlayers] = useState<Player[]>([]);
   const [selectedRole, setSelectedRole] = useState<'WK' | 'BAT' | 'AR' | 'BOWL'>('WK');
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
@@ -77,6 +78,18 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   };
 
   useEffect(() => { fetchMyTeams(); }, [matchId, token]);
+
+  useEffect(() => {
+    if (!match?.start_time) return;
+    const lockAt = new Date(match.start_time).getTime() - (match.lock_time_minutes || 15) * 60000;
+    const delay = lockAt - Date.now();
+    if (delay <= 0) {
+      setLockClockNow(Date.now());
+      return;
+    }
+    const timer = setTimeout(() => setLockClockNow(Date.now()), delay + 25);
+    return () => clearTimeout(timer);
+  }, [match?.start_time, match?.lock_time_minutes]);
 
   const handleSelectExistingTeam = async (t: any) => {
     try {
@@ -163,7 +176,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
     : null;
   const isLocked = !!match && (
     match.is_locked || match.status === 'live' || match.status === 'completed' ||
-    (lockTime !== null && new Date() >= lockTime)
+    (lockTime !== null && lockClockNow >= lockTime.getTime())
   );
 
   const selectedPlayers = players.filter((p) => selectedPlayerIds.includes(p.id));

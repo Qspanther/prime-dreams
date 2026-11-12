@@ -11,6 +11,7 @@ import CategoryBadge from '../components/ui/CategoryBadge';
 export default function MyTeamsPage() {
   const { token, isAuthenticated } = useAuth();
   const [teams, setTeams] = useState<any[]>([]);
+  const [lockClockNow, setLockClockNow] = useState(() => Date.now());
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
 
@@ -25,6 +26,25 @@ export default function MyTeamsPage() {
       .catch((err) => console.error(err))
       .finally(() => setLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    const lockTimes = teams
+      .map((team) => {
+        const match = team.match;
+        if (!match?.start_time || match.status !== 'upcoming') return null;
+        return new Date(match.start_time).getTime() - (match.lock_time_minutes || 15) * 60000;
+      })
+      .filter((time): time is number => time !== null);
+    const now = Date.now();
+    const dueLockTime = Math.max(0, ...lockTimes.filter(time => time <= now));
+    if (dueLockTime > lockClockNow) setLockClockNow(dueLockTime);
+
+    const nextLockTime = lockTimes.filter(time => time > now).sort((a, b) => a - b)[0];
+    if (!nextLockTime) return;
+
+    const timer = setTimeout(() => setLockClockNow(Date.now()), nextLockTime - Date.now() + 25);
+    return () => clearTimeout(timer);
+  }, [teams, lockClockNow]);
 
   const filteredTeams = teams.filter((t) => {
     if (selectedCategory === 'All') return true;
@@ -86,7 +106,7 @@ export default function MyTeamsPage() {
               ? new Date(new Date(match.start_time).getTime() - (match.lock_time_minutes || 15) * 60000)
               : null;
             const teamLocked = !match || match.is_locked || match.status === 'live' ||
-              match.status === 'completed' || (matchLock !== null && new Date() >= matchLock);
+              match.status === 'completed' || (matchLock !== null && lockClockNow >= matchLock.getTime());
 
             return (
               <div

@@ -147,7 +147,7 @@ router.get('/matches', async (req, res) => {
     const now = new Date();
     const formatted = matches.map(m => {
       const lockTime = new Date(m.start_time.getTime() - (m.lock_time_minutes || 15) * 60000);
-      const isLocked = now >= lockTime;
+      const isLocked = isMatchLocked(m, now);
       const totalPrizePool = (m.contests || []).reduce((sum, c) => sum + (c.prize_pool || 0), 0);
       const minEntry = (m.contests || []).reduce((min, c) => Math.min(min, c.entry_fee || 0), 9999);
 
@@ -437,7 +437,7 @@ router.get('/matches/:id', async (req, res) => {
 
     const now = new Date();
     const lockTime = new Date(match.start_time.getTime() - (match.lock_time_minutes || 15) * 60000);
-    const isLocked = now >= lockTime;
+    const isLocked = isMatchLocked(match, now);
 
     // ─── Practice (free) contest: auto-seed one per upcoming match ───
     let contests = match.contests || [];
@@ -743,6 +743,10 @@ function matchLockTime(match) {
   return new Date(match.start_time.getTime() - (match.lock_time_minutes || 15) * 60000);
 }
 
+function isMatchLocked(match, now = new Date()) {
+  return now >= matchLockTime(match) || ['live', 'completed'].includes(match.status);
+}
+
 router.post('/matches/:id/teams', authenticate, async (req, res) => {
   let transaction;
   let filledContest = null;
@@ -756,7 +760,7 @@ router.post('/matches/:id/teams', authenticate, async (req, res) => {
 
     // Lock check (§15)
     const now = new Date();
-    if (now >= matchLockTime(match)) {
+    if (isMatchLocked(match, now)) {
       await transaction.rollback();
       return res.status(400).json({ error: 'Contest selection is locked. Match starts shortly!' });
     }
@@ -919,7 +923,7 @@ router.post('/matches/:id/teams/:teamId/clone', authenticate, async (req, res) =
     if (team.user_id !== req.user.id) return res.status(403).json({ error: 'Not your team' });
 
     const now = new Date();
-    if (now >= matchLockTime(match)) {
+    if (isMatchLocked(match, now)) {
       return res.status(400).json({ error: 'Contest is locked. Teams can no longer be created.' });
     }
 
@@ -972,7 +976,7 @@ router.post('/matches/:id/teams/:teamId/switch-contest', authenticate, async (re
     if (team.user_id !== req.user.id) { await t.rollback(); return res.status(403).json({ error: 'Not your team' }); }
 
     const now = new Date();
-    if (now >= matchLockTime(match)) {
+    if (isMatchLocked(match, now)) {
       await t.rollback();
       return res.status(400).json({ error: 'Contest is locked. Teams can no longer be switched.' });
     }
@@ -1097,7 +1101,7 @@ router.put('/matches/:id/teams/:teamId', authenticate, async (req, res) => {
     }
 
     const now = new Date();
-    if (now >= matchLockTime(match) || match.status === 'live' || match.status === 'completed') {
+    if (isMatchLocked(match, now)) {
       return res.status(400).json({ error: 'Contest is locked. Team can no longer be edited.' });
     }
 
@@ -1325,7 +1329,7 @@ router.post('/matches/:matchId/private-contests', authenticate, async (req, res)
     if (!match) return res.status(404).json({ error: 'Match not found' });
 
     const now = new Date();
-    if (now >= new Date(match.start_time.getTime() - (match.lock_time_minutes || 15) * 60000)) {
+    if (isMatchLocked(match, now)) {
       return res.status(400).json({ error: 'Contest creation is locked. Match starts shortly!' });
     }
 
@@ -1407,7 +1411,7 @@ router.get('/contests/private/:code', authenticate, async (req, res) => {
     if (contest.filled_spots >= contest.total_spots) return res.status(400).json({ error: 'Contest is full' });
 
     const now = new Date();
-    if (now >= new Date(match.start_time.getTime() - (match.lock_time_minutes || 15) * 60000)) {
+    if (isMatchLocked(match, now)) {
       return res.status(400).json({ error: 'Contest is locked. Match starts shortly!' });
     }
 

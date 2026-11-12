@@ -329,7 +329,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
               <span className="w-3.5 h-3.5 rounded-full bg-[#EF4444] shadow-[0_0_12px_rgba(239,68,68,0.6)] animate-ping" />
               <span className="text-[#EF4444]">Live Cricket Arena</span>
               <span className="text-xs text-white font-black bg-[#2563EB] px-3 py-1 rounded-full border border-[#93C5FD] shadow-sm">
-                {liveMatches.length} In-Play
+                {liveMatches.length} In-Play · ↔ Swipe
               </span>
             </h3>
             <span className="text-xs text-emerald-700 font-mono font-black flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-300">
@@ -338,13 +338,12 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
             </span>
           </div>
 
-          {/* 3 Columns Grid on Desktop */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 touch-pan-x">
             {liveMatches.map((m) => (
               <Link
                 key={m.id}
                 href={`/match/${m.id}`}
-                className="prime-card-3d p-5 flex flex-col justify-between group border-2 border-[#CBD5E1] hover:border-[#2563EB]"
+                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3.5 flex flex-col justify-between group border border-emerald-300 shadow-[0_0_22px_rgba(34,197,94,0.20)] hover:border-emerald-500 hover:shadow-[0_0_28px_rgba(34,197,94,0.34)]"
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -354,6 +353,18 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                       LIVE
                     </span>
                   </div>
+
+                  {resolveImageUrl(m.match_poster) && (
+                    <div className="relative h-28 w-full overflow-hidden rounded-xl border border-emerald-300 bg-emerald-50 shadow-[0_0_18px_rgba(34,197,94,0.32)]">
+                      <img
+                        src={resolveImageUrl(m.match_poster)}
+                        alt={m.title || `${m.team_a} vs ${m.team_b}`}
+                        className="h-full w-full object-cover"
+                        onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                      />
+                      <span className="absolute bottom-1.5 left-2 rounded bg-emerald-950/75 px-2 py-0.5 text-[9px] font-black text-white">LIVE MATCH</span>
+                    </div>
+                  )}
 
                   {/* Team A vs Team B Live Scores */}
                   <div className="grid grid-cols-2 gap-3 items-center py-2">
@@ -428,15 +439,15 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
             <span className="text-[#2563EB]">⚡ Upcoming Matches</span>
             <span className="text-xs text-[#64748B] font-bold">(Next 6 Days)</span>
           </h3>
-          <span className="text-xs font-black text-[#334155] px-3 py-1 rounded-full bg-white border border-[#CBD5E1] shadow-sm">
-            {upcomingMatches.length} Matches Scheduled
+          <span className="text-xs font-black text-[#334155] px-3 py-1 rounded-full bg-white border border-[#CBD5E1] shadow-sm flex items-center gap-2">
+            {upcomingMatches.length} Matches <span aria-hidden="true">↔ Swipe</span>
           </span>
         </div>
 
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 touch-pan-x">
             {[1, 2, 3].map((n) => (
-              <div key={n} className="h-48 rounded-2xl bg-white/70 animate-pulse border-2 border-[#CBD5E1]" />
+              <div key={n} className="h-48 min-w-[270px] max-w-[300px] shrink-0 snap-start rounded-2xl bg-white/70 animate-pulse border-2 border-[#CBD5E1]" />
             ))}
           </div>
         ) : upcomingMatches.length === 0 ? (
@@ -444,12 +455,11 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
             No upcoming matches in this category for the next 6 days.
           </div>
         ) : (
-          /* 3 COLUMNS RESPONSIVE GRID ON DESKTOP */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 touch-pan-x">
             {upcomingMatches.map((m) => (
               <div
                 key={m.id}
-                className="prime-card-3d p-5 flex flex-col justify-between group border-2 border-[#CBD5E1] hover:border-[#2563EB]"
+                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3.5 flex flex-col justify-between group border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)]"
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -462,7 +472,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
                   {/* Match Poster Banner if uploaded */}
                   {resolveImageUrl(m.match_poster) && (
-                    <div className="relative aspect-[3/2] w-full rounded-xl overflow-hidden mb-3 border border-[#CBD5E1] shadow-xs">
+                    <div className="relative h-28 w-full rounded-xl overflow-hidden mb-3 border border-amber-300 shadow-[0_0_16px_rgba(245,158,11,0.28)]">
                       <img
                         src={resolveImageUrl(m.match_poster)}
                         alt={m.title}
@@ -513,16 +523,17 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                   <div className="flex items-center gap-2">
                     <Link
                       href={`/team-builder/${m.id}`}
-                      className="prime-btn-dark-3d !py-1.5 !px-3 !text-xs font-black"
+                      className={`prime-btn-dark-3d !py-1.5 !px-3 !text-xs font-black ${m.is_locked ? 'pointer-events-none opacity-45' : ''}`}
+                      aria-disabled={m.is_locked}
+                      tabIndex={m.is_locked ? -1 : 0}
                     >
                       XI
                     </Link>
-                    <Link
-                      href={`/match/${m.id}`}
-                      className="prime-btn-3d !py-1.5 !px-4 !text-xs font-black uppercase tracking-wider"
-                    >
-                      Join
-                    </Link>
+                    {m.is_locked ? (
+                      <span className="rounded-xl border border-red-300 bg-red-50 px-3 py-1.5 text-[10px] font-black text-red-700">🔒 LOCKED</span>
+                    ) : (
+                      <Link href={`/match/${m.id}`} className="prime-btn-3d !py-1.5 !px-4 !text-xs font-black uppercase tracking-wider">Join</Link>
+                    )}
                   </div>
                 </div>
               </div>
@@ -542,17 +553,16 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
               <span className="text-[#0F172A]">Coming Soon</span>
               <span className="text-xs text-[#64748B] font-bold">(Scheduled &gt; 6 Days)</span>
             </h3>
-            <span className="text-xs font-black text-[#334155] px-3 py-1 rounded-full bg-white border border-[#CBD5E1] shadow-sm">
-              {comingSoonMatches.length} Matches
+            <span className="text-xs font-black text-[#334155] px-3 py-1 rounded-full bg-white border border-[#CBD5E1] shadow-sm flex items-center gap-2">
+              {comingSoonMatches.length} Matches <span aria-hidden="true">↔ Swipe</span>
             </span>
           </div>
 
-          {/* 3 COLUMNS RESPONSIVE GRID ON DESKTOP */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 touch-pan-x">
             {comingSoonMatches.map((m) => (
               <div
                 key={m.id}
-                className="prime-card-3d p-5 flex flex-col justify-between space-y-3 border-2 border-[#CBD5E1] hover:border-[#2563EB]"
+                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3.5 flex flex-col justify-between space-y-3 border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)]"
               >
                 <div className="flex items-center justify-between">
                   <CategoryBadge category={m.category} size="xs" />
@@ -563,7 +573,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
                 {/* Match Poster Banner if uploaded */}
                 {resolveImageUrl(m.match_poster) && (
-                  <div className="relative aspect-[3/2] w-full rounded-xl overflow-hidden border border-[#CBD5E1]">
+                  <div className="relative h-28 w-full rounded-xl overflow-hidden border border-amber-300 shadow-[0_0_16px_rgba(245,158,11,0.28)]">
                     <img
                       src={resolveImageUrl(m.match_poster)}
                       alt={m.title}

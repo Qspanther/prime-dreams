@@ -4,7 +4,7 @@ import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  Trophy, Swords, Users, Clock, Shield, Radio,
+  Trophy, Swords, Users, Clock, Shield, Radio, Lock,
   ArrowLeft, AlertCircle, Zap, Calendar, MapPin
 } from 'lucide-react';
 import { apiGet, apiPost, resolveImageUrl } from '../../lib/api';
@@ -950,15 +950,21 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
             {filteredContests.map((c: any) => {
               const spotsLeft = Math.max(0, (c.total_spots || 100) - (c.filled_spots || 0));
               const percentFilled = Math.min(100, Math.round(((c.filled_spots || 0) / (c.total_spots || 100)) * 100));
+              const contestLocked = c.status !== 'open' || match.is_locked || ['live', 'completed'].includes(match.status);
+              const contestFull = spotsLeft === 0;
 
               return (
                 <div key={c.id} className="contest-card-3d p-5 flex flex-col justify-between">
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <CategoryBadge category={match.category} size="xs" />
-                      <span className="font-mono font-black text-sm text-[#1D4ED8] bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-[#BFDBFE]">
-                        {c.type === 'practice' || Number(c.entry_fee) === 0 ? 'FREE' : `₹${c.entry_fee}`}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        {contestLocked && <span className="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-2 py-1 text-[9px] font-black uppercase text-red-700"><Lock className="h-3 w-3" />Contest Locked</span>}
+                        {contestFull && !contestLocked && <span className="rounded-lg border border-slate-300 bg-slate-100 px-2 py-1 text-[9px] font-black uppercase text-slate-600">Full</span>}
+                        <span className="font-mono font-black text-sm text-[#1D4ED8] bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-[#BFDBFE]">
+                          {c.type === 'practice' || Number(c.entry_fee) === 0 ? 'FREE' : `₹${c.entry_fee}`}
+                        </span>
+                      </div>
                     </div>
 
                     <h4 className="font-black text-[#0F172A] text-base mb-1">{c.title}</h4>
@@ -991,12 +997,18 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                       <span className="text-[11px] text-[#64748B] font-bold">
                         {c.type === 'practice' ? 'Practice • No cash risk' : /rookie/i.test(c.title || '') ? 'Rookie • Beginner' : c.type === 'multi_battlefield' ? 'Auto-clones' : 'Guaranteed'}
                       </span>
-                      <Link
-                        href={c.type === 'h2h' ? `/team-builder/${matchId}?h2h=1` : `/team-builder/${matchId}?contestId=${c.id}`}
-                        className="prime-btn-3d !py-2 !px-4 text-xs font-black uppercase tracking-wider"
-                      >
-                        {c.type === 'h2h' ? 'Create team & challenge' : c.type === 'practice' || Number(c.entry_fee) === 0 ? 'Join Free' : `Join Contest ₹${c.entry_fee}`}
-                      </Link>
+                      {contestLocked || contestFull ? (
+                        <button type="button" disabled className="cursor-not-allowed rounded-xl border border-slate-300 bg-slate-100 px-4 py-2 text-[10px] font-black uppercase text-slate-500">
+                          {contestLocked ? 'Contest Locked' : 'Contest Full'}
+                        </button>
+                      ) : (
+                        <Link
+                          href={c.type === 'h2h' ? `/team-builder/${matchId}?h2h=1` : `/team-builder/${matchId}?contestId=${c.id}`}
+                          className="prime-btn-3d !py-2 !px-4 text-xs font-black uppercase tracking-wider"
+                        >
+                          {c.type === 'h2h' ? 'Create team & challenge' : c.type === 'practice' || Number(c.entry_fee) === 0 ? 'Join Free' : `Join Contest ₹${c.entry_fee}`}
+                        </Link>
+                      )}
                     </div>
                   </div>
                 </div>
