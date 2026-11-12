@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Radio, ChevronRight, X } from 'lucide-react';
+import { Radio, ChevronRight, X, Trophy } from 'lucide-react';
 import CategoryBadge from './CategoryBadge';
 import { apiGet } from '../../lib/api';
 
@@ -85,10 +85,8 @@ export default function LiveMatchSwitcher({
             liveMatches.map((m) => {
               const isActive = m.id === activeMatchId;
               return (
-                <Link
+                <div
                   key={m.id}
-                  href={`/match/${m.id}`}
-                  onClick={onClose}
                   className={`block p-4 rounded-xl border-2 transition-all cursor-pointer ${
                     isActive
                       ? 'bg-gradient-to-r from-[#FF1744]/25 to-[#000000] border-[#FF1744] shadow-[0_0_15px_rgba(255,23,68,0.4)]'
@@ -103,7 +101,7 @@ export default function LiveMatchSwitcher({
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between">
+                  <Link href={`/match/${m.id}`} onClick={onClose} className="flex items-center justify-between">
                     <div>
                       <h4 className="font-black text-white text-base">{m.title}</h4>
                       <p className="text-xs text-[#FFD700] font-mono font-bold mt-0.5">
@@ -111,8 +109,17 @@ export default function LiveMatchSwitcher({
                       </p>
                     </div>
                     <ChevronRight className="w-5 h-5 text-[#A3A3A3]" />
+                  </Link>
+                  <div className="mt-3 flex justify-end">
+                    <Link
+                      href={`/match/${m.id}/leaderboard`}
+                      onClick={onClose}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-[#FFD700]/40 bg-[#FFD700]/10 px-3 py-1.5 text-xs font-black text-[#FFD700] hover:bg-[#FFD700]/20"
+                    >
+                      <Trophy className="w-3.5 h-3.5" /> Live leaderboard
+                    </Link>
                   </div>
-                </Link>
+                </div>
               );
             })
           )}

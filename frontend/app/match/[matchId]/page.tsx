@@ -606,7 +606,16 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          {isLive && (
+            <Link
+              href={`/match/${matchId}/leaderboard`}
+              className="prime-btn-gold-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"
+            >
+              <Trophy className="w-4 h-4" />
+              <span>Live Leaderboard</span>
+            </Link>
+          )}
           <button
             onClick={() => router.push(`/team-builder/${matchId}?h2h=1`)}
             className="prime-btn-dark-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"

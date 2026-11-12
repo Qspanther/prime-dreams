@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Shield, ArrowRight, Plus, Pencil, Lock } from 'lucide-react';
+import { Shield, ArrowRight, Plus, Pencil, Lock, Trophy } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import CategoryFilterTabs from '../components/ui/CategoryFilterTabs';
@@ -136,7 +136,7 @@ export default function MyTeamsPage() {
                     Contest: <strong className="text-[#0F172A]">{contest?.title || 'Open Contest'}</strong>
                   </span>
                   {match && (
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       {teamLocked ? (
                         <span className="text-[#64748B] font-black flex items-center gap-1" title="Contest locked — editing closed">
                           <Lock className="w-3.5 h-3.5" />
@@ -151,6 +151,13 @@ export default function MyTeamsPage() {
                           <span>Edit</span>
                         </Link>
                       )}
+                      <Link
+                        href={`/match/${match.id}/leaderboard?teamId=${team.id}`}
+                        className="text-[#D97706] font-black hover:underline flex items-center gap-1 group"
+                      >
+                        <Trophy className="w-3.5 h-3.5" />
+                        <span>Leaderboard</span>
+                      </Link>
                       <Link
                         href={`/match/${match.id}`}
                         className="text-[#2563EB] font-black hover:underline flex items-center gap-1 group"

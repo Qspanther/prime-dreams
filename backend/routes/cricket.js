@@ -269,6 +269,144 @@ router.get('/matches/:id/telemetry', async (req, res) => {
 });
 
 /**
+ * GET /api/matches/:id/leaderboard
+ * Live player points and, optionally, the current user's contest team standings.
+ */
+router.get('/matches/:id/leaderboard', authenticate, async (req, res) => {
+  try {
+    const match = await CricketMatch.findByPk(req.params.id);
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+
+    const players = await CricketPlayer.findAll({
+      where: { match_id: match.id },
+      order: [['points', 'DESC'], ['name', 'ASC']],
+    });
+    let priorPlayerPoints = null;
+    let playerRank = 0;
+    const playerLeaderboard = players.map((player, index) => {
+      const points = Number(player.points) || 0;
+      if (priorPlayerPoints === null || points !== priorPlayerPoints) playerRank = index + 1;
+      priorPlayerPoints = points;
+      return {
+        id: player.id,
+        rank: playerRank,
+        name: player.name,
+        role: player.role,
+        team_name: player.team_name,
+        points,
+        stats: player.stats || {},
+      };
+    });
+
+    const response = {
+      success: true,
+      match: {
+        id: match.id,
+        title: match.title,
+        status: match.status,
+        team_a: match.team_a,
+        team_b: match.team_b,
+        score_summary: match.score_summary || {},
+        last_updated: match.last_live_poll_at || null,
+      },
+      player_leaderboard: playerLeaderboard,
+      contest: null,
+      contest_leaderboard: [],
+      my_team: null,
+    };
+
+    const teamId = req.query.team_id;
+    if (teamId) {
+      const myTeam = await CricketTeam.findOne({
+        where: { id: teamId, match_id: match.id, user_id: req.user.id },
+      });
+      if (!myTeam) return res.status(404).json({ error: 'Your team was not found for this match.' });
+
+      const contest = myTeam.contest_id
+        ? await MatchContest.findOne({ where: { id: myTeam.contest_id, match_id: match.id } })
+        : null;
+      if (contest) {
+        response.contest = { id: contest.id, title: contest.title, status: contest.status };
+        response.my_team = {
+          team_id: myTeam.id,
+          team_name: myTeam.team_name,
+          rank: null,
+          total_points: Number(myTeam.total_points) || 0,
+        };
+        const lineupsAreVisible = ['live', 'completed'].includes(match.status) || ['locked', 'live', 'completed'].includes(contest.status);
+        if (!lineupsAreVisible) {
+          response.contest_lineups_hidden = true;
+          return res.json(response);
+        }
+
+        const teams = await CricketTeam.findAll({
+          where: { contest_id: contest.id },
+          include: [
+            { model: User, as: 'user', attributes: ['id', 'name', 'username'] },
+            {
+              model: TeamPlayer,
+              as: 'teamPlayers',
+              attributes: ['is_captain', 'is_vice_captain', 'points_earned'],
+              include: [{ model: CricketPlayer, as: 'player', attributes: ['id', 'name', 'role', 'team_name', 'points', 'stats'] }],
+            },
+          ],
+          order: [['total_points', 'DESC'], ['created_at', 'ASC']],
+        });
+
+        const playerRanks = new Map(playerLeaderboard.map(player => [player.id, player.rank]));
+        let priorTeamPoints = null;
+        let teamRank = 0;
+        response.contest_leaderboard = teams.map((team, index) => {
+          const points = Number(team.total_points) || 0;
+          if (priorTeamPoints === null || points !== priorTeamPoints) teamRank = index + 1;
+          priorTeamPoints = points;
+          return {
+            team_id: team.id,
+            rank: teamRank,
+            team_name: team.team_name,
+            user_id: team.user_id,
+            user_name: team.user?.username || team.user?.name || 'Player',
+            total_points: points,
+            players: (team.teamPlayers || []).map(entry => ({
+              id: entry.player?.id,
+              name: entry.player?.name || 'Player',
+              role: entry.player?.role || null,
+              team_name: entry.player?.team_name || null,
+              points: Number(entry.player?.points) || 0,
+              points_earned: Number(entry.points_earned) || 0,
+              rank: playerRanks.get(entry.player?.id) || null,
+              is_captain: Boolean(entry.is_captain),
+              is_vice_captain: Boolean(entry.is_vice_captain),
+              stats: entry.player?.stats || {},
+            })),
+          };
+        });
+
+        const myStanding = response.contest_leaderboard.find(team => team.team_id === myTeam.id);
+        response.my_team = myStanding ? {
+          team_id: myStanding.team_id,
+          team_name: myStanding.team_name,
+          rank: myStanding.rank,
+          total_points: myStanding.total_points,
+        } : null;
+      } else {
+        response.my_team = {
+          team_id: myTeam.id,
+          team_name: myTeam.team_name,
+          rank: null,
+          total_points: Number(myTeam.total_points) || 0,
+        };
+      }
+    }
+
+    res.json(response);
+  } catch (err) {
+    console.error('Get live cricket leaderboard error:', err);
+    res.status(500).json({ error: 'Could not load the live leaderboard.' });
+  }
+});
+
+/**
  * GET /api/matches/:id
  * Single match detail with 30-player pool (15 Team A + 15 Team B)
  */

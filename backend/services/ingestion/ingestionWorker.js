@@ -1,7 +1,7 @@
 // 🏏 PRIME DREEMS — REAL-TIME INGESTION WORKER
 // Orchestrates Ingestion, Validation, Deduplication, Verification, HotStore, and WebSocket Streaming
 
-const { CricketMatch, CricketPlayer, CricketTeam, TeamPlayer, ScoreAuditLog } = require('../../db/models');
+const { CricketMatch, CricketPlayer, MatchContest, CricketTeam, TeamPlayer, ScoreAuditLog } = require('../../db/models');
 const cricbuzzSource = require('./sources/cricbuzzSource');
 const dualSourceVerifier = require('./dualSourceVerifier');
 const deduplicator = require('./deduplication');
@@ -422,6 +422,23 @@ async function updatePlayerFantasyPoints(matchId, scoreData, eventId) {
         teamTotal += earned;
       }
       await team.update({ total_points: Math.round(teamTotal * 10) / 10 });
+    }
+
+    // Keep every contest rank synchronized with the same ball's player totals.
+    const contests = await MatchContest.findAll({ where: { match_id: matchId } });
+    for (const contest of contests) {
+      const contestTeams = await CricketTeam.findAll({
+        where: { contest_id: contest.id },
+        order: [['total_points', 'DESC'], ['created_at', 'ASC']],
+      });
+      let previousPoints = null;
+      let rank = 0;
+      for (let index = 0; index < contestTeams.length; index++) {
+        const points = Number(contestTeams[index].total_points) || 0;
+        if (previousPoints === null || points !== previousPoints) rank = index + 1;
+        previousPoints = points;
+        if (contestTeams[index].rank !== rank) await contestTeams[index].update({ rank });
+      }
     }
   } catch (err) {
     console.error(`⚠️ [Ingestion] Points calculation error for match ${matchId}:`, err.message);
