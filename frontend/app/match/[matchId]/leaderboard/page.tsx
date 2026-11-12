@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, use, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Radio, RefreshCw, Trophy } from 'lucide-react';
+import { ArrowLeft, Radio, RefreshCw, Search, Trophy, X } from 'lucide-react';
 import { apiGet } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 
@@ -39,6 +39,9 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const [participantSearch, setParticipantSearch] = useState('');
+  const [participantSearchResults, setParticipantSearchResults] = useState<any[] | null>(null);
+  const [participantSearchLoading, setParticipantSearchLoading] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!token) return;
@@ -101,6 +104,34 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
     };
   }, [matchId, refresh, token]);
 
+  useEffect(() => {
+    const query = participantSearch.trim();
+    if (!teamId || query.length < 2 || !token) {
+      setParticipantSearchResults(null);
+      setParticipantSearchLoading(false);
+      return;
+    }
+
+    let active = true;
+    setParticipantSearchLoading(true);
+    setParticipantSearchResults(null);
+    const timer = setTimeout(async () => {
+      try {
+        const result = await apiGet(`/users/search?q=${encodeURIComponent(query)}`, token);
+        if (active) setParticipantSearchResults(result.users || []);
+      } catch {
+        if (active) setParticipantSearchResults([]);
+      } finally {
+        if (active) setParticipantSearchLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [participantSearch, teamId, token]);
+
   if (!token) {
     return <main className="max-w-5xl mx-auto px-4 py-10 text-center text-[#0F172A]">Live leaderboard dekhne ke liye <Link href="/login" className="font-black text-[#2563EB] underline">login karein</Link>.</main>;
   }
@@ -108,6 +139,10 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
   const match = data?.match;
   const matchTitle = match?.title || [match?.team_a, match?.team_b].filter(Boolean).join(' vs ') || 'Match leaderboard';
   const myTeamPlayers = data?.my_team?.players || [];
+  const allContestTeams = data?.contest_leaderboard || [];
+  const visibleContestTeams = participantSearch.trim().length >= 2
+    ? allContestTeams.filter(team => participantSearchResults?.some(user => user.id === team.user_id))
+    : allContestTeams;
 
   return (
     <main className="max-w-6xl mx-auto px-3 sm:px-6 py-6 space-y-5 text-[#0F172A]">
@@ -142,6 +177,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
       )}
 
       {teamId ? (
+        <div className="space-y-5">
         <section className="space-y-4">
           <header className="prime-card-3d flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
             <div>
@@ -189,6 +225,77 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
             <p className="prime-card-3d p-8 text-center text-sm font-bold text-[#64748B]">Is team ke player points abhi available nahi hain.</p>
           )}
         </section>
+        {data?.contest && (
+          <section className="prime-card-3d overflow-hidden">
+            <div className="border-b border-[#E2E8F0] p-4 sm:p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="flex items-center gap-2 text-lg font-black"><Trophy className="h-5 w-5 text-[#D97706]" />Contest teams &amp; live ranks</h2>
+                  <p className="mt-1 text-xs text-[#64748B]">Contest mein khel rahe sabhi users ki team aur rank. Kisi team ko kholkar uske players dekhein.</p>
+                </div>
+                <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">{visibleContestTeams.length} teams</span>
+              </div>
+              <label className="mt-4 flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2 shadow-[0_0_12px_rgba(37,99,235,0.08)]">
+                <Search className="h-4 w-4 shrink-0 text-blue-600" />
+                <input
+                  type="search"
+                  value={participantSearch}
+                  onChange={event => setParticipantSearch(event.target.value)}
+                  placeholder="Username ya email se participant search karein"
+                  aria-label="Username ya email se contest participant search karein"
+                  className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
+                />
+                {participantSearch && <button type="button" onClick={() => setParticipantSearch('')} aria-label="Search clear karein" className="rounded-full p-1 text-slate-500 hover:bg-slate-100"><X className="h-4 w-4" /></button>}
+              </label>
+              {participantSearch.trim().length === 1 && <p className="mt-2 text-xs font-semibold text-slate-500">Search ke liye kam se kam 2 characters likhein.</p>}
+            </div>
+            {data.contest_lineups_hidden ? (
+              <p className="p-6 text-sm font-semibold text-[#64748B]">Contest lock hone par participants ki teams aur players yahan dikhne lagenge.</p>
+            ) : participantSearchLoading ? (
+              <p className="p-6 text-center text-sm font-semibold text-[#64748B]">Participants search ho rahe hain…</p>
+            ) : visibleContestTeams.length ? (
+              <div className="space-y-3 p-3 sm:p-4">
+                {visibleContestTeams.map((team: any) => (
+                  <details key={team.team_id} className="overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-white to-blue-50 shadow-[0_0_14px_rgba(37,99,235,0.12)]">
+                    <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4 transition hover:bg-blue-50/70">
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-11 min-w-11 items-center justify-center rounded-xl border border-blue-200 bg-white px-2 text-sm font-black text-blue-700 shadow-[0_0_12px_rgba(37,99,235,0.18)]">#{team.rank}</span>
+                        <div className="min-w-0">
+                          <p className="truncate font-black text-slate-900">{team.team_name}</p>
+                          <p className="truncate text-xs font-semibold text-slate-500">@{team.username}</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-mono text-lg font-black text-[#D97706]">{Number(team.total_points || 0).toFixed(1)} pts</p>
+                        <p className="text-[10px] font-bold text-slate-500">{team.players?.length || 0} players · team dekhein</p>
+                      </div>
+                    </summary>
+                    <div className="grid grid-cols-1 gap-3 border-t border-blue-100 p-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {(team.players || []).map((player: any) => (
+                        <article key={`${team.team_id}-${player.id}`} className="rounded-xl border border-blue-200 bg-white/90 p-3 shadow-[0_0_12px_rgba(37,99,235,0.10)]">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-black text-slate-900">{player.name}{player.is_captain ? ' · C' : player.is_vice_captain ? ' · VC' : ''}</p>
+                              <p className="truncate text-[10px] font-semibold text-slate-500">{player.team_name} · {player.role}</p>
+                            </div>
+                            <span className="shrink-0 rounded-lg border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-black text-blue-700">#{player.rank ?? '—'}</span>
+                          </div>
+                          <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+                            <span className="font-semibold text-slate-500">Player {Number(player.points || 0).toFixed(1)} pts</span>
+                            <span className="font-mono font-black text-[#D97706]">Team {Number(player.points_earned || 0).toFixed(1)} pts</span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            ) : (
+              <p className="p-6 text-center text-sm font-semibold text-[#64748B]">{participantSearch.trim().length >= 2 ? 'Is username ya email se koi contest participant nahi mila.' : 'Is contest mein abhi koi team nahi hai.'}</p>
+            )}
+          </section>
+        )}
+        </div>
       ) : (
         <section className="prime-card-3d overflow-hidden">
           <div className="flex items-center justify-between border-b border-[#E2E8F0] p-4 sm:p-5">

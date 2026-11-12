@@ -362,7 +362,16 @@ router.get('/matches/:id/leaderboard', authenticate, async (req, res) => {
 
         const teams = await CricketTeam.findAll({
           where: { contest_id: contest.id },
-          attributes: ['id', 'total_points'],
+          attributes: ['id', 'user_id', 'team_name', 'total_points'],
+          include: [
+            { model: User, as: 'user', attributes: ['id', 'username', 'name'] },
+            {
+              model: TeamPlayer,
+              as: 'teamPlayers',
+              attributes: ['is_captain', 'is_vice_captain', 'points_earned'],
+              include: [{ model: CricketPlayer, as: 'player', attributes: ['id', 'name', 'role', 'team_name', 'points', 'stats'] }],
+            },
+          ],
           order: [['total_points', 'DESC'], ['created_at', 'ASC']],
         });
 
@@ -374,13 +383,27 @@ router.get('/matches/:id/leaderboard', authenticate, async (req, res) => {
           priorTeamPoints = points;
           return {
             team_id: team.id,
+            user_id: team.user_id,
+            team_name: team.team_name || 'Team',
+            username: team.user?.username || team.user?.name || 'Player',
             rank: teamRank,
             total_points: points,
+            players: (team.teamPlayers || []).map(entry => ({
+              id: entry.player?.id,
+              name: entry.player?.name || 'Player',
+              role: entry.player?.role || null,
+              team_name: entry.player?.team_name || null,
+              points: Number(entry.player?.points) || 0,
+              points_earned: Number(entry.points_earned) || 0,
+              rank: playerRanks.get(entry.player?.id) || null,
+              is_captain: Boolean(entry.is_captain),
+              is_vice_captain: Boolean(entry.is_vice_captain),
+              stats: entry.player?.stats || {},
+            })),
           };
         });
 
         const myStanding = response.contest_leaderboard.find(team => team.team_id === myTeam.id);
-        response.contest_leaderboard = myStanding ? [myStanding] : [];
         if (myStanding) {
           response.my_team.rank = myStanding.rank;
           response.my_team.total_points = myStanding.total_points;
