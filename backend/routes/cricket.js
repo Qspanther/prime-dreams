@@ -298,6 +298,8 @@ router.get('/matches/:id/leaderboard', authenticate, async (req, res) => {
       };
     });
 
+    const teamId = req.query.team_id;
+    const playerRanks = new Map(playerLeaderboard.map(player => [player.id, player.rank]));
     const response = {
       success: true,
       match: {
@@ -309,30 +311,49 @@ router.get('/matches/:id/leaderboard', authenticate, async (req, res) => {
         score_summary: match.score_summary || {},
         last_updated: match.last_live_poll_at || null,
       },
-      player_leaderboard: playerLeaderboard,
+      player_leaderboard: teamId ? [] : playerLeaderboard,
       contest: null,
       contest_leaderboard: [],
       my_team: null,
     };
 
-    const teamId = req.query.team_id;
     if (teamId) {
       const myTeam = await CricketTeam.findOne({
         where: { id: teamId, match_id: match.id, user_id: req.user.id },
+        include: [{
+          model: TeamPlayer,
+          as: 'teamPlayers',
+          attributes: ['is_captain', 'is_vice_captain', 'points_earned'],
+          include: [{ model: CricketPlayer, as: 'player', attributes: ['id', 'name', 'role', 'team_name', 'points', 'stats'] }],
+        }],
       });
       if (!myTeam) return res.status(404).json({ error: 'Your team was not found for this match.' });
+
+      const myPlayers = (myTeam.teamPlayers || []).map(entry => ({
+        id: entry.player?.id,
+        name: entry.player?.name || 'Player',
+        role: entry.player?.role || null,
+        team_name: entry.player?.team_name || null,
+        points: Number(entry.player?.points) || 0,
+        points_earned: Number(entry.points_earned) || 0,
+        rank: playerRanks.get(entry.player?.id) || null,
+        is_captain: Boolean(entry.is_captain),
+        is_vice_captain: Boolean(entry.is_vice_captain),
+        stats: entry.player?.stats || {},
+      }));
+      response.my_team = {
+        team_id: myTeam.id,
+        team_name: myTeam.team_name,
+        rank: null,
+        total_points: Number(myTeam.total_points) || 0,
+        players: myPlayers,
+      };
 
       const contest = myTeam.contest_id
         ? await MatchContest.findOne({ where: { id: myTeam.contest_id, match_id: match.id } })
         : null;
       if (contest) {
         response.contest = { id: contest.id, title: contest.title, status: contest.status };
-        response.my_team = {
-          team_id: myTeam.id,
-          team_name: myTeam.team_name,
-          rank: null,
-          total_points: Number(myTeam.total_points) || 0,
-        };
         const lineupsAreVisible = ['live', 'completed'].includes(match.status) || ['locked', 'live', 'completed'].includes(contest.status);
         if (!lineupsAreVisible) {
           response.contest_lineups_hidden = true;
@@ -341,19 +362,10 @@ router.get('/matches/:id/leaderboard', authenticate, async (req, res) => {
 
         const teams = await CricketTeam.findAll({
           where: { contest_id: contest.id },
-          include: [
-            { model: User, as: 'user', attributes: ['id', 'name', 'username'] },
-            {
-              model: TeamPlayer,
-              as: 'teamPlayers',
-              attributes: ['is_captain', 'is_vice_captain', 'points_earned'],
-              include: [{ model: CricketPlayer, as: 'player', attributes: ['id', 'name', 'role', 'team_name', 'points', 'stats'] }],
-            },
-          ],
+          attributes: ['id', 'total_points'],
           order: [['total_points', 'DESC'], ['created_at', 'ASC']],
         });
 
-        const playerRanks = new Map(playerLeaderboard.map(player => [player.id, player.rank]));
         let priorTeamPoints = null;
         let teamRank = 0;
         response.contest_leaderboard = teams.map((team, index) => {
@@ -363,39 +375,18 @@ router.get('/matches/:id/leaderboard', authenticate, async (req, res) => {
           return {
             team_id: team.id,
             rank: teamRank,
-            team_name: team.team_name,
-            user_id: team.user_id,
-            user_name: team.user?.username || team.user?.name || 'Player',
             total_points: points,
-            players: (team.teamPlayers || []).map(entry => ({
-              id: entry.player?.id,
-              name: entry.player?.name || 'Player',
-              role: entry.player?.role || null,
-              team_name: entry.player?.team_name || null,
-              points: Number(entry.player?.points) || 0,
-              points_earned: Number(entry.points_earned) || 0,
-              rank: playerRanks.get(entry.player?.id) || null,
-              is_captain: Boolean(entry.is_captain),
-              is_vice_captain: Boolean(entry.is_vice_captain),
-              stats: entry.player?.stats || {},
-            })),
           };
         });
 
         const myStanding = response.contest_leaderboard.find(team => team.team_id === myTeam.id);
-        response.my_team = myStanding ? {
-          team_id: myStanding.team_id,
-          team_name: myStanding.team_name,
-          rank: myStanding.rank,
-          total_points: myStanding.total_points,
-        } : null;
+        response.contest_leaderboard = myStanding ? [myStanding] : [];
+        if (myStanding) {
+          response.my_team.rank = myStanding.rank;
+          response.my_team.total_points = myStanding.total_points;
+        }
       } else {
-        response.my_team = {
-          team_id: myTeam.id,
-          team_name: myTeam.team_name,
-          rank: null,
-          total_points: Number(myTeam.total_points) || 0,
-        };
+        response.contest_leaderboard = [];
       }
     }
 

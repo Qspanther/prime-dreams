@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, use, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { ArrowLeft, Radio, RefreshCw, Trophy, Users } from 'lucide-react';
+import { ArrowLeft, Radio, RefreshCw, Trophy } from 'lucide-react';
 import { apiGet } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
 
@@ -13,7 +13,7 @@ type LeaderboardData = {
   contest?: { id: string; title: string; status: string } | null;
   contest_leaderboard?: any[];
   contest_lineups_hidden?: boolean;
-  my_team?: { team_id: string; team_name: string; rank: number | null; total_points: number } | null;
+  my_team?: { team_id: string; team_name: string; rank: number | null; total_points: number; players?: any[] } | null;
 };
 
 function websocketUrl() {
@@ -107,7 +107,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
 
   const match = data?.match;
   const matchTitle = match?.title || [match?.team_a, match?.team_b].filter(Boolean).join(' vs ') || 'Match leaderboard';
-  const contestEntries = data?.contest_leaderboard || [];
+  const myTeamPlayers = data?.my_team?.players || [];
 
   return (
     <main className="max-w-6xl mx-auto px-3 sm:px-6 py-6 space-y-5 text-[#0F172A]">
@@ -141,54 +141,73 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
         </section>
       )}
 
-      <section className="prime-card-3d overflow-hidden">
-        <div className="flex items-center justify-between border-b border-[#E2E8F0] p-4 sm:p-5">
-          <div><h2 className="flex items-center gap-2 text-lg font-black"><Trophy className="w-5 h-5 text-[#D97706]" /> Match player leaderboard</h2><p className="mt-1 text-xs text-[#64748B]">Match ke sabhi listed players ke fantasy points aur live rank.</p></div>
-          <span className="text-xs font-black text-[#64748B]">{data?.player_leaderboard?.length || 0} players</span>
-        </div>
-        {loading && !data ? <p className="p-8 text-center text-sm font-bold text-[#64748B]">Live points load ho rahe hain…</p> : (
-          <div className="divide-y divide-[#E2E8F0]">
-            {(data?.player_leaderboard || []).map(player => (
-              <div key={player.id} className="grid grid-cols-[3rem_minmax(0,1fr)_5rem] sm:grid-cols-[4rem_minmax(0,1fr)_7rem_7rem] items-center gap-2 px-4 py-3">
-                <span className="text-sm font-black text-[#64748B]">#{player.rank}</span>
-                <div className="min-w-0"><p className="truncate text-sm font-black">{player.name}</p><p className="text-[11px] font-semibold text-[#64748B]">{player.team_name} · {player.role}</p></div>
-                <span className="hidden sm:block text-right text-xs font-bold text-[#64748B]">{player.stats?.runs ?? 0} runs · {player.stats?.wickets ?? 0} wkts</span>
-                <span className="text-right font-mono text-base font-black text-[#D97706]">{Number(player.points || 0).toFixed(1)}</span>
-              </div>
-            ))}
-            {!loading && !data?.player_leaderboard?.length && <p className="p-8 text-center text-sm font-bold text-[#64748B]">Is match ke player points abhi available nahi hain.</p>}
-          </div>
-        )}
-      </section>
+      {teamId ? (
+        <section className="space-y-4">
+          <header className="prime-card-3d flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
+            <div>
+              <h2 className="flex items-center gap-2 text-lg font-black"><Trophy className="w-5 h-5 text-[#2563EB]" /> {data?.my_team?.team_name || 'Your team'} leaderboard</h2>
+              <p className="mt-1 text-xs text-[#64748B]">Sirf aapki team ke players · C = Captain (2×) · VC = Vice-Captain (1.5×)</p>
+            </div>
+            <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">{myTeamPlayers.length} players</span>
+          </header>
 
-      {teamId && (
-        <section className="prime-card-3d overflow-hidden">
-          <div className="border-b border-[#E2E8F0] p-4 sm:p-5">
-            <h2 className="flex items-center gap-2 text-lg font-black"><Users className="w-5 h-5 text-[#2563EB]" /> Contest teams and player points</h2>
-            <p className="mt-1 text-xs text-[#64748B]">Har entry ki rank, team total aur sabhi players ke live points. C = Captain (2×), VC = Vice-Captain (1.5×).</p>
-          </div>
-          {contestEntries.length ? (
-            <div className="space-y-3 p-3 sm:p-4">
-              {contestEntries.map(team => (
-                <details key={team.team_id} open={team.team_id === data?.my_team?.team_id} className="rounded-xl border border-[#E2E8F0] bg-white">
-                  <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4">
-                    <div className="flex min-w-0 items-center gap-3"><span className="text-lg font-black text-[#2563EB]">#{team.rank}</span><div className="min-w-0"><p className="truncate font-black">{team.team_name}</p><p className="text-xs font-semibold text-[#64748B]">{team.user_name}</p></div></div>
-                    <span className="font-mono text-lg font-black text-[#D97706]">{Number(team.total_points || 0).toFixed(1)} pts</span>
-                  </summary>
-                  <div className="divide-y divide-[#E2E8F0] border-t border-[#E2E8F0] px-4">
-                    {(team.players || []).map((player: any) => (
-                      <div key={`${team.team_id}-${player.id}`} className="grid grid-cols-[2.5rem_minmax(0,1fr)_6rem] items-center gap-2 py-2.5 text-xs sm:grid-cols-[3rem_minmax(0,1fr)_8rem_8rem]">
-                        <span className="font-black text-[#64748B]">#{player.rank ?? '—'}</span>
-                        <div className="min-w-0"><p className="truncate font-black">{player.name}{player.is_captain ? ' · C' : player.is_vice_captain ? ' · VC' : ''}</p><p className="text-[10px] text-[#64748B]">{player.team_name} · {player.role}</p></div>
-                        <span className="hidden text-right text-[#64748B] sm:block">Player {Number(player.points || 0).toFixed(1)}</span>
-                        <span className="text-right font-mono font-black text-[#D97706]">Team {Number(player.points_earned || 0).toFixed(1)}</span>
+          {loading && !data ? <p className="prime-card-3d p-8 text-center text-sm font-bold text-[#64748B]">Aapki team ke live points load ho rahe hain…</p> : myTeamPlayers.length ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {myTeamPlayers.map((player: any) => (
+                <article key={player.id} className="rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 via-white to-blue-100 p-4 shadow-[0_0_18px_rgba(37,99,235,0.18)] transition hover:border-blue-400 hover:shadow-[0_0_26px_rgba(37,99,235,0.32)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-10 min-w-10 items-center justify-center rounded-xl border border-blue-200 bg-white/90 px-2 font-black text-blue-700 shadow-[0_0_12px_rgba(37,99,235,0.18)]">#{player.rank ?? '—'}</span>
+                      <div className="min-w-0">
+                        <h3 className="truncate text-sm font-black text-slate-900">{player.name}</h3>
+                        <p className="truncate text-[11px] font-semibold text-slate-500">{player.team_name} · {player.role}</p>
                       </div>
-                    ))}
+                    </div>
+                    {(player.is_captain || player.is_vice_captain) && (
+                      <span className="shrink-0 rounded-full border border-blue-300 bg-blue-100 px-2 py-1 text-[10px] font-black text-blue-800">
+                        {player.is_captain ? 'C · 2×' : 'VC · 1.5×'}
+                      </span>
+                    )}
                   </div>
-                </details>
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <div className="rounded-xl border border-blue-100 bg-white/80 p-3 shadow-[inset_0_0_12px_rgba(37,99,235,0.06)]">
+                      <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Player points</p>
+                      <p className="mt-1 font-mono text-xl font-black text-blue-700">{Number(player.points || 0).toFixed(1)}</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-100 bg-white/80 p-3 shadow-[inset_0_0_12px_rgba(37,99,235,0.06)]">
+                      <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Team points</p>
+                      <p className="mt-1 font-mono text-xl font-black text-[#D97706]">{Number(player.points_earned || 0).toFixed(1)}</p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-[11px] font-semibold text-slate-600">
+                    {player.stats?.runs ?? 0} runs · {player.stats?.balls ?? 0} balls · {player.stats?.wickets ?? 0} wickets
+                  </p>
+                </article>
               ))}
             </div>
-          ) : <p className="p-6 text-sm font-semibold text-[#64748B]">{data?.contest_lineups_hidden ? 'Match live/lock hone par sabhi contest teams aur unke players yahan dikh jayenge.' : data?.contest ? 'Abhi koi registered contest team nahi hai.' : 'Yeh team abhi kisi contest mein register nahi hai.'}</p>}
+          ) : (
+            <p className="prime-card-3d p-8 text-center text-sm font-bold text-[#64748B]">Is team ke player points abhi available nahi hain.</p>
+          )}
+        </section>
+      ) : (
+        <section className="prime-card-3d overflow-hidden">
+          <div className="flex items-center justify-between border-b border-[#E2E8F0] p-4 sm:p-5">
+            <div><h2 className="flex items-center gap-2 text-lg font-black"><Trophy className="w-5 h-5 text-[#D97706]" /> Match player leaderboard</h2><p className="mt-1 text-xs text-[#64748B]">Match ke sabhi listed players ke fantasy points aur live rank.</p></div>
+            <span className="text-xs font-black text-[#64748B]">{data?.player_leaderboard?.length || 0} players</span>
+          </div>
+          {loading && !data ? <p className="p-8 text-center text-sm font-bold text-[#64748B]">Live points load ho rahe hain…</p> : (
+            <div className="divide-y divide-[#E2E8F0]">
+              {(data?.player_leaderboard || []).map(player => (
+                <div key={player.id} className="grid grid-cols-[3rem_minmax(0,1fr)_5rem] sm:grid-cols-[4rem_minmax(0,1fr)_7rem_7rem] items-center gap-2 px-4 py-3">
+                  <span className="text-sm font-black text-[#64748B]">#{player.rank}</span>
+                  <div className="min-w-0"><p className="truncate text-sm font-black">{player.name}</p><p className="text-[11px] font-semibold text-[#64748B]">{player.team_name} · {player.role}</p></div>
+                  <span className="hidden sm:block text-right text-xs font-bold text-[#64748B]">{player.stats?.runs ?? 0} runs · {player.stats?.wickets ?? 0} wkts</span>
+                  <span className="text-right font-mono text-base font-black text-[#D97706]">{Number(player.points || 0).toFixed(1)}</span>
+                </div>
+              ))}
+              {!loading && !data?.player_leaderboard?.length && <p className="p-8 text-center text-sm font-bold text-[#64748B]">Is match ke player points abhi available nahi hain.</p>}
+            </div>
+          )}
         </section>
       )}
     </main>
