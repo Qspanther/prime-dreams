@@ -346,10 +346,19 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
           <CategoryBadge category={match.category} size="md" />
 
           {isLive ? (
-            <span className="neon-badge-red px-3 py-1 rounded-full text-xs font-black flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
-              LIVE MATCH INNINGS
-            </span>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <span className="neon-badge-red px-3 py-1 rounded-full text-xs font-black flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
+                LIVE MATCH INNINGS
+              </span>
+              <Link
+                href={`/match/${matchId}/leaderboard`}
+                className="prime-btn-gold-3d px-3 py-1 rounded-full text-xs font-black inline-flex items-center gap-1.5"
+              >
+                <Trophy className="w-3.5 h-3.5" />
+                <span>Live Leaderboard</span>
+              </Link>
+            </div>
           ) : match.is_locked ? (
             <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 border border-red-300 text-xs font-black">
               🔒 CONTESTS LOCKED
@@ -607,15 +616,6 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-3">
-          {isLive && (
-            <Link
-              href={`/match/${matchId}/leaderboard`}
-              className="prime-btn-gold-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"
-            >
-              <Trophy className="w-4 h-4" />
-              <span>Live Leaderboard</span>
-            </Link>
-          )}
           <button
             onClick={() => router.push(`/team-builder/${matchId}?h2h=1`)}
             className="prime-btn-dark-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"
