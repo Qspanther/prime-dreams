@@ -2,6 +2,8 @@
 // Extracts live fixtures, real-time ball telemetry, and schedules directly from Cricbuzz
 
 const https = require('https');
+const playerSnapshotCache = new Map();
+const squadCache = new Map();
 
 function extractJsonObject(text, fromIndex) {
   const start = text.indexOf('{', fromIndex);
@@ -26,6 +28,168 @@ function extractJsonObject(text, fromIndex) {
     }
   }
   return null;
+}
+
+function extractJsonArray(text, fromIndex) {
+  const start = text.indexOf('[', fromIndex);
+  if (start === -1) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const char = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') inString = true;
+    else if (char === '[') depth += 1;
+    else if (char === ']') {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+function roleFromSquad(role, keeper = false) {
+  const normalized = String(role || '').toLowerCase();
+  if (keeper || normalized.includes('keeper') || normalized.startsWith('wk')) return 'WK';
+  if (normalized.includes('all')) return 'AR';
+  if (normalized.includes('bowl')) return 'BOWL';
+  return 'BAT';
+}
+
+function emptyPlayerStats() {
+  return {
+    runs: 0, balls: 0, fours: 0, sixes: 0, wickets: 0, maidens: 0,
+    overs: 0, runs_conceded: 0, catches: 0, stumpings: 0,
+    runouts_direct: 0, runouts_indirect: 0, is_out: false,
+  };
+}
+
+function oversAsBallFraction(value) {
+  const text = String(value || 0);
+  const [wholePart, ballsPart = '0'] = text.split('.');
+  const whole = Math.max(0, Number(wholePart) || 0);
+  const balls = Math.max(0, Math.min(5, Number(ballsPart) || 0));
+  return whole + balls / 6;
+}
+
+async function fetchMatchSquad(rawId, scorecardHtml, scorecardData) {
+  const cached = squadCache.get(String(rawId));
+  if (cached && cached.expiresAt > Date.now()) return cached.players;
+
+  const matchPath = scorecardHtml.match(new RegExp(`href="(/cricket-match-squads/${rawId}/[^"?#]+)"`))?.[1];
+  if (!matchPath) return cached?.players || [];
+
+  const squadHtml = await fetchWithBackoff(`https://www.cricbuzz.com${matchPath}`, 1);
+  const squadData = decodeNextData(squadHtml);
+  const teamNames = new Map([
+    [String(scorecardData.matchHeader?.team1?.id || ''), scorecardData.matchHeader?.team1?.name],
+    [String(scorecardData.matchHeader?.team2?.id || ''), scorecardData.matchHeader?.team2?.name],
+  ]);
+  const playersById = new Map();
+  const listMarker = /"playing XI"\s*:/gi;
+  let marker;
+  while ((marker = listMarker.exec(squadData)) !== null) {
+    try {
+      const list = JSON.parse(extractJsonArray(squadData, marker.index + marker[0].length - 1) || '[]');
+      for (const player of list) {
+        const id = player.id == null ? null : String(player.id);
+        const name = String(player.fullName || player.name || '').trim();
+        if (!id || !name) continue;
+        playersById.set(id, {
+          external_id: id,
+          name,
+          team_name: teamNames.get(String(player.teamId)) || player.teamName || 'Unknown',
+          role: roleFromSquad(player.role, player.keeper),
+        });
+      }
+    } catch (_) { /* Ignore malformed individual squad blocks. */ }
+  }
+
+  const players = [...playersById.values()];
+  squadCache.set(String(rawId), { players, expiresAt: Date.now() + 90000 });
+  return players;
+}
+
+/** Fetch the official scorecard snapshot used by the ball-by-ball points board. */
+async function fetchLivePlayerSnapshot(rawId) {
+  if (!rawId) return null;
+  const key = String(rawId);
+  const cached = playerSnapshotCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.snapshot;
+
+  try {
+    const html = await fetchWithBackoff(`https://www.cricbuzz.com/live-cricket-scorecard/${key}`, 1);
+    const decoded = decodeNextData(html);
+    const marker = '"scorecardApiData":';
+    const markerIndex = decoded.indexOf(marker);
+    if (markerIndex === -1) throw new Error('Scorecard data is not available yet.');
+    const rawScorecard = extractJsonObject(decoded, markerIndex + marker.length);
+    const scorecard = rawScorecard ? JSON.parse(rawScorecard) : null;
+    if (!scorecard || !Array.isArray(scorecard.scoreCard)) throw new Error('Scorecard innings are unavailable.');
+
+    let players = [];
+    try { players = await fetchMatchSquad(key, html, scorecard); }
+    catch (error) { console.warn(`[Cricbuzz] Playing XI unavailable for ${key}: ${error.message}`); }
+    const playerMap = new Map(players.map(player => [player.external_id, { ...player, stats: emptyPlayerStats() }]));
+    const ensurePlayer = (externalId, name, teamName, role) => {
+      if (externalId == null || !name) return null;
+      const id = String(externalId);
+      if (!playerMap.has(id)) {
+        playerMap.set(id, {
+          external_id: id,
+          name: String(name).trim(),
+          team_name: teamName || 'Unknown',
+          role: role || 'BAT',
+          stats: emptyPlayerStats(),
+        });
+      }
+      return playerMap.get(id);
+    };
+
+    for (const innings of scorecard.scoreCard) {
+      const batting = innings.batTeamDetails || {};
+      const bowling = innings.bowlTeamDetails || {};
+      for (const batter of Object.values(batting.batsmenData || {})) {
+        const player = ensurePlayer(batter.batId, batter.batName, batting.batTeamName, roleFromSquad('', batter.isKeeper));
+        if (!player) continue;
+        const stats = player.stats;
+        stats.runs += Number(batter.runs) || 0;
+        stats.balls += Number(batter.balls) || 0;
+        stats.fours += Number(batter.fours) || 0;
+        stats.sixes += Number(batter.sixes) || 0;
+        if (batter.outDesc && !/^(batting|not out|did not bat|retired hurt)$/i.test(String(batter.outDesc).trim())) stats.is_out = true;
+        if (String(batter.wicketCode || '').toUpperCase() === 'CAUGHT' && Number(batter.fielderId1) > 0) {
+          const fielder = playerMap.get(String(batter.fielderId1));
+          if (fielder) fielder.stats.catches += 1;
+        }
+      }
+      for (const bowler of Object.values(bowling.bowlersData || {})) {
+        const player = ensurePlayer(bowler.bowlerId, bowler.bowlName, bowling.bowlTeamName, roleFromSquad('Bowler'));
+        if (!player) continue;
+        player.stats.wickets += Number(bowler.wickets) || 0;
+        player.stats.maidens += Number(bowler.maidens) || 0;
+        player.stats.overs += oversAsBallFraction(bowler.overs);
+        player.stats.runs_conceded += Number(bowler.runs) || 0;
+      }
+    }
+
+    const snapshot = {
+      players: [...playerMap.values()],
+      source_updated_at: scorecard.responseLastUpdated || null,
+    };
+    playerSnapshotCache.set(key, { snapshot, expiresAt: Date.now() + 5000 });
+    if (players.length) squadCache.set(key, { players, expiresAt: Date.now() + 90000 });
+    return snapshot;
+  } catch (error) {
+    console.warn(`[Cricbuzz] Live player scorecard unavailable for ${key}: ${error.message}`);
+    return cached?.snapshot || null;
+  }
 }
 
 function decodeNextData(html) {
@@ -354,5 +518,6 @@ async function fetchLiveFeed() {
 
 module.exports = {
   fetchLiveFeed,
+  fetchLivePlayerSnapshot,
 };
 

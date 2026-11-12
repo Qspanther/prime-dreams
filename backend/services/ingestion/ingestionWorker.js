@@ -127,6 +127,17 @@ async function processLiveIngestionTick() {
     const dbMatches = await CricketMatch.findAll({
       where: { status: { [Op.in]: ['live', 'upcoming'] } }
     });
+    const livePlayerSnapshots = new Map();
+    await Promise.all(dbMatches.map(async match => {
+      const feedMatch = findMatchingFeedMatch(match, liveMatchesFeed);
+      if (!feedMatch || feedMatch.status !== 'live' || !feedMatch.raw_id) return;
+      try {
+        const snapshot = await cricbuzzSource.fetchLivePlayerSnapshot(feedMatch.raw_id);
+        if (snapshot) livePlayerSnapshots.set(match.id, snapshot);
+      } catch (error) {
+        console.warn(`[Ingestion] Player scorecard refresh failed for ${match.title}: ${error.message}`);
+      }
+    }));
     const matchedFeedIds = new Set();
     const sourceFeedHealthy = liveMatchesFeed.length > 0;
 
@@ -227,6 +238,7 @@ async function processLiveIngestionTick() {
 
       // ─── CASE B: Live In-Play Match Telemetry Update ───
       if (match.status === 'live') {
+        const playerSnapshot = livePlayerSnapshots.get(match.id) || null;
         const lastGoodSnapshot = hotStore.getSnapshot(match.id)?.score || match.score_summary;
 
         let rawCandidateScore = null;
@@ -287,6 +299,7 @@ async function processLiveIngestionTick() {
             },
             last_live_poll_at: new Date(),
           });
+          if (playerSnapshot) await updatePlayerFantasyPoints(match.id, normalized, eventId, playerSnapshot);
           continue;
         }
 
@@ -346,7 +359,7 @@ async function processLiveIngestionTick() {
         });
 
         // Recalculate Fantasy Player Points & Team Totals (Section 6)
-        await updatePlayerFantasyPoints(match.id, normalized, eventId);
+        await updatePlayerFantasyPoints(match.id, normalized, eventId, playerSnapshot);
 
         // Broadcast lean 200-byte DELTA to connected WebSocket clients (Section 3.2)
         wsGateway.broadcastDelta(match.id, {
@@ -384,8 +397,38 @@ async function processLiveIngestionTick() {
 /**
  * Updates fantasy player points and recalculates contest team totals
  */
-async function updatePlayerFantasyPoints(matchId, scoreData, eventId) {
+async function updatePlayerFantasyPoints(matchId, scoreData, eventId, playerSnapshot = null) {
   try {
+    if (Array.isArray(playerSnapshot?.players) && playerSnapshot.players.length > 0) {
+      const existingPlayers = await CricketPlayer.findAll({ where: { match_id: matchId } });
+      const keyFor = (name, teamName) => `${String(teamName || '').trim().toLowerCase()}|${String(name || '').trim().toLowerCase()}`;
+      const playerByName = new Map(existingPlayers.map(player => [keyFor(player.name, player.team_name), player]));
+
+      for (const sourcePlayer of playerSnapshot.players) {
+        const name = String(sourcePlayer.name || '').trim();
+        const teamName = String(sourcePlayer.team_name || '').trim();
+        if (!name || !teamName) continue;
+        const existing = playerByName.get(keyFor(name, teamName));
+        if (existing) {
+          const stats = sourcePlayer.stats || existing.stats;
+          if (existing.role !== (sourcePlayer.role || existing.role) || JSON.stringify(existing.stats || {}) !== JSON.stringify(stats || {})) {
+            await existing.update({ stats, role: sourcePlayer.role || existing.role });
+          }
+        } else {
+          const created = await CricketPlayer.create({
+            match_id: matchId,
+            name,
+            team_name: teamName,
+            role: sourcePlayer.role || 'BAT',
+            credits: 9,
+            points: 0,
+            stats: sourcePlayer.stats || {},
+          });
+          playerByName.set(keyFor(name, teamName), created);
+        }
+      }
+    }
+
     const players = await CricketPlayer.findAll({ where: { match_id: matchId } });
     if (players.length === 0) return;
 
