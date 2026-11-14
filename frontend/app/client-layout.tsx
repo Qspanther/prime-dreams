@@ -21,6 +21,7 @@ function AppShell({ children }: { children: ReactNode }) {
   const isPublicPage = publicPaths.includes(pathname || '');
   const isAuthPage = authOnlyPaths.includes(pathname || '');
   const isAdminRoute = pathname?.startsWith('/admin');
+  const isTeamBuilder = pathname?.startsWith('/team-builder');
 
   // Register Service Worker for offline caching + Web Push (FCM-style) notifications.
   useEffect(() => {
@@ -65,11 +66,11 @@ function AppShell({ children }: { children: ReactNode }) {
           {isAdminRoute ? <AdminSidebar /> : <Sidebar />}
           <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
             <TopBar />
-            <main className="flex-1 overflow-y-auto overflow-x-hidden pb-24 lg:pb-8">
+            <main className={`flex-1 overflow-y-auto overflow-x-hidden ${isTeamBuilder ? 'pb-4' : 'pb-28 lg:pb-8'}`}>
               {children}
             </main>
           </div>
-          <MobileBottomNav />
+          {!isTeamBuilder && <MobileBottomNav />}
         </div>
       )}
 

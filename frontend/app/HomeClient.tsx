@@ -412,278 +412,297 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
       {/* ======================================================== */}
       {/* 🎪 DYNAMIC PROMOTIONAL & LIVE ADVERTISEMENT BANNER CAROUSEL */}
       {/* ======================================================== */}
-      {bannerSlides.length > 0 && currentSlideData && (
+      {bannerSlides.length > 0 && (
         <div className="space-y-2.5">
           <div
-            className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_16px_40px_rgba(15,23,42,0.20)] border-2 border-[#94A3B8] transition-all duration-300 [touch-action:pan-y]"
+            className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_16px_40px_rgba(15,23,42,0.20)] border-2 border-[#94A3B8] [touch-action:pan-y]"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             onTouchStart={handleBannerTouchStart}
             onTouchMove={handleBannerTouchMove}
             onTouchEnd={handleBannerTouchEnd}
           >
-            {/* Main Slide Card Container with Dynamic Gradient */}
-            <div className={`p-4 sm:p-7 md:p-8 bg-gradient-to-br ${currentSlideData.gradient} text-white min-h-[220px] sm:min-h-[260px] flex flex-col justify-between relative select-none`}>
-              {/* Ambient Lighting Beams */}
-              <div className="absolute -right-24 -top-24 w-[380px] h-[380px] rounded-full bg-blue-400/20 blur-[100px] pointer-events-none" />
-              <div className="absolute -left-24 -bottom-24 w-[380px] h-[380px] rounded-full bg-amber-400/15 blur-[100px] pointer-events-none" />
-              <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-white/80 to-transparent pointer-events-none" />
+            {/* The Horizontal Sliding Track (Smooth CSS transform for visible left/right slide animation) */}
+            <div
+              className="flex w-full transition-transform duration-500 ease-out"
+              style={{ transform: `translateX(-${activeSlide * 100}%)` }}
+            >
+              {bannerSlides.map((slide, slideIdx) => (
+                <div
+                  key={slide.id}
+                  className={`w-full shrink-0 p-4 sm:p-7 md:p-8 bg-gradient-to-br ${slide.gradient} text-white min-h-[220px] sm:min-h-[260px] flex flex-col justify-between relative select-none`}
+                >
+                  {/* Ambient Lighting Beams */}
+                  <div className="absolute -right-24 -top-24 w-[380px] h-[380px] rounded-full bg-blue-400/20 blur-[100px] pointer-events-none" />
+                  <div className="absolute -left-24 -bottom-24 w-[380px] h-[380px] rounded-full bg-amber-400/15 blur-[100px] pointer-events-none" />
+                  <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-white/80 to-transparent pointer-events-none" />
 
-              {/* ─── SLIDE TYPE 1: LIVE IN-PLAY MATCH BANNER ─── */}
-              {currentSlideData.type === 'live_match' && (
-                <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center">
-                  <div className="lg:col-span-8 flex flex-col gap-2 sm:gap-3">
-                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                      <span className="neon-badge-red px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest flex items-center gap-1.5 shadow-lg">
-                        <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                        LIVE MATCH ARENA
-                      </span>
-                      <CategoryBadge category={currentSlideData.category} size="xs" />
-                      <span className="bg-white/15 backdrop-blur-md text-white px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold border border-white/20 truncate max-w-[200px] sm:max-w-none">
-                        📍 {currentSlideData.venue}
-                      </span>
+                  {/* ─── SLIDE TYPE 1: LIVE IN-PLAY MATCH BANNER ─── */}
+                  {slide.type === 'live_match' && (
+                    <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center">
+                      <div className="lg:col-span-8 flex flex-col gap-2 sm:gap-3">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                          <span className="neon-badge-red px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest flex items-center gap-1.5 shadow-lg">
+                            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                            LIVE MATCH ARENA
+                          </span>
+                          <CategoryBadge category={slide.category} size="xs" />
+                          <span className="bg-white/15 backdrop-blur-md text-white px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold border border-white/20 truncate max-w-[200px] sm:max-w-none">
+                            📍 {slide.venue}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white drop-shadow-md font-['Montserrat'] tracking-tight leading-snug">
+                            {slide.title}
+                          </h2>
+                          <div className="flex items-center gap-2 sm:gap-3 mt-1 sm:mt-1.5 flex-wrap">
+                            <span className="text-base sm:text-2xl font-black font-mono text-[#FDE047] drop-shadow-sm">
+                              {slide.scoreSummary}
+                            </span>
+                            <span className="hidden sm:inline text-white/50">•</span>
+                            <span className="text-[11px] sm:text-sm font-semibold text-emerald-300">
+                              {slide.statusText}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* High-Converting Advertising Highlights */}
+                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 pt-0.5 sm:pt-1">
+                          <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
+                            <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F59E0B] shrink-0" />
+                            <span className="text-[11px] sm:text-xs font-bold">Prize: <strong className="text-[#FDE047] text-xs sm:text-sm font-mono">{slide.prizePool}</strong></span>
+                          </div>
+                          <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
+                            <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
+                            <span className="text-[11px] sm:text-xs font-bold">Entry: <strong className="text-white text-xs sm:text-sm font-mono">{slide.entryFee}</strong></span>
+                          </div>
+                          <div className="col-span-2 sm:col-span-1 bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
+                            <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-300 shrink-0" />
+                            <span className="text-[11px] sm:text-xs font-bold">Telemetry: <strong className="text-sky-300 text-[11px] sm:text-xs">Live Telemetry Gateway</strong></span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right Action Trigger */}
+                      <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-2 sm:gap-3">
+                        <div className="bg-black/30 backdrop-blur-md p-2.5 sm:p-4 rounded-2xl border border-white/20 text-center w-full lg:max-w-[280px]">
+                          <span className="text-[9px] sm:text-[10px] text-amber-300 uppercase tracking-widest font-black block">Grand Colosseum</span>
+                          <span className="text-sm sm:text-lg font-black text-white block mt-0.5">1st Prize ₹15,00,000</span>
+                          <span className="text-[9px] sm:text-[10px] text-white/70 block mt-0.5">Instant UPI Bank Withdrawals</span>
+                        </div>
+
+                        <Link
+                          href={`/match/${slide.matchId}`}
+                          className="w-full lg:max-w-[280px] prime-btn-3d text-center text-xs sm:text-sm font-black uppercase tracking-wider py-2.5 sm:py-3 flex items-center justify-center gap-2 shadow-[0_10px_25px_rgba(37,99,235,0.5)] hover:scale-105 transition"
+                        >
+                          <span>Enter Live Arena</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </Link>
+                      </div>
                     </div>
+                  )}
 
-                    <div>
-                      <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white drop-shadow-md font-['Montserrat'] tracking-tight leading-snug">
-                        {currentSlideData.title}
-                      </h2>
-                      <div className="flex items-center gap-2 sm:gap-3 mt-1 sm:mt-1.5 flex-wrap">
-                        <span className="text-base sm:text-2xl font-black font-mono text-[#FDE047] drop-shadow-sm">
-                          {currentSlideData.scoreSummary}
+                  {/* ─── SLIDE TYPE 2: FEATURED UPCOMING MEGA MATCH ─── */}
+                  {slide.type === 'upcoming_match' && (
+                    <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center">
+                      <div className="lg:col-span-8 flex flex-col gap-2 sm:gap-3">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                          <span className="neon-badge-gold px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest flex items-center gap-1.5 shadow-lg">
+                            <Flame className="w-3.5 h-3.5 fill-white" />
+                            FEATURED MEGA CONTEST
+                          </span>
+                          <CategoryBadge category={slide.category} size="xs" />
+                          <span className="bg-white/15 backdrop-blur-md text-white px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold border border-white/20 truncate">
+                            📅 {slide.matchDate} • ⏰ {slide.matchTime}
+                          </span>
+                        </div>
+
+                        <div>
+                          <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white drop-shadow-md font-['Montserrat'] tracking-tight leading-snug">
+                            {slide.title}
+                          </h2>
+                          <p className="text-xs sm:text-sm text-white/80 font-semibold mt-1 line-clamp-2 sm:line-clamp-none">
+                            Pick your 11 cricket champions &amp; assign Captain (2.0×) and Vice-Captain (1.5×) on the stadium pitch.
+                          </p>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap pt-0.5 sm:pt-1">
+                          <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
+                            <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F59E0B]" />
+                            <span className="text-[11px] sm:text-xs font-bold">Prize Pool: <strong className="text-[#FDE047] text-xs sm:text-sm font-mono">{slide.prizePool}</strong></span>
+                          </div>
+                          <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
+                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-300" />
+                            <span className="text-[11px] sm:text-xs font-bold">10,000 Spots Pool</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-2.5 sm:gap-3">
+                        <div className="grid grid-cols-2 gap-2 sm:gap-2.5 w-full lg:max-w-[280px]">
+                          <Link
+                            href={`/team-builder/${slide.matchId}`}
+                            className="prime-btn-dark-3d text-center text-xs font-black uppercase tracking-wider py-2.5 flex items-center justify-center gap-1.5"
+                          >
+                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#2563EB]" />
+                            <span>Create XI</span>
+                          </Link>
+                          <Link
+                            href={`/match/${slide.matchId}`}
+                            className="prime-btn-3d text-center text-xs font-black uppercase tracking-wider py-2.5 flex items-center justify-center gap-1.5"
+                          >
+                            <span>Join Now</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ─── SLIDE TYPE 3: ACCOUNT-WISE DAILY REWARD BANNER ─── */}
+                  {slide.type === 'daily_reward' && (
+                    <div className="relative z-10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sm:gap-6 py-1 sm:py-2">
+                      <div className="space-y-1.5 sm:space-y-2 max-w-xl">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-amber-400 text-slate-950 shadow-md">
+                          <Gift className="w-3.5 h-3.5" />
+                          DAILY REWARD BONUS
                         </span>
-                        <span className="hidden sm:inline text-white/50">•</span>
-                        <span className="text-[11px] sm:text-sm font-semibold text-emerald-300">
-                          {currentSlideData.statusText}
+                        <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug">
+                          {slide.title}
+                        </h2>
+                        <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-medium">
+                          {slide.subtitle}
+                        </p>
+                      </div>
+
+                      <div className="shrink-0 flex flex-col items-stretch sm:items-center gap-1.5 sm:gap-2">
+                        <button
+                          onClick={handleClaimDailyReward}
+                          disabled={claimingDaily}
+                          className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 text-slate-950 text-xs sm:text-sm font-black hover:scale-105 transition shadow-[0_10px_25px_rgba(245,158,11,0.5)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                        >
+                          <Sparkles className="w-4 h-4 text-amber-700" />
+                          <span>{claimingDaily ? 'Claiming Coins...' : '⚡ CLAIM DAILY REWARD NOW'}</span>
+                        </button>
+                        <span className="text-[10px] sm:text-[11px] text-white/80 font-bold text-center">100% Free • One-click credit</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ─── SLIDE TYPE 4: REFERRAL & SHARE BONUS BANNER ─── */}
+                  {slide.type === 'referral_bonus' && (
+                    <div className="relative z-10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sm:gap-6 py-1 sm:py-2">
+                      <div className="space-y-1.5 sm:space-y-2 max-w-xl">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-orange-500 text-white shadow-md">
+                          <Share2 className="w-3.5 h-3.5" />
+                          {slide.badge}
                         </span>
+                        <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug">
+                          {slide.title}
+                        </h2>
+                        <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-medium">
+                          {slide.subtitle}
+                        </p>
+                        <div className="flex items-center gap-2 sm:gap-3 pt-1 flex-wrap">
+                          <span className="text-xs text-amber-300 font-bold">Your Referral Code:</span>
+                          <span className="px-2.5 py-0.5 rounded-lg bg-black/40 border border-white/20 font-mono font-black text-white text-xs">
+                            {slide.referralCode}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="shrink-0 flex flex-col items-stretch sm:items-center gap-1.5 sm:gap-2">
+                        <button
+                          onClick={handleCopyReferral}
+                          className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-white text-slate-900 text-xs sm:text-sm font-black hover:bg-slate-100 hover:scale-105 transition shadow-[0_10px_25px_rgba(255,255,255,0.3)] flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          {copiedReferral ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-[#2563EB]" />}
+                          <span>{copiedReferral ? 'Link Copied!' : '📲 SHARE LINK & CLAIM BONUS'}</span>
+                        </button>
+                        <span className="text-[10px] sm:text-[11px] text-white/80 font-bold text-center">Invite friends via WhatsApp or Link</span>
                       </div>
                     </div>
+                  )}
 
-                    {/* High-Converting Advertising Highlights */}
-                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 pt-0.5 sm:pt-1">
-                      <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
-                        <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F59E0B] shrink-0" />
-                        <span className="text-[11px] sm:text-xs font-bold">Prize: <strong className="text-[#FDE047] text-xs sm:text-sm font-mono">{currentSlideData.prizePool}</strong></span>
+                  {/* ─── SLIDE TYPE 5: 100% DEPOSIT BOOST BANNER ─── */}
+                  {slide.type === 'deposit_boost' && (
+                    <div className="relative z-10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sm:gap-6 py-1 sm:py-2">
+                      <div className="space-y-1.5 sm:space-y-2 max-w-xl">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-purple-400 text-slate-950 shadow-md">
+                          <Coins className="w-3.5 h-3.5" />
+                          WALLET CASH BONUS
+                        </span>
+                        <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug">
+                          {slide.title}
+                        </h2>
+                        <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-medium">
+                          {slide.subtitle}
+                        </p>
                       </div>
-                      <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
-                        <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
-                        <span className="text-[11px] sm:text-xs font-bold">Entry: <strong className="text-white text-xs sm:text-sm font-mono">{currentSlideData.entryFee}</strong></span>
-                      </div>
-                      <div className="col-span-2 sm:col-span-1 bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
-                        <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-300 shrink-0" />
-                        <span className="text-[11px] sm:text-xs font-bold">Telemetry: <strong className="text-sky-300 text-[11px] sm:text-xs">Live Telemetry Gateway</strong></span>
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Right Action Trigger */}
-                  <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-2 sm:gap-3">
-                    <div className="bg-black/30 backdrop-blur-md p-2.5 sm:p-4 rounded-2xl border border-white/20 text-center w-full lg:max-w-[280px]">
-                      <span className="text-[9px] sm:text-[10px] text-amber-300 uppercase tracking-widest font-black block">Grand Colosseum</span>
-                      <span className="text-sm sm:text-lg font-black text-white block mt-0.5">1st Prize ₹15,00,000</span>
-                      <span className="text-[9px] sm:text-[10px] text-white/70 block mt-0.5">Instant UPI Bank Withdrawals</span>
-                    </div>
-
-                    <Link
-                      href={`/match/${currentSlideData.matchId}`}
-                      className="w-full lg:max-w-[280px] prime-btn-3d text-center text-xs sm:text-sm font-black uppercase tracking-wider py-2.5 sm:py-3 flex items-center justify-center gap-2 shadow-[0_10px_25px_rgba(37,99,235,0.5)] hover:scale-105 transition"
-                    >
-                      <span>Enter Live Arena</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </Link>
-                  </div>
-                </div>
-              )}
-
-              {/* ─── SLIDE TYPE 2: FEATURED UPCOMING MEGA MATCH ─── */}
-              {currentSlideData.type === 'upcoming_match' && (
-                <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center">
-                  <div className="lg:col-span-8 flex flex-col gap-2 sm:gap-3">
-                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                      <span className="neon-badge-gold px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest flex items-center gap-1.5 shadow-lg">
-                        <Flame className="w-3.5 h-3.5 fill-white" />
-                        FEATURED MEGA CONTEST
-                      </span>
-                      <CategoryBadge category={currentSlideData.category} size="xs" />
-                      <span className="bg-white/15 backdrop-blur-md text-white px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold border border-white/20 truncate">
-                        📅 {currentSlideData.matchDate} • ⏰ {currentSlideData.matchTime}
-                      </span>
-                    </div>
-
-                    <div>
-                      <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white drop-shadow-md font-['Montserrat'] tracking-tight leading-snug">
-                        {currentSlideData.title}
-                      </h2>
-                      <p className="text-xs sm:text-sm text-white/80 font-semibold mt-1 line-clamp-2 sm:line-clamp-none">
-                        Pick your 11 cricket champions &amp; assign Captain (2.0×) and Vice-Captain (1.5×) on the stadium pitch.
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap pt-0.5 sm:pt-1">
-                      <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
-                        <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F59E0B]" />
-                        <span className="text-[11px] sm:text-xs font-bold">Prize Pool: <strong className="text-[#FDE047] text-xs sm:text-sm font-mono">{currentSlideData.prizePool}</strong></span>
-                      </div>
-                      <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
-                        <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-300" />
-                        <span className="text-[11px] sm:text-xs font-bold">10,000 Spots Pool</span>
+                      <div className="shrink-0">
+                        <Link
+                          href={slide.actionLink}
+                          className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 text-xs sm:text-sm font-black hover:scale-105 transition shadow-[0_10px_25px_rgba(245,158,11,0.5)] flex items-center justify-center gap-2"
+                        >
+                          <span>💰 ADD CASH &amp; CLAIM 100% BONUS</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </Link>
                       </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-2.5 sm:gap-3">
-                    <div className="grid grid-cols-2 gap-2 sm:gap-2.5 w-full lg:max-w-[280px]">
-                      <Link
-                        href={`/team-builder/${currentSlideData.matchId}`}
-                        className="prime-btn-dark-3d text-center text-xs font-black uppercase tracking-wider py-2.5 flex items-center justify-center gap-1.5"
+                  {/* Bottom Bar: Manual Arrows + Slide Dots Navigation */}
+                  <div className="relative z-10 pt-3 sm:pt-4 mt-2 border-t border-white/15 flex items-center justify-between">
+                    {/* Prev / Next Controls */}
+                    <div className="flex items-center gap-1.5 sm:gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveSlide((prev) => (prev - 1 + bannerSlides.length) % bannerSlides.length);
+                        }}
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition cursor-pointer"
+                        aria-label="Previous Slide"
                       >
-                        <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#2563EB]" />
-                        <span>Create XI</span>
-                      </Link>
-                      <Link
-                        href={`/match/${currentSlideData.matchId}`}
-                        className="prime-btn-3d text-center text-xs font-black uppercase tracking-wider py-2.5 flex items-center justify-center gap-1.5"
+                        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveSlide((prev) => (prev + 1) % bannerSlides.length);
+                        }}
+                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition cursor-pointer"
+                        aria-label="Next Slide"
                       >
-                        <span>Join Now</span>
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* ─── SLIDE TYPE 3: ACCOUNT-WISE DAILY REWARD BANNER ─── */}
-              {currentSlideData.type === 'daily_reward' && (
-                <div className="relative z-10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sm:gap-6 py-1 sm:py-2">
-                  <div className="space-y-1.5 sm:space-y-2 max-w-xl">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-amber-400 text-slate-950 shadow-md">
-                      <Gift className="w-3.5 h-3.5" />
-                      DAILY REWARD BONUS
-                    </span>
-                    <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug">
-                      {currentSlideData.title}
-                    </h2>
-                    <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-medium">
-                      {currentSlideData.subtitle}
-                    </p>
-                  </div>
-
-                  <div className="shrink-0 flex flex-col items-stretch sm:items-center gap-1.5 sm:gap-2">
-                    <button
-                      onClick={handleClaimDailyReward}
-                      disabled={claimingDaily}
-                      className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 text-slate-950 text-xs sm:text-sm font-black hover:scale-105 transition shadow-[0_10px_25px_rgba(245,158,11,0.5)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      <Sparkles className="w-4 h-4 text-amber-700" />
-                      <span>{claimingDaily ? 'Claiming Coins...' : '⚡ CLAIM DAILY REWARD NOW'}</span>
-                    </button>
-                    <span className="text-[10px] sm:text-[11px] text-white/80 font-bold text-center">100% Free • One-click credit</span>
-                  </div>
-                </div>
-              )}
-
-              {/* ─── SLIDE TYPE 4: REFERRAL & SHARE BONUS BANNER ─── */}
-              {currentSlideData.type === 'referral_bonus' && (
-                <div className="relative z-10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sm:gap-6 py-1 sm:py-2">
-                  <div className="space-y-1.5 sm:space-y-2 max-w-xl">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-orange-500 text-white shadow-md">
-                      <Share2 className="w-3.5 h-3.5" />
-                      {currentSlideData.badge}
-                    </span>
-                    <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug">
-                      {currentSlideData.title}
-                    </h2>
-                    <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-medium">
-                      {currentSlideData.subtitle}
-                    </p>
-                    <div className="flex items-center gap-2 sm:gap-3 pt-1 flex-wrap">
-                      <span className="text-xs text-amber-300 font-bold">Your Referral Code:</span>
-                      <span className="px-2.5 py-0.5 rounded-lg bg-black/40 border border-white/20 font-mono font-black text-white text-xs">
-                        {currentSlideData.referralCode}
+                        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      </button>
+                      <span className="text-[10px] sm:text-[11px] text-white/70 font-mono font-bold ml-1">
+                        {slideIdx + 1} / {bannerSlides.length}
                       </span>
                     </div>
-                  </div>
 
-                  <div className="shrink-0 flex flex-col items-stretch sm:items-center gap-1.5 sm:gap-2">
-                    <button
-                      onClick={handleCopyReferral}
-                      className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-white text-slate-900 text-xs sm:text-sm font-black hover:bg-slate-100 hover:scale-105 transition shadow-[0_10px_25px_rgba(255,255,255,0.3)] flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      {copiedReferral ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-[#2563EB]" />}
-                      <span>{copiedReferral ? 'Link Copied!' : '📲 SHARE LINK & CLAIM BONUS'}</span>
-                    </button>
-                    <span className="text-[10px] sm:text-[11px] text-white/80 font-bold text-center">Invite friends via WhatsApp or Link</span>
-                  </div>
-                </div>
-              )}
-
-              {/* ─── SLIDE TYPE 5: 100% DEPOSIT BOOST BANNER ─── */}
-              {currentSlideData.type === 'deposit_boost' && (
-                <div className="relative z-10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sm:gap-6 py-1 sm:py-2">
-                  <div className="space-y-1.5 sm:space-y-2 max-w-xl">
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-purple-400 text-slate-950 shadow-md">
-                      <Coins className="w-3.5 h-3.5" />
-                      WALLET CASH BONUS
-                    </span>
-                    <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug">
-                      {currentSlideData.title}
-                    </h2>
-                    <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-medium">
-                      {currentSlideData.subtitle}
-                    </p>
-                  </div>
-
-                  <div className="shrink-0">
-                    <Link
-                      href={currentSlideData.actionLink}
-                      className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 text-xs sm:text-sm font-black hover:scale-105 transition shadow-[0_10px_25px_rgba(245,158,11,0.5)] flex items-center justify-center gap-2"
-                    >
-                      <span>💰 ADD CASH &amp; CLAIM 100% BONUS</span>
-                      <ArrowRight className="w-4 h-4" />
-                    </Link>
+                    {/* Inside Slide Indicator Dots */}
+                    <div className="flex items-center gap-1.5">
+                      {bannerSlides.map((s, idx) => (
+                        <button
+                          key={s.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveSlide(idx);
+                          }}
+                          className={`h-2 rounded-full transition-all cursor-pointer ${
+                            activeSlide === idx
+                              ? 'w-6 sm:w-7 bg-white shadow-md'
+                              : 'w-2 bg-white/35 hover:bg-white/60'
+                          }`}
+                          aria-label={`Jump to slide ${idx + 1}`}
+                        />
+                      ))}
+                    </div>
                   </div>
                 </div>
-              )}
-
-              {/* Bottom Bar: Manual Arrows + Slide Dots Navigation */}
-              <div className="relative z-10 pt-3 sm:pt-4 mt-2 border-t border-white/15 flex items-center justify-between">
-                {/* Prev / Next Controls */}
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <button
-                    onClick={() => setActiveSlide((prev) => (prev - 1 + bannerSlides.length) % bannerSlides.length)}
-                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition cursor-pointer"
-                    aria-label="Previous Slide"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  </button>
-                  <button
-                    onClick={() => setActiveSlide((prev) => (prev + 1) % bannerSlides.length)}
-                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition cursor-pointer"
-                    aria-label="Next Slide"
-                  >
-                    <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  </button>
-                  <span className="text-[10px] sm:text-[11px] text-white/70 font-mono font-bold ml-1">
-                    {activeSlide + 1} / {bannerSlides.length}
-                  </span>
-                </div>
-
-                {/* Inside Slide Indicator Dots */}
-                <div className="flex items-center gap-1.5">
-                  {bannerSlides.map((s, idx) => (
-                    <button
-                      key={s.id}
-                      onClick={() => setActiveSlide(idx)}
-                      className={`h-2 rounded-full transition-all cursor-pointer ${
-                        activeSlide === idx
-                          ? 'w-6 sm:w-7 bg-white shadow-md'
-                          : 'w-2 bg-white/35 hover:bg-white/60'
-                      }`}
-                      aria-label={`Jump to slide ${idx + 1}`}
-                    />
-                  ))}
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 
@@ -742,7 +761,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
             </span>
           </div>
 
-          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-y]">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-x_pan-y] [-webkit-overflow-scrolling:touch]">
             {liveMatches.map((m) => (
               <Link
                 key={m.id}
@@ -839,7 +858,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
         </div>
 
         {loading ? (
-          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-y]">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-x_pan-y] [-webkit-overflow-scrolling:touch]">
             {[1, 2, 3].map((n) => (
               <div key={n} className="h-48 min-w-[270px] max-w-[300px] shrink-0 snap-start rounded-2xl bg-white/70 animate-pulse border-2 border-[#CBD5E1]" />
             ))}
@@ -849,7 +868,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
             No upcoming matches in this category for the next 6 days.
           </div>
         ) : (
-          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-y]">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-x_pan-y] [-webkit-overflow-scrolling:touch]">
             {upcomingMatches.map((m) => (
               <div
                 key={m.id}
@@ -953,7 +972,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
             </span>
           </div>
 
-          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-y]">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-x_pan-y] [-webkit-overflow-scrolling:touch]">
             {comingSoonMatches.map((m) => (
               <div
                 key={m.id}

@@ -419,53 +419,120 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         </div>
 
         {/* Teams Matchup Ribbon */}
-        <div className="relative z-10 grid grid-cols-5 items-center gap-3 py-3">
-          {/* Team A */}
-          <div className="col-span-2 flex items-center gap-2 sm:gap-4 min-w-0">
-            <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border-2 border-[#93C5FD] flex items-center justify-center font-black text-lg text-white shadow-[0_4px_12px_rgba(37,99,235,0.3)] shrink-0 overflow-hidden">
-              {resolveImageUrl(match.team_a_logo) ? (
-                <img src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
-              ) : (match.team_a_code || match.team_a?.slice(0, 3).toUpperCase())}
+        <div className="relative z-10 py-2 sm:py-3">
+          {/* Mobile Screen Layout (<sm): Clean Two-Row Clash with VS Badge */}
+          <div className="sm:hidden space-y-2">
+            {/* Team A Card */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/90 border-2 border-[#93C5FD] shadow-xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border-2 border-[#93C5FD] flex items-center justify-center font-black text-sm text-white shadow-xs shrink-0 overflow-hidden">
+                  {resolveImageUrl(match.team_a_logo) ? (
+                    <img src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                  ) : (match.team_a_code || match.team_a?.slice(0, 3).toUpperCase())}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-black text-sm text-[#0F172A] truncate">{match.team_a}</h2>
+                  <span className="text-[10px] text-[#64748B] font-bold block">{match.team_a_code || 'TEAM A'}</span>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                {scoreSummary?.team_a ? (
+                  <p className="text-sm font-mono font-black text-[#2563EB]">
+                    {scoreSummary.team_a.runs}/{scoreSummary.team_a.wickets}
+                    <span className="text-[11px] font-normal text-[#64748B] ml-1">
+                      ({scoreSummary.team_a.overs} ov)
+                    </span>
+                  </p>
+                ) : (
+                  <span className="text-xs font-mono text-[#64748B]">{isLive ? 'Yet to bat' : 'Scheduled'}</span>
+                )}
+              </div>
             </div>
-            <div className="min-w-0">
-              <h2 className="font-black text-sm sm:text-2xl text-[#0F172A] truncate">{match.team_a}</h2>
-              {scoreSummary?.team_a && (
-                <p className="text-base sm:text-lg font-mono font-black text-[#2563EB]">
-                  {scoreSummary.team_a.runs}/{scoreSummary.team_a.wickets}
-                  <span className="text-xs font-normal text-[#64748B] ml-1.5">
-                    ({scoreSummary.team_a.overs} ov)
-                  </span>
-                </p>
-              )}
+
+            {/* VS Pill */}
+            <div className="flex items-center justify-center -my-1">
+              <span className="px-3 py-0.5 rounded-full bg-gradient-to-r from-[#0284C7] to-[#0369A1] text-white font-black text-[10px] italic shadow-sm border border-[#BAE6FD]">
+                VS
+              </span>
+            </div>
+
+            {/* Team B Card */}
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/90 border-2 border-[#FDE68A] shadow-xs">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border-2 border-[#FDE68A] flex items-center justify-center font-black text-sm text-white shadow-xs shrink-0 overflow-hidden">
+                  {resolveImageUrl(match.team_b_logo) ? (
+                    <img src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                  ) : (match.team_b_code || match.team_b?.slice(0, 3).toUpperCase())}
+                </div>
+                <div className="min-w-0">
+                  <h2 className="font-black text-sm text-[#0F172A] truncate">{match.team_b}</h2>
+                  <span className="text-[10px] text-[#64748B] font-bold block">{match.team_b_code || 'TEAM B'}</span>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                {scoreSummary?.team_b ? (
+                  <p className="text-sm font-mono font-black text-[#D97706]">
+                    {scoreSummary.team_b.runs}/{scoreSummary.team_b.wickets}
+                    <span className="text-[11px] font-normal text-[#64748B] ml-1">
+                      ({scoreSummary.team_b.overs} ov)
+                    </span>
+                  </p>
+                ) : (
+                  <span className="text-xs font-mono text-[#64748B]">{isLive ? 'Yet to bat' : 'Scheduled'}</span>
+                )}
+              </div>
             </div>
           </div>
 
-          {/* VS Divider */}
-          <div className="col-span-1 text-center">
-            <span className="inline-block px-3 py-1 rounded-xl bg-gradient-to-b from-[#0284C7] to-[#0369A1] border border-[#BAE6FD] text-white font-black text-sm italic shadow-md">
-              VS
-            </span>
-          </div>
-
-          {/* Team B */}
-          <div className="col-span-2 flex items-center justify-end gap-2 sm:gap-4 text-right min-w-0">
-            <div className="min-w-0">
-              <h2 className="font-black text-sm sm:text-2xl text-[#0F172A] truncate">{match.team_b}</h2>
-              {scoreSummary?.team_b ? (
-                <p className="text-base sm:text-lg font-mono font-black text-[#D97706]">
-                  {scoreSummary.team_b.runs}/{scoreSummary.team_b.wickets}
-                  <span className="text-xs font-normal text-[#64748B] ml-1.5">
-                    ({scoreSummary.team_b.overs} ov)
-                  </span>
-                </p>
-              ) : isLive ? (
-                <p className="text-xs font-mono text-[#64748B]">Yet to bat</p>
-              ) : null}
+          {/* Desktop & Tablet Layout (>=sm): Original 5-column Grid */}
+          <div className="hidden sm:grid grid-cols-5 items-center gap-3">
+            {/* Team A */}
+            <div className="col-span-2 flex items-center gap-2 sm:gap-4 min-w-0">
+              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border-2 border-[#93C5FD] flex items-center justify-center font-black text-lg text-white shadow-[0_4px_12px_rgba(37,99,235,0.3)] shrink-0 overflow-hidden">
+                {resolveImageUrl(match.team_a_logo) ? (
+                  <img src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                ) : (match.team_a_code || match.team_a?.slice(0, 3).toUpperCase())}
+              </div>
+              <div className="min-w-0">
+                <h2 className="font-black text-sm sm:text-2xl text-[#0F172A] truncate">{match.team_a}</h2>
+                {scoreSummary?.team_a && (
+                  <p className="text-base sm:text-lg font-mono font-black text-[#2563EB]">
+                    {scoreSummary.team_a.runs}/{scoreSummary.team_a.wickets}
+                    <span className="text-xs font-normal text-[#64748B] ml-1.5">
+                      ({scoreSummary.team_a.overs} ov)
+                    </span>
+                  </p>
+                )}
+              </div>
             </div>
-            <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border-2 border-[#FDE68A] flex items-center justify-center font-black text-lg text-white shadow-[0_4px_12px_rgba(245,158,11,0.3)] shrink-0 overflow-hidden">
-              {resolveImageUrl(match.team_b_logo) ? (
-                <img src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
-              ) : (match.team_b_code || match.team_b?.slice(0, 3).toUpperCase())}
+
+            {/* VS Divider */}
+            <div className="col-span-1 text-center">
+              <span className="inline-block px-3 py-1 rounded-xl bg-gradient-to-b from-[#0284C7] to-[#0369A1] border border-[#BAE6FD] text-white font-black text-sm italic shadow-md">
+                VS
+              </span>
+            </div>
+
+            {/* Team B */}
+            <div className="col-span-2 flex items-center justify-end gap-2 sm:gap-4 text-right min-w-0">
+              <div className="min-w-0">
+                <h2 className="font-black text-sm sm:text-2xl text-[#0F172A] truncate">{match.team_b}</h2>
+                {scoreSummary?.team_b ? (
+                  <p className="text-base sm:text-lg font-mono font-black text-[#D97706]">
+                    {scoreSummary.team_b.runs}/{scoreSummary.team_b.wickets}
+                    <span className="text-xs font-normal text-[#64748B] ml-1.5">
+                      ({scoreSummary.team_b.overs} ov)
+                    </span>
+                  </p>
+                ) : isLive ? (
+                  <p className="text-xs font-mono text-[#64748B]">Yet to bat</p>
+                ) : null}
+              </div>
+              <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border-2 border-[#FDE68A] flex items-center justify-center font-black text-lg text-white shadow-[0_4px_12px_rgba(245,158,11,0.3)] shrink-0 overflow-hidden">
+                {resolveImageUrl(match.team_b_logo) ? (
+                  <img src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                ) : (match.team_b_code || match.team_b?.slice(0, 3).toUpperCase())}
+              </div>
             </div>
           </div>
         </div>

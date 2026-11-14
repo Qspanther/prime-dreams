@@ -486,65 +486,75 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
       {/* Match & Squad Meter Card */}
       {match && (
         <div className="prime-card-3d p-5 space-y-4">
-          <div className="flex items-center justify-between pb-3 border-b border-[#E2E8F0]">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E2E8F0]">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
               {/* Team A Logo */}
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border border-[#93C5FD] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border border-[#93C5FD] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
                 {resolveImageUrl(match.team_a_logo) ? (
                   <img src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                 ) : (match.team_a_code || match.team_a?.slice(0, 3).toUpperCase())}
               </div>
 
-              <div>
-                <h2 className="font-black text-[#0F172A] text-base sm:text-xl">
+              <div className="min-w-0 flex-1">
+                <h2 className="font-black text-[#0F172A] text-sm sm:text-xl truncate">
                   {match.team_a} vs {match.team_b}
                 </h2>
-                <p className="text-xs text-[#64748B] font-bold">Max 7 players from any single team</p>
+                <p className="text-[11px] sm:text-xs text-[#64748B] font-bold">Max 7 players from any single team</p>
               </div>
 
               {/* Team B Logo */}
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-[#FDE68A] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-[#FDE68A] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
                 {resolveImageUrl(match.team_b_logo) ? (
                   <img src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                 ) : (match.team_b_code || match.team_b?.slice(0, 3).toUpperCase())}
               </div>
             </div>
 
-            <div className="text-right">
-              <span className="pd-eyebrow block text-[#64748B]">Credits Left</span>
-              <span className={`pd-num text-xl font-black font-mono ${creditsLeft < 9 ? 'text-[#DC2626]' : 'text-[#D97706] drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]'}`}>
+            <div className="flex items-center justify-between sm:justify-end gap-2 bg-[#F8FAFC] sm:bg-transparent p-2 sm:p-0 rounded-xl border sm:border-0 border-[#CBD5E1] shrink-0">
+              <span className="text-[10px] uppercase font-black tracking-wider text-[#64748B]">Credits Left</span>
+              <span className={`text-base sm:text-xl font-black font-mono ${creditsLeft < 9 ? 'text-[#DC2626]' : 'text-[#D97706] drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]'}`}>
                 {creditsLeft} / {TOTAL_CREDITS}
               </span>
             </div>
           </div>
 
           {/* 11 Players Count Meter */}
-          <div className="grid grid-cols-4 gap-2 pt-1 text-center text-xs">
-            <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
-              <span className="pd-eyebrow !tracking-normal text-[10px] text-[#64748B] block">Selected</span>
-              <span className="pd-num font-black text-base text-[#2563EB] font-mono">
-                {selectedPlayerIds.length} / 11
+          <div className="grid grid-cols-4 gap-1.5 sm:gap-2 pt-1 text-center">
+            <div className="p-2 sm:p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1] flex flex-col justify-center">
+              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-[#64748B] tracking-wider truncate">
+                Selected
+              </span>
+              <span className="block text-xs sm:text-base font-black font-mono text-[#2563EB] whitespace-nowrap mt-0.5">
+                {selectedPlayerIds.length}/11
               </span>
             </div>
-            <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
-              <span className="pd-eyebrow !tracking-normal text-[10px] text-[#64748B] block truncate" title={match.team_a}>{match.team_a_code || match.team_a}</span>
-              <span className="pd-num font-black text-base text-[#0F172A] font-mono">
-                {teamCounts[match.team_a] || 0} / 7
+            <div className="p-2 sm:p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1] flex flex-col justify-center">
+              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-[#64748B] tracking-wider truncate" title={match.team_a}>
+                {match.team_a_code || match.team_a?.slice(0, 5).toUpperCase()}
+              </span>
+              <span className="block text-xs sm:text-base font-black font-mono text-[#0F172A] whitespace-nowrap mt-0.5">
+                {teamCounts[match.team_a] || 0}/7
               </span>
             </div>
-            <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
-              <span className="pd-eyebrow !tracking-normal text-[10px] text-[#64748B] block truncate" title={match.team_b}>{match.team_b_code || match.team_b}</span>
-              <span className="pd-num font-black text-base text-[#0F172A] font-mono">
-                {teamCounts[match.team_b] || 0} / 7
+            <div className="p-2 sm:p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1] flex flex-col justify-center">
+              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-[#64748B] tracking-wider truncate" title={match.team_b}>
+                {match.team_b_code || match.team_b?.slice(0, 5).toUpperCase()}
+              </span>
+              <span className="block text-xs sm:text-base font-black font-mono text-[#0F172A] whitespace-nowrap mt-0.5">
+                {teamCounts[match.team_b] || 0}/7
               </span>
             </div>
-            <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
-              <span className="pd-eyebrow !tracking-normal text-[10px] text-[#64748B] block">Squad Pool</span>
-              <span className="pd-num font-black text-base text-[#0F172A] font-mono">{players.length || 22} Total</span>
+            <div className="p-2 sm:p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1] flex flex-col justify-center">
+              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-[#64748B] tracking-wider truncate">
+                Squad
+              </span>
+              <span className="block text-xs sm:text-base font-black font-mono text-[#0F172A] whitespace-nowrap mt-0.5">
+                {players.length || 22} Total
+              </span>
             </div>
           </div>
 
-          {/* Dream11-Style Pitch & Stadium Insights Bar */}
+          {/* Stadium Pitch & Pitch Insights Bar */}
           <div className="rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] p-3 shadow-xs">
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
               <div className="flex items-center gap-1.5 font-black text-[#0F172A]">
@@ -845,7 +855,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
       </div>
 
       {/* Bottom Floating Bar */}
-      <div className="sticky bottom-4 z-20 space-y-2">
+      <div className="sticky bottom-2 sm:bottom-4 z-30 space-y-2">
         {error && !showPitchPreview && (
           <div className="p-3 rounded-xl bg-red-50 border-2 border-red-400 text-red-700 text-xs font-bold flex items-center justify-between shadow-xl">
             <div className="flex items-center gap-2">
@@ -862,29 +872,29 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
           </div>
         )}
 
-        <div className="p-3 sm:p-4 bg-white/95 backdrop-blur-xl rounded-2xl border-2 border-[#CBD5E1] flex items-center justify-between shadow-[0_10px_30px_rgba(30,58,138,0.18)]">
-          <div>
-            <div className="flex items-center gap-2">
+        <div className="p-2.5 sm:p-4 bg-white/95 backdrop-blur-xl rounded-2xl border-2 border-[#CBD5E1] flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 shadow-[0_10px_30px_rgba(30,58,138,0.18)]">
+          <div className="flex items-center justify-between w-full sm:w-auto gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <span className={`text-xs font-black ${selectedPlayerIds.length === 11 ? 'text-green-700' : 'text-[#0F172A]'}`}>
                 {selectedPlayerIds.length}/11 Players Picked
               </span>
               {selectedPlayerIds.length === 11 && (
                 <span className="text-[10px] font-black text-green-700 bg-green-100 border border-green-300 px-1.5 py-0.2 rounded">
-                  ✓ 11 Selected
+                  ✓ Ready
                 </span>
               )}
             </div>
             <span className="text-xs text-[#D97706] font-mono font-black">{creditsLeft} CR left</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
             <button
               type="button"
               onClick={() => {
                 setPitchMode('view');
                 setShowPitchPreview(true);
               }}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white !py-2.5 !px-3 sm:!px-4 text-xs font-black flex items-center gap-1.5 rounded-xl shadow-lg border-2 border-emerald-400 cursor-pointer transition-transform hover:scale-105"
+              className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white !py-2.5 px-3 sm:px-4 text-xs font-black flex items-center justify-center gap-1.5 rounded-xl shadow-lg border-2 border-emerald-400 cursor-pointer transition-transform hover:scale-105"
               title="View on Cricket Stadium Ground"
             >
               <Eye className="w-4 h-4 text-emerald-200" />
@@ -895,7 +905,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
               <button
                 type="button"
                 disabled
-                className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-[#E2E8F0] text-[#94A3B8] border border-[#CBD5E1] cursor-not-allowed flex items-center gap-1.5 shadow-none"
+                className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-[#E2E8F0] text-[#94A3B8] border border-[#CBD5E1] cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none"
               >
                 <Lock className="w-4 h-4 text-[#94A3B8]" />
                 <span>Squads Locked</span>
@@ -904,11 +914,11 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
               <button
                 type="button"
                 onClick={handleProceedToCaptain}
-                className={`prime-btn-3d !py-2.5 !px-4 sm:!px-6 text-xs font-black uppercase tracking-wider cursor-pointer ${
+                className={`flex-1 sm:flex-none prime-btn-3d !py-2.5 px-3 sm:px-6 text-xs font-black uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1 ${
                   selectedPlayerIds.length === 11 ? 'shadow-[0_0_16px_rgba(37,99,235,0.6)]' : 'opacity-90'
                 }`}
               >
-                <span>{isLowBalance ? `Add ₹${entryFee - (walletBalance || 0)} to Join →` : entryFee > 0 ? `Pay ₹${entryFee} • Choose C / VC →` : 'Choose C / VC →'}</span>
+                <span>{isLowBalance ? `Add ₹${entryFee - (walletBalance || 0)}` : entryFee > 0 ? `Pay ₹${entryFee} • Next` : 'Choose C / VC →'}</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             )}
