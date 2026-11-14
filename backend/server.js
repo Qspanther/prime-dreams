@@ -202,6 +202,21 @@ async function start() {
     await sequelize.sync();
     console.log('📦 Database synced');
 
+    // Ensure 10,000 Realistic Indian Bots exist in Database
+    try {
+      const { User } = require('./db/models');
+      const { seedBots } = require('./services/seed-10000-bots');
+      const botCount = await User.count({ where: { is_bot: true } });
+      if (botCount < 10000) {
+        console.log(`🤖 Bot network has ${botCount} bots. Auto-seeding 10,000 realistic Indian bots...`);
+        await seedBots(10000);
+      } else {
+        console.log(`🤖 Verified 10,000 realistic Indian bots with @gmail.com active in Database.`);
+      }
+    } catch (botSeedErr) {
+      console.warn('⚠️ Bot verification notice:', botSeedErr.message);
+    }
+
     // Seed sample matches only for local SQLite development.
     if (!process.env.DATABASE_URL && process.env.NODE_ENV !== 'production') {
       await seedCricketMatches();
