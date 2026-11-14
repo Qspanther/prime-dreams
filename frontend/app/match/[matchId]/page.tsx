@@ -497,7 +497,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               <span>In-Play Live Cricket Telemetry Stream</span>
             </h3>
             <span className="bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE] px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold">
-              ⚡ Cricbuzz Auto-Syncing (10s)
+              ⚡ Live Telemetry Auto-Sync (10s)
             </span>
           </div>
 
@@ -820,7 +820,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               {(isLive || match.is_locked) && (
                 <div className="rounded-xl bg-[#FEF2F2] border-2 border-[#FCA5A5] p-4 flex items-center gap-3 text-xs font-black text-[#991B1B]">
                   <Lock className="w-5 h-5 shrink-0 text-[#DC2626]" />
-                  <span>🔒 Match in-play / locked hone ke baad private contests create ya join nahi kiye ja sakte (Dream11 Rules).</span>
+                  <span>🔒 Match in-play / locked hone ke baad private contests create ya join nahi kiye ja sakte (Official Fairplay Rules).</span>
                 </div>
               )}
 

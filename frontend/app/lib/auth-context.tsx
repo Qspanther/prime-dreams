@@ -9,6 +9,8 @@ interface User {
   email: string;
   kycStatus?: string;
   role?: string;
+  referral_code?: string;
+  total_referrals_count?: number;
 }
 
 interface AuthContextType {

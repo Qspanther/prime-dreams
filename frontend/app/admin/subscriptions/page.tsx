@@ -19,6 +19,10 @@ interface SettingsData {
   share_unlock_reward_days: string;
   subscription_monthly_price: string;
   subscription_duration_days: string;
+  referral_bonus_amount?: string;
+  welcome_bonus_amount?: string;
+  promo_banner_title?: string;
+  promo_banner_subtitle?: string;
 }
 
 interface StatsData {
@@ -60,6 +64,10 @@ export default function AdminSubscriptionsPage() {
     share_unlock_reward_days: '30',
     subscription_monthly_price: '199',
     subscription_duration_days: '30',
+    referral_bonus_amount: '500',
+    welcome_bonus_amount: '100',
+    promo_banner_title: 'Share & Earn ₹500 Bonus Cash',
+    promo_banner_subtitle: 'Invite 3 friends with your referral link to unlock instant cash bonus + 30 days tournament access!',
   });
 
   const [stats, setStats] = useState<StatsData>({
@@ -374,6 +382,87 @@ export default function AdminSubscriptionsPage() {
               <p className="text-[10px] text-[#64748B] mt-1">Duration of paid pass (e.g. 30 days)</p>
             </div>
           </div>
+        </div>
+
+        {/* SECTION 3: Promotional Banners & Bonus Cash Policy */}
+        <div className="prime-card-3d bg-white p-6 border border-[#CBD5E1] space-y-6">
+          <div className="pb-4 border-b border-[#E2E8F0]">
+            <h3 className="text-lg font-black text-[#0F172A] flex items-center gap-2">
+              <Gift className="text-[#D97706]" size={20} />
+              Homepage Promotional Banners &amp; Bonus Cash Controls
+            </h3>
+            <p className="text-xs text-[#334155] mt-0.5">
+              Customize referral rewards, welcome cash bonuses, and the promotional advertising banners displayed on the homepage.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Referral Cash Bonus Amount */}
+            <div>
+              <label className="block text-xs font-semibold text-[#334155] uppercase tracking-wider mb-2">
+                Referral / Share Cash Bonus (₹)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="10"
+                  value={form.referral_bonus_amount || '500'}
+                  onChange={e => setForm({ ...form, referral_bonus_amount: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-white border border-[#CBD5E1] rounded-xl font-bold text-[#0F172A] focus:outline-none focus:border-[#2563EB] text-sm"
+                />
+                <span className="absolute right-3 top-2.5 text-xs text-[#64748B]">INR</span>
+              </div>
+              <p className="text-[10px] text-[#64748B] mt-1">Bonus cash awarded per 3 friends referred</p>
+            </div>
+
+            {/* Welcome Signup Bonus Amount */}
+            <div>
+              <label className="block text-xs font-semibold text-[#334155] uppercase tracking-wider mb-2">
+                Welcome / First Deposit Bonus (₹)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  min="0"
+                  step="10"
+                  value={form.welcome_bonus_amount || '100'}
+                  onChange={e => setForm({ ...form, welcome_bonus_amount: e.target.value })}
+                  className="w-full px-4 py-2.5 bg-white border border-[#CBD5E1] rounded-xl font-bold text-[#0F172A] focus:outline-none focus:border-[#2563EB] text-sm"
+                />
+                <span className="absolute right-3 top-2.5 text-xs text-[#64748B]">INR</span>
+              </div>
+              <p className="text-[10px] text-[#64748B] mt-1">Instant bonus credited on first registration</p>
+            </div>
+
+            {/* Promo Banner Headline */}
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-[#334155] uppercase tracking-wider mb-2">
+                Promotional Banner Headline
+              </label>
+              <input
+                type="text"
+                value={form.promo_banner_title || 'Share & Earn ₹500 Bonus Cash'}
+                onChange={e => setForm({ ...form, promo_banner_title: e.target.value })}
+                className="w-full px-4 py-2.5 bg-white border border-[#CBD5E1] rounded-xl font-bold text-[#0F172A] focus:outline-none focus:border-[#2563EB] text-sm"
+                placeholder="e.g. Share & Earn ₹500 Bonus Cash"
+              />
+            </div>
+
+            {/* Promo Banner Subtitle */}
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-[#334155] uppercase tracking-wider mb-2">
+                Promotional Banner Subtitle
+              </label>
+              <input
+                type="text"
+                value={form.promo_banner_subtitle || 'Invite 3 friends with your referral link to unlock instant cash bonus + 30 days tournament access!'}
+                onChange={e => setForm({ ...form, promo_banner_subtitle: e.target.value })}
+                className="w-full px-4 py-2.5 bg-white border border-[#CBD5E1] rounded-xl text-[#0F172A] focus:outline-none focus:border-[#2563EB] text-sm"
+                placeholder="e.g. Invite friends with your referral link to unlock instant bonus!"
+              />
+            </div>
+          </div>
 
           <div className="pt-2 flex justify-end">
             <button
@@ -382,7 +471,7 @@ export default function AdminSubscriptionsPage() {
               className="px-6 py-2.5 bg-gradient-to-r from-[#2563EB] to-[#1D4ED8] text-white font-bold rounded-xl text-sm flex items-center gap-2 hover:opacity-90 disabled:opacity-50 transition-all shadow-lg shadow-[#2563EB]/20"
             >
               <Save size={16} />
-              {saving ? 'Saving Changes...' : 'Save Subscription & Share Rules'}
+              {saving ? 'Saving Policy...' : 'Save Bonus & Share Policy'}
             </button>
           </div>
         </div>

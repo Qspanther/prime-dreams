@@ -372,4 +372,47 @@ router.post('/purchase', authenticate, async (req, res) => {
   }
 });
 
+// Public Promo Banner Configuration
+router.get('/promo-banner-settings', async (req, res) => {
+  try {
+    const keys = [
+      'share_unlock_target',
+      'share_unlock_reward_days',
+      'referral_bonus_amount',
+      'welcome_bonus_amount',
+      'promo_banner_title',
+      'promo_banner_subtitle',
+    ];
+    const rows = await SystemSetting.findAll({ where: { key: keys } });
+    const settings = {
+      share_unlock_target: 3,
+      share_unlock_reward_days: 30,
+      referral_bonus_amount: 500,
+      welcome_bonus_amount: 100,
+      promo_banner_title: 'Share & Earn ₹500 Bonus Cash',
+      promo_banner_subtitle: 'Invite 3 friends with your referral link to unlock instant cash bonus + 30 days tournament access!',
+    };
+    rows.forEach(r => {
+      if (['share_unlock_target', 'share_unlock_reward_days', 'referral_bonus_amount', 'welcome_bonus_amount'].includes(r.key)) {
+        settings[r.key] = Number(r.value) || settings[r.key];
+      } else {
+        settings[r.key] = r.value || settings[r.key];
+      }
+    });
+    res.json({ success: true, settings });
+  } catch (err) {
+    res.json({
+      success: true,
+      settings: {
+        share_unlock_target: 3,
+        share_unlock_reward_days: 30,
+        referral_bonus_amount: 500,
+        welcome_bonus_amount: 100,
+        promo_banner_title: 'Share & Earn ₹500 Bonus Cash',
+        promo_banner_subtitle: 'Invite 3 friends with your referral link to unlock instant cash bonus + 30 days tournament access!',
+      }
+    });
+  }
+});
+
 module.exports = router;

@@ -103,7 +103,7 @@ export default function RewardsPage() {
       const segAngle = (360 / SPIN_PRIZES.length) * segIndex;
       setSpinAngle(360 * 5 - segAngle - (360 / SPIN_PRIZES.length) / 2);
       setSpinResult(prize);
-      setMessage(res?.message || `You won ${prize} DreamCoins!`);
+      setMessage(res?.message || `You won ${prize} Prime Coins!`);
       setTimeout(async () => await loadState(), 600);
     } catch (e: any) {
       setError(e?.message || 'No spins left today. Come back tomorrow!');
@@ -122,7 +122,7 @@ export default function RewardsPage() {
       const res = await apiPost('/rewards/scratch', {}, token);
       const prize = Number(res?.prize) || 0;
       setScratchResult(prize);
-      setMessage(res?.message || `You scratched and won ${prize} DreamCoins!`);
+      setMessage(res?.message || `You scratched and won ${prize} Prime Coins!`);
       setTimeout(async () => await loadState(), 600);
     } catch (e: any) {
       setError(e?.message || 'No scratch cards left');
@@ -168,7 +168,7 @@ export default function RewardsPage() {
           <Coins className="w-6 h-6 text-[#92400E]" />
         </div>
         <div>
-          <h1 className="text-xl font-black text-[#0F172A]">DreamCoins Rewards</h1>
+          <h1 className="text-xl font-black text-[#0F172A]">Prime Coins Rewards</h1>
           <p className="text-xs text-[#64748B] font-bold">Earn coins, spin the wheel, scratch &amp; complete missions</p>
         </div>
       </div>
@@ -187,7 +187,7 @@ export default function RewardsPage() {
         <div>
           <p className="text-[10px] text-[#92400E] uppercase font-black tracking-widest">Your Balance</p>
           <p className="text-3xl font-black text-[#92400E] font-mono">{coins.toLocaleString('en-IN')}</p>
-          <p className="text-[10px] text-[#B45309] font-bold">DreamCoins</p>
+          <p className="text-[10px] text-[#B45309] font-bold">Prime Coins</p>
         </div>
         <div className="flex gap-3">
           <div className="text-center bg-white/70 rounded-2xl px-4 py-2 border border-[#FDE68A]">
@@ -208,14 +208,14 @@ export default function RewardsPage() {
             <Gift className="w-5 h-5 text-[#2563EB]" />
             <h3 className="font-black text-sm text-[#0F172A]">Daily Reward</h3>
           </div>
-          <p className="text-xs text-[#64748B] font-bold mb-4">Claim your free DreamCoins every day. Streak rewards keep growing!</p>
+          <p className="text-xs text-[#64748B] font-bold mb-4">Claim your free Prime Coins every day. Streak rewards keep growing!</p>
           <button
             onClick={handleClaimDaily}
             disabled={claimingDaily || !canClaimDaily}
             className="prime-btn-3d w-full !py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {claimingDaily ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            {canClaimDaily ? 'Claim ₹20 DreamCoins' : 'Claimed Today ✓'}
+            {canClaimDaily ? 'Claim ₹20 Prime Coins' : 'Claimed Today ✓'}
           </button>
         </div>
 
@@ -284,13 +284,13 @@ export default function RewardsPage() {
             ) : scratchResult !== null ? (
               <div>
                 <p className="text-3xl font-black text-[#92400E] font-mono">{scratchResult}</p>
-                <p className="text-[10px] text-[#B45309] font-bold uppercase">DreamCoins won!</p>
+                <p className="text-[10px] text-[#B45309] font-bold uppercase">Prime Coins won!</p>
               </div>
             ) : scratchCards > 0 ? (
               <div className="px-4">
                 <Star className="w-6 h-6 mx-auto mb-2 text-[#F59E0B]" />
                 <p className="text-xs font-black text-[#0F172A]">Tap to scratch</p>
-                <p className="text-[10px] text-[#64748B] font-bold mt-1">Win up to {Math.max(...SCRATCH_PRIZES)} DreamCoins</p>
+                <p className="text-[10px] text-[#64748B] font-bold mt-1">Win up to {Math.max(...SCRATCH_PRIZES)} Prime Coins</p>
               </div>
             ) : (
               <div className="px-4">

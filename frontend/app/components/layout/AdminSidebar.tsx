@@ -4,7 +4,7 @@ import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Home, Trophy, Users, Shield, Wallet, Sliders, ArrowLeft
+  Home, Trophy, Users, Shield, Wallet, Sliders, ArrowLeft, Gift
 } from 'lucide-react';
 import PrimeLogo from '../ui/PrimeLogo';
 
@@ -12,6 +12,7 @@ const navItems = [
   { href: '/admin', label: 'Console Overview', icon: Home },
   { href: '/admin/tournaments', label: 'Cricket Matches & Contests', icon: Trophy },
   { href: '/admin/crypto', label: 'INR Gateway & Payments', icon: Wallet },
+  { href: '/admin/subscriptions', label: 'Bonus & Referral Policy', icon: Gift },
   { href: '/admin/formula', label: 'Fantasy Scoring Formula', icon: Sliders },
   { href: '/admin/users', label: 'Player Management', icon: Shield },
 ];

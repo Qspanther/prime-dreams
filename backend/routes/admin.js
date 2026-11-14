@@ -802,6 +802,10 @@ router.get('/subscription-settings', authenticate, isAdmin, async (req, res) => 
       'share_unlock_reward_days',
       'subscription_monthly_price',
       'subscription_duration_days',
+      'referral_bonus_amount',
+      'welcome_bonus_amount',
+      'promo_banner_title',
+      'promo_banner_subtitle',
     ];
 
     const settingsRows = await SystemSetting.findAll({ where: { key: keys } });
@@ -881,6 +885,10 @@ router.get('/subscription-settings', authenticate, isAdmin, async (req, res) => 
         share_unlock_reward_days: settingsMap.share_unlock_reward_days || '30',
         subscription_monthly_price: settingsMap.subscription_monthly_price || '199',
         subscription_duration_days: settingsMap.subscription_duration_days || '30',
+        referral_bonus_amount: settingsMap.referral_bonus_amount || '500',
+        welcome_bonus_amount: settingsMap.welcome_bonus_amount || '100',
+        promo_banner_title: settingsMap.promo_banner_title || 'Share & Earn ₹500 Bonus Cash',
+        promo_banner_subtitle: settingsMap.promo_banner_subtitle || 'Invite 3 friends with your referral link to unlock instant cash bonus + 30 days tournament access!',
       },
       stats: {
         activeSubscribersCount,
@@ -908,6 +916,10 @@ router.put('/subscription-settings', authenticate, isAdmin, async (req, res) => 
       'share_unlock_reward_days',
       'subscription_monthly_price',
       'subscription_duration_days',
+      'referral_bonus_amount',
+      'welcome_bonus_amount',
+      'promo_banner_title',
+      'promo_banner_subtitle',
     ];
 
     for (const key of allowedKeys) {

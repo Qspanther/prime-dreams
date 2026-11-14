@@ -1,16 +1,16 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useAuth } from './lib/auth-context';
-import { apiGet, resolveImageUrl } from './lib/api';
+import { apiGet, apiPost, resolveImageUrl } from './lib/api';
 import {
   Trophy, Clock, Users, ArrowRight, Shield, Activity,
-  Radio, Sparkles, ChevronRight, AlertCircle, Calendar, Zap, Bell
+  Radio, Sparkles, ChevronRight, ChevronLeft, AlertCircle,
+  Calendar, Zap, Bell, Flame, Coins, Gift, Share2, Copy, Check
 } from 'lucide-react';
 import CategoryFilterTabs from './components/ui/CategoryFilterTabs';
 import CategoryBadge from './components/ui/CategoryBadge';
-import PrimeLogo from './components/ui/PrimeLogo';
 import MatchPosterFrame from './components/ui/MatchPosterFrame';
 
 function getLiveScoreText(match: any, side: 'team_a' | 'team_b') {
@@ -36,13 +36,41 @@ interface HomeClientProps {
 }
 
 export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [matches, setMatches] = useState<any[]>(initialMatches);
   const [loading, setLoading] = useState<boolean>(initialMatches.length === 0);
   const [bannerDismissed, setBannerDismissed] = useState<boolean>(false);
   const [reminders, setReminders] = useState<Record<string, boolean>>({});
   const [reminderToast, setReminderToast] = useState<string | null>(null);
+
+  // Dynamic Banner Carousel State
+  const [activeSlide, setActiveSlide] = useState<number>(0);
+  const [isHovered, setIsHovered] = useState<boolean>(false);
+  const [copiedReferral, setCopiedReferral] = useState<boolean>(false);
+  const [claimingDaily, setClaimingDaily] = useState<boolean>(false);
+  const [dailyClaimedSession, setDailyClaimedSession] = useState<boolean>(false);
+
+  // Touch Swipe Coordinates for Mobile Banner Gestures
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const isSwipingBanner = useRef<boolean>(false);
+
+  // User Reward & Promo Configuration
+  const [rewardsState, setRewardsState] = useState<any>(null);
+  const [promoSettings, setPromoSettings] = useState<{
+    referral_bonus_amount: number;
+    welcome_bonus_amount: number;
+    share_unlock_target: number;
+    promo_banner_title: string;
+    promo_banner_subtitle: string;
+  }>({
+    referral_bonus_amount: 500,
+    welcome_bonus_amount: 100,
+    share_unlock_target: 3,
+    promo_banner_title: 'Share & Earn ₹500 Bonus Cash!',
+    promo_banner_subtitle: 'Invite 3 friends with your referral link to unlock instant cash bonus + 30 days tournament access!',
+  });
 
   const toggleReminder = (e: React.MouseEvent, matchId: string, matchTitle: string) => {
     e.preventDefault();
@@ -74,12 +102,36 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
   useEffect(() => {
     fetchMatches();
-    // Auto-sync live scores every 10 seconds (§8, §12)
     const interval = setInterval(fetchMatches, 10000);
     return () => clearInterval(interval);
   }, [selectedCategory]);
 
-  // Session-only dismiss for personalized welcome banner (§3)
+  // Fetch Admin Promo Settings & User Rewards
+  useEffect(() => {
+    apiGet('/subscription/promo-banner-settings')
+      .then((res) => {
+        if (res?.settings) {
+          setPromoSettings({
+            referral_bonus_amount: Number(res.settings.referral_bonus_amount) || 500,
+            welcome_bonus_amount: Number(res.settings.welcome_bonus_amount) || 100,
+            share_unlock_target: Number(res.settings.share_unlock_target) || 3,
+            promo_banner_title: res.settings.promo_banner_title || 'Share & Earn ₹500 Bonus Cash!',
+            promo_banner_subtitle: res.settings.promo_banner_subtitle || 'Invite 3 friends with your referral link to unlock instant cash bonus + 30 days tournament access!',
+          });
+        }
+      })
+      .catch(() => {});
+
+    if (token) {
+      apiGet('/rewards/state', token)
+        .then((res) => {
+          if (res?.success) setRewardsState(res);
+        })
+        .catch(() => {});
+    }
+  }, [token]);
+
+  // Session-only dismiss for personalized welcome banner
   useEffect(() => {
     if (typeof sessionStorage !== 'undefined') {
       const dismissed = sessionStorage.getItem('prime_welcome_dismissed');
@@ -94,8 +146,49 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
     }
   };
 
-  // 1. Live, Upcoming & Coming Soon Matches (Optimized single-pass memoization)
-  const { liveMatches, upcomingMatches, comingSoonMatches } = React.useMemo(() => {
+  // Claim Daily Login Reward Directly from Banner
+  const handleClaimDailyReward = async () => {
+    if (!token) {
+      setReminderToast('Please log in to claim your daily bonus!');
+      setTimeout(() => setReminderToast(null), 3000);
+      return;
+    }
+    setClaimingDaily(true);
+    try {
+      const res = await apiPost('/rewards/claim-daily', {}, token);
+      if (res?.success) {
+        setDailyClaimedSession(true);
+        setReminderToast(`🎉 Congratulations! You claimed ${res.coins_earned || 20} Prime Coins!`);
+        setTimeout(() => setReminderToast(null), 4000);
+        // Refresh reward state
+        apiGet('/rewards/state', token).then(r => r?.success && setRewardsState(r)).catch(() => {});
+      } else {
+        setReminderToast(res?.error || 'Could not claim daily reward');
+        setTimeout(() => setReminderToast(null), 3000);
+      }
+    } catch (err: any) {
+      setReminderToast(err.message || 'Already claimed or server error');
+      setTimeout(() => setReminderToast(null), 3000);
+    } finally {
+      setClaimingDaily(false);
+    }
+  };
+
+  // Copy Referral Share Link
+  const handleCopyReferral = () => {
+    const code = user?.referral_code || 'PRIME100';
+    const shareText = `🏏 Join me on Prime Dreams Cricket Fantasy! Use my code "${code}" to unlock a ₹${promoSettings.welcome_bonus_amount} Signup Bonus + Free Match Passes: https://prime-dreams.onrender.com/signup?ref=${code}`;
+    navigator.clipboard.writeText(shareText);
+    setCopiedReferral(true);
+    setReminderToast(`📋 Referral link copied! Share with friends to earn ₹${promoSettings.referral_bonus_amount} Bonus!`);
+    setTimeout(() => {
+      setCopiedReferral(false);
+      setReminderToast(null);
+    }, 4000);
+  };
+
+  // Filter Live, Upcoming & Coming Soon Matches
+  const { liveMatches, upcomingMatches, comingSoonMatches } = useMemo(() => {
     const now = Date.now();
     const live: any[] = [];
     const upcoming: any[] = [];
@@ -124,33 +217,191 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
     return { liveMatches: live, upcomingMatches: upcoming, comingSoonMatches: comingSoon };
   }, [matches]);
 
-  // Featured Hero Match (either first live match or first upcoming match)
-  const heroMatch = liveMatches[0] || upcomingMatches[0] || matches[0];
+  // Construct Dynamic Advertisement Banners List
+  const bannerSlides = useMemo(() => {
+    const slides: any[] = [];
+
+    // 1. Live Matches Advertisement Banners (1 for every live fixture)
+    liveMatches.forEach((m, idx) => {
+      slides.push({
+        id: `live-${m.id}`,
+        type: 'live_match',
+        badge: '🔴 LIVE IN-PLAY MATCH',
+        badgeClass: 'neon-badge-red',
+        category: m.category,
+        venue: m.venue || 'International Cricket Stadium',
+        title: m.title || `${m.team_a} vs ${m.team_b}`,
+        teamA: m.team_a,
+        teamB: m.team_b,
+        teamALogo: m.team_a_logo,
+        teamBLogo: m.team_b_logo,
+        teamACode: m.team_a_code || m.team_a?.slice(0, 3).toUpperCase(),
+        teamBCode: m.team_b_code || m.team_b?.slice(0, 3).toUpperCase(),
+        scoreSummary: getLiveScoreSummary(m),
+        statusText: m.live_data?.status_text || 'Live score syncing from telemetry feed',
+        matchId: m.id,
+        prizePool: m.total_prize_pool > 0 ? `₹${m.total_prize_pool.toLocaleString('en-IN')}` : '₹50,00,000',
+        entryFee: m.min_entry_fee > 0 ? `₹${m.min_entry_fee}` : '₹49',
+        gradient: 'from-[#090D16] via-[#0F172A] to-[#1E3A8A]',
+      });
+    });
+
+    // 2. Featured Upcoming Mega Match Banner (if upcoming fixtures exist)
+    if (upcomingMatches.length > 0) {
+      const topMatch = upcomingMatches[0];
+      slides.push({
+        id: `upcoming-${topMatch.id}`,
+        type: 'upcoming_match',
+        badge: '🔥 FEATURED MEGA MATCH',
+        badgeClass: 'neon-badge-gold',
+        category: topMatch.category,
+        venue: topMatch.venue || 'Stadium Arena',
+        title: topMatch.title || `${topMatch.team_a} vs ${topMatch.team_b}`,
+        teamA: topMatch.team_a,
+        teamB: topMatch.team_b,
+        teamALogo: topMatch.team_a_logo,
+        teamBLogo: topMatch.team_b_logo,
+        teamACode: topMatch.team_a_code || topMatch.team_a?.slice(0, 3).toUpperCase(),
+        teamBCode: topMatch.team_b_code || topMatch.team_b?.slice(0, 3).toUpperCase(),
+        matchDate: topMatch.match_date,
+        matchTime: topMatch.match_time,
+        matchId: topMatch.id,
+        prizePool: topMatch.total_prize_pool > 0 ? `₹${topMatch.total_prize_pool.toLocaleString('en-IN')}` : '₹10,00,000',
+        entryFee: topMatch.min_entry_fee > 0 ? `₹${topMatch.min_entry_fee}` : '₹49',
+        gradient: 'from-[#0B132B] via-[#1C2541] to-[#3A506B]',
+      });
+    }
+
+    // 3. Account-Wise Daily Reward Banner (Shown only if NOT redeemed yet)
+    const canClaimDaily = (!dailyClaimedSession && rewardsState?.can_claim_daily !== false);
+    if (canClaimDaily) {
+      slides.push({
+        id: 'account-daily-reward',
+        type: 'daily_reward',
+        badge: '🎁 DAILY REWARD READY',
+        badgeClass: 'bg-emerald-500 text-white font-black',
+        title: 'Claim Your Daily 20 Prime Coins + Free Scratch Card!',
+        subtitle: 'Log in daily to claim free coins, spin the wheel, and unlock free tournament passes.',
+        actionType: 'claim_daily',
+        gradient: 'from-[#064E3B] via-[#047857] to-[#0284C7]',
+      });
+    }
+
+    // 4. Admin-Configured Referral / Share Bonus Cash Banner
+    slides.push({
+      id: 'account-referral-promo',
+      type: 'referral_bonus',
+      badge: `📢 EARN ₹${promoSettings.referral_bonus_amount} BONUS CASH`,
+      badgeClass: 'bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black',
+      title: promoSettings.promo_banner_title,
+      subtitle: promoSettings.promo_banner_subtitle,
+      targetFriends: promoSettings.share_unlock_target,
+      completedFriends: user?.total_referrals_count || 0,
+      referralCode: user?.referral_code || 'PRIME100',
+      actionType: 'copy_referral',
+      gradient: 'from-[#1E1B4B] via-[#312E81] to-[#2563EB]',
+    });
+
+    // 5. Welcome 100% Deposit Bonus Banner
+    slides.push({
+      id: 'account-deposit-boost',
+      type: 'deposit_boost',
+      badge: '⚡ 100% DEPOSIT BONUS',
+      badgeClass: 'bg-purple-600 text-white font-black',
+      title: 'Instant 100% Match Deposit Bonus',
+      subtitle: `Add cash to your wallet & get an instant bonus up to ₹${promoSettings.referral_bonus_amount}! Play mega contests risk-free.`,
+      actionLink: '/wallet',
+      gradient: 'from-[#3B0764] via-[#581C87] to-[#7E22CE]',
+    });
+
+    return slides;
+  }, [liveMatches, upcomingMatches, rewardsState, dailyClaimedSession, promoSettings, user]);
+
+  // Auto-rotate advertisement banners:
+  // Immediate auto-swap cue on mount (swaps after 2.5s so mobile/desktop users immediately notice auto-rotation),
+  // then rotates every 4.5s (pauses on hover or active touch swipe).
+  useEffect(() => {
+    if (bannerSlides.length <= 1) return;
+
+    const initialCue = setTimeout(() => {
+      if (!isHovered && !isSwipingBanner.current) {
+        setActiveSlide((prev) => (prev + 1) % bannerSlides.length);
+      }
+    }, 2500);
+
+    const interval = setInterval(() => {
+      if (!isHovered && !isSwipingBanner.current) {
+        setActiveSlide((prev) => (prev + 1) % bannerSlides.length);
+      }
+    }, 4500);
+
+    return () => {
+      clearTimeout(initialCue);
+      clearInterval(interval);
+    };
+  }, [bannerSlides.length, isHovered]);
+
+  // Touch Swipe Gesture Handlers for Mobile Banners
+  const handleBannerTouchStart = (e: React.TouchEvent) => {
+    setIsHovered(true);
+    touchStartX.current = e.targetTouches[0].clientX;
+    touchStartY.current = e.targetTouches[0].clientY;
+    isSwipingBanner.current = true;
+  };
+
+  const handleBannerTouchMove = (e: React.TouchEvent) => {
+    // Keep touch tracking live
+  };
+
+  const handleBannerTouchEnd = (e: React.TouchEvent) => {
+    setIsHovered(false);
+    if (touchStartX.current === null) return;
+    const endX = e.changedTouches[0].clientX;
+    const endY = e.changedTouches[0].clientY;
+    const diffX = touchStartX.current - endX;
+    const diffY = (touchStartY.current || 0) - endY;
+
+    // Trigger slide swap if horizontal swipe distance > 35px and larger than vertical drift
+    if (Math.abs(diffX) > 35 && Math.abs(diffX) > Math.abs(diffY)) {
+      if (diffX > 0) {
+        // Swiped Left -> Next Slide
+        setActiveSlide((prev) => (prev + 1) % bannerSlides.length);
+      } else {
+        // Swiped Right -> Previous Slide
+        setActiveSlide((prev) => (prev - 1 + bannerSlides.length) % bannerSlides.length);
+      }
+    }
+    touchStartX.current = null;
+    touchStartY.current = null;
+    isSwipingBanner.current = false;
+  };
+
+  const currentSlideData = bannerSlides[activeSlide] || bannerSlides[0];
 
   return (
-    <div className="w-full px-3 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto space-y-8 bg-transparent text-[#0F172A]">
-      {/* Personalized Welcome Banner (§3: 3D Golden Liquid Glass) */}
+    <div className="w-full px-3 sm:px-6 lg:px-8 py-4 sm:py-6 max-w-7xl mx-auto space-y-6 sm:space-y-8 bg-transparent text-[#0F172A]">
+      {/* Personalized Welcome Banner */}
       {!bannerDismissed && (
-        <div className="relative rounded-2xl prime-card-shiny-gold p-4 sm:p-5 flex items-center justify-between border-2 border-[#F59E0B] shadow-[0_10px_25px_rgba(245,158,11,0.18)]">
+        <div className="relative rounded-2xl prime-card-shiny-gold p-3.5 sm:p-5 flex items-center justify-between border-2 border-[#F59E0B] shadow-[0_10px_25px_rgba(245,158,11,0.18)]">
           <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <div className="w-13 h-13 rounded-2xl bg-gradient-to-b from-[#3B82F6] via-[#2563EB] to-[#1D4ED8] flex items-center justify-center shrink-0 shadow-[0_4px_14px_rgba(37,99,235,0.4)] border-2 border-white">
-              <span className="text-2xl drop-shadow-md">🏏</span>
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-b from-[#3B82F6] via-[#2563EB] to-[#1D4ED8] flex items-center justify-center shrink-0 shadow-[0_4px_14px_rgba(37,99,235,0.4)] border-2 border-white">
+              <span className="text-xl sm:text-2xl drop-shadow-md">🏏</span>
             </div>
-            <div>
-              <h2 className="text-sm sm:text-lg font-black text-[#0F172A] flex items-center gap-2">
-                <span>Welcome back, <span className="text-[#2563EB]">{user?.name || user?.username || 'Champion'}</span>! 🏏</span>
-                <span className="hidden sm:inline px-2.5 py-0.5 rounded-full text-[10px] font-black bg-[#2563EB] text-white border border-[#93C5FD] shadow-sm">
+            <div className="min-w-0">
+              <h2 className="text-xs sm:text-lg font-black text-[#0F172A] flex items-center gap-1.5 sm:gap-2 truncate">
+                <span className="truncate">Welcome back, <span className="text-[#2563EB]">{user?.name || user?.username || 'Champion'}</span>! 🏏</span>
+                <span className="hidden sm:inline px-2 py-0.5 rounded-full text-[10px] font-black bg-[#2563EB] text-white border border-[#93C5FD] shadow-sm shrink-0">
                   PRIME VIP
                 </span>
               </h2>
-              <p className="text-xs sm:text-sm text-[#475569] font-semibold mt-0.5">
+              <p className="text-[11px] sm:text-sm text-[#475569] font-semibold mt-0.5 line-clamp-1 sm:line-clamp-none">
                 Ready to build your winning cricket fantasy XI &amp; conquer the Grand Colosseum?
               </p>
             </div>
           </div>
           <button
             onClick={handleDismissBanner}
-            className="text-[#64748B] hover:text-[#0F172A] p-2 text-sm shrink-0 ml-2 rounded-lg hover:bg-black/5 transition"
+            className="text-[#64748B] hover:text-[#0F172A] p-1.5 sm:p-2 text-sm shrink-0 ml-1.5 rounded-lg hover:bg-black/5 transition cursor-pointer"
             title="Dismiss for this session"
           >
             ✕
@@ -158,185 +409,306 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
         </div>
       )}
 
-      {/* Hero Grand Match Showcase (3D Elevated Bluish-White Crystal Feature) */}
-      {heroMatch && (
-        <div className="relative w-full rounded-3xl bg-gradient-to-br from-white via-[#F0F6FD] to-[#E2EEFC] border-2 border-[#94A3B8] hover:border-[#2563EB] overflow-hidden shadow-[0_15px_40px_rgba(30,58,138,0.12)] transition-all duration-300 text-[#0F172A]">
-          {/* Match Poster Backdrop if available */}
-          {resolveImageUrl(heroMatch.match_poster) && (
-            <div className="absolute inset-0 z-0 opacity-20 pointer-events-none overflow-hidden">
-              <img
-                src={resolveImageUrl(heroMatch.match_poster)}
-                alt="Match Poster"
-                className="w-full h-full object-cover scale-105"
-                onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-white via-white/85 to-white/70" />
-            </div>
-          )}
+      {/* ======================================================== */}
+      {/* 🎪 DYNAMIC PROMOTIONAL & LIVE ADVERTISEMENT BANNER CAROUSEL */}
+      {/* ======================================================== */}
+      {bannerSlides.length > 0 && currentSlideData && (
+        <div className="space-y-2.5">
+          <div
+            className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_16px_40px_rgba(15,23,42,0.20)] border-2 border-[#94A3B8] transition-all duration-300 [touch-action:pan-y]"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+            onTouchStart={handleBannerTouchStart}
+            onTouchMove={handleBannerTouchMove}
+            onTouchEnd={handleBannerTouchEnd}
+          >
+            {/* Main Slide Card Container with Dynamic Gradient */}
+            <div className={`p-4 sm:p-7 md:p-8 bg-gradient-to-br ${currentSlideData.gradient} text-white min-h-[220px] sm:min-h-[260px] flex flex-col justify-between relative select-none`}>
+              {/* Ambient Lighting Beams */}
+              <div className="absolute -right-24 -top-24 w-[380px] h-[380px] rounded-full bg-blue-400/20 blur-[100px] pointer-events-none" />
+              <div className="absolute -left-24 -bottom-24 w-[380px] h-[380px] rounded-full bg-amber-400/15 blur-[100px] pointer-events-none" />
+              <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-white/80 to-transparent pointer-events-none" />
 
-          {/* Spotlight Ambient Beams */}
-          <div className="absolute -right-24 -top-24 w-[420px] h-[420px] rounded-full bg-blue-400/15 blur-[120px] pointer-events-none" />
-          <div className="absolute -left-24 -bottom-24 w-[420px] h-[420px] rounded-full bg-sky-300/20 blur-[120px] pointer-events-none" />
+              {/* ─── SLIDE TYPE 1: LIVE IN-PLAY MATCH BANNER ─── */}
+              {currentSlideData.type === 'live_match' && (
+                <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center">
+                  <div className="lg:col-span-8 flex flex-col gap-2 sm:gap-3">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                      <span className="neon-badge-red px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest flex items-center gap-1.5 shadow-lg">
+                        <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                        LIVE MATCH ARENA
+                      </span>
+                      <CategoryBadge category={currentSlideData.category} size="xs" />
+                      <span className="bg-white/15 backdrop-blur-md text-white px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold border border-white/20 truncate max-w-[200px] sm:max-w-none">
+                        📍 {currentSlideData.venue}
+                      </span>
+                    </div>
 
-          {/* Top Glass Specular Line */}
-          <div className="absolute top-0 inset-x-0 h-[2px] bg-gradient-to-r from-transparent via-white/80 to-transparent pointer-events-none" />
+                    <div>
+                      <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white drop-shadow-md font-['Montserrat'] tracking-tight leading-snug">
+                        {currentSlideData.title}
+                      </h2>
+                      <div className="flex items-center gap-2 sm:gap-3 mt-1 sm:mt-1.5 flex-wrap">
+                        <span className="text-base sm:text-2xl font-black font-mono text-[#FDE047] drop-shadow-sm">
+                          {currentSlideData.scoreSummary}
+                        </span>
+                        <span className="hidden sm:inline text-white/50">•</span>
+                        <span className="text-[11px] sm:text-sm font-semibold text-emerald-300">
+                          {currentSlideData.statusText}
+                        </span>
+                      </div>
+                    </div>
 
-          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6 sm:p-8 items-center">
-            {/* Left Match Narrative & Telemetry */}
-            <div className="lg:col-span-7 flex flex-col gap-4">
-              <div className="flex flex-wrap items-center gap-2.5">
-                {heroMatch.status === 'live' ? (
-                  <span className="neon-badge-red px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-2">
-                    <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
-                    LIVE MATCH ARENA
-                  </span>
-                ) : (
-                  <span className="neon-badge-gold px-3 py-1 rounded-full text-xs font-black uppercase tracking-widest flex items-center gap-1.5">
-                    <Zap className="w-3.5 h-3.5 fill-white text-white" />
-                    FEATURED MEGA MATCH
-                  </span>
-                )}
-                <CategoryBadge category={heroMatch.category} size="sm" />
-                <span className="bg-white/80 text-[#334155] px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 border border-[#CBD5E1] shadow-sm">
-                  📍 {heroMatch.venue || 'International Cricket Stadium'}
-                </span>
-              </div>
-
-              <div>
-                <span className="pd-eyebrow block text-[#64748B]">
-                  {heroMatch.status === 'live' ? 'Current Live Score' : 'Guaranteed Colosseum Prize Pool'}
-                </span>
-                <h1 className="pd-num text-3xl sm:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-[#1E3A8A] via-[#2563EB] to-[#0284C7] drop-shadow-sm tracking-tight font-['Montserrat',sans-serif]">
-                  {heroMatch.status === 'live'
-                    ? getLiveScoreSummary(heroMatch)
-                    : `₹${heroMatch.total_prize_pool > 0 ? heroMatch.total_prize_pool.toLocaleString('en-IN') : '50,00,000'} MEGA ARENA`}
-                </h1>
-                <p className="pd-num text-xs sm:text-sm text-[#475569] font-bold mt-1">
-                  {heroMatch.status === 'live'
-                    ? heroMatch.live_data?.status_text || 'Live status confirmed by the score feed.'
-                    : '1st Prize ₹15,00,000 Guaranteed • Instant UTR/UPI Bank Payouts • 0% Fair-Play Certified'}
-                </p>
-              </div>
-
-              {/* 3D Teams Face-Off Card Ribbon */}
-              <div className="grid grid-cols-7 items-center bg-white/90 rounded-2xl p-4 sm:p-5 border-2 border-[#CBD5E1] shadow-[0_4px_12px_rgba(30,58,138,0.06)]">
-                {/* Team A */}
-                <div className="col-span-3 flex items-center gap-2 sm:gap-3 min-w-0">
-                  <div className="w-13 h-13 rounded-2xl bg-gradient-to-b from-[#EF4444] to-[#B91C1C] flex items-center justify-center shadow-[0_4px_14px_rgba(239,68,68,0.4)] font-black text-lg text-white font-['Montserrat'] shrink-0 border-2 border-white overflow-hidden">
-                    {resolveImageUrl(heroMatch.team_a_logo) && heroMatch.team_a_logo !== '/cricket/team_a.png' ? (
-                      <img src={resolveImageUrl(heroMatch.team_a_logo)} alt={heroMatch.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.innerHTML = heroMatch.team_a_code || heroMatch.team_a?.slice(0, 3).toUpperCase(); }} />
-                    ) : (heroMatch.team_a_code || heroMatch.team_a?.slice(0, 3).toUpperCase())}
+                    {/* High-Converting Advertising Highlights */}
+                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 pt-0.5 sm:pt-1">
+                      <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
+                        <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F59E0B] shrink-0" />
+                        <span className="text-[11px] sm:text-xs font-bold">Prize: <strong className="text-[#FDE047] text-xs sm:text-sm font-mono">{currentSlideData.prizePool}</strong></span>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
+                        <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
+                        <span className="text-[11px] sm:text-xs font-bold">Entry: <strong className="text-white text-xs sm:text-sm font-mono">{currentSlideData.entryFee}</strong></span>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1 bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
+                        <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-300 shrink-0" />
+                        <span className="text-[11px] sm:text-xs font-bold">Telemetry: <strong className="text-sky-300 text-[11px] sm:text-xs">Live Telemetry Gateway</strong></span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-black text-base text-[#0F172A] truncate drop-shadow-sm">{heroMatch.team_a}</span>
-                    <span className="text-[10px] sm:text-xs text-emerald-600 font-extrabold flex items-center gap-1 min-w-0 max-w-full">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                      <span className="truncate">{heroMatch.status === 'live' ? getLiveScoreText(heroMatch, 'team_a') : 'Form: W • W • L • W'}</span>
+
+                  {/* Right Action Trigger */}
+                  <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-2 sm:gap-3">
+                    <div className="bg-black/30 backdrop-blur-md p-2.5 sm:p-4 rounded-2xl border border-white/20 text-center w-full lg:max-w-[280px]">
+                      <span className="text-[9px] sm:text-[10px] text-amber-300 uppercase tracking-widest font-black block">Grand Colosseum</span>
+                      <span className="text-sm sm:text-lg font-black text-white block mt-0.5">1st Prize ₹15,00,000</span>
+                      <span className="text-[9px] sm:text-[10px] text-white/70 block mt-0.5">Instant UPI Bank Withdrawals</span>
+                    </div>
+
+                    <Link
+                      href={`/match/${currentSlideData.matchId}`}
+                      className="w-full lg:max-w-[280px] prime-btn-3d text-center text-xs sm:text-sm font-black uppercase tracking-wider py-2.5 sm:py-3 flex items-center justify-center gap-2 shadow-[0_10px_25px_rgba(37,99,235,0.5)] hover:scale-105 transition"
+                    >
+                      <span>Enter Live Arena</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── SLIDE TYPE 2: FEATURED UPCOMING MEGA MATCH ─── */}
+              {currentSlideData.type === 'upcoming_match' && (
+                <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center">
+                  <div className="lg:col-span-8 flex flex-col gap-2 sm:gap-3">
+                    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                      <span className="neon-badge-gold px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest flex items-center gap-1.5 shadow-lg">
+                        <Flame className="w-3.5 h-3.5 fill-white" />
+                        FEATURED MEGA CONTEST
+                      </span>
+                      <CategoryBadge category={currentSlideData.category} size="xs" />
+                      <span className="bg-white/15 backdrop-blur-md text-white px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold border border-white/20 truncate">
+                        📅 {currentSlideData.matchDate} • ⏰ {currentSlideData.matchTime}
+                      </span>
+                    </div>
+
+                    <div>
+                      <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white drop-shadow-md font-['Montserrat'] tracking-tight leading-snug">
+                        {currentSlideData.title}
+                      </h2>
+                      <p className="text-xs sm:text-sm text-white/80 font-semibold mt-1 line-clamp-2 sm:line-clamp-none">
+                        Pick your 11 cricket champions &amp; assign Captain (2.0×) and Vice-Captain (1.5×) on the stadium pitch.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap pt-0.5 sm:pt-1">
+                      <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
+                        <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F59E0B]" />
+                        <span className="text-[11px] sm:text-xs font-bold">Prize Pool: <strong className="text-[#FDE047] text-xs sm:text-sm font-mono">{currentSlideData.prizePool}</strong></span>
+                      </div>
+                      <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
+                        <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-300" />
+                        <span className="text-[11px] sm:text-xs font-bold">10,000 Spots Pool</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-2.5 sm:gap-3">
+                    <div className="grid grid-cols-2 gap-2 sm:gap-2.5 w-full lg:max-w-[280px]">
+                      <Link
+                        href={`/team-builder/${currentSlideData.matchId}`}
+                        className="prime-btn-dark-3d text-center text-xs font-black uppercase tracking-wider py-2.5 flex items-center justify-center gap-1.5"
+                      >
+                        <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#2563EB]" />
+                        <span>Create XI</span>
+                      </Link>
+                      <Link
+                        href={`/match/${currentSlideData.matchId}`}
+                        className="prime-btn-3d text-center text-xs font-black uppercase tracking-wider py-2.5 flex items-center justify-center gap-1.5"
+                      >
+                        <span>Join Now</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── SLIDE TYPE 3: ACCOUNT-WISE DAILY REWARD BANNER ─── */}
+              {currentSlideData.type === 'daily_reward' && (
+                <div className="relative z-10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sm:gap-6 py-1 sm:py-2">
+                  <div className="space-y-1.5 sm:space-y-2 max-w-xl">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-amber-400 text-slate-950 shadow-md">
+                      <Gift className="w-3.5 h-3.5" />
+                      DAILY REWARD BONUS
                     </span>
-                  </div>
-                </div>
-
-                {/* VS Badge & Lock Countdown */}
-                <div className="col-span-1 min-w-0 flex flex-col items-center justify-center text-center">
-                  <span className="font-black text-base text-[#2563EB] italic">VS</span>
-                  <div className="bg-[#E0F2FE] px-1.5 py-0.5 rounded-full text-[#0369A1] text-[9px] font-black mt-1 border border-[#38BDF8] shadow-sm leading-tight max-w-full">
-                    {heroMatch.status === 'live' ? 'LIVE NOW' : `${heroMatch.match_date}`}
-                  </div>
-                </div>
-
-                {/* Team B */}
-                <div className="col-span-3 flex items-center justify-end gap-2 sm:gap-3 text-right min-w-0">
-                  <div className="flex flex-col min-w-0 items-end">
-                    <span className="font-black text-base text-[#0F172A] truncate drop-shadow-sm">{heroMatch.team_b}</span>
-                    <span className="text-[10px] sm:text-xs text-emerald-600 font-extrabold flex items-center gap-1 min-w-0 max-w-full">
-                      <span className="truncate">{heroMatch.status === 'live' ? getLiveScoreText(heroMatch, 'team_b') : 'Form: W • W • W • L'}</span>
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
-                    </span>
-                  </div>
-                  <div className="w-13 h-13 rounded-2xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] flex items-center justify-center shadow-[0_4px_14px_rgba(245,158,11,0.4)] font-black text-lg text-white font-['Montserrat'] shrink-0 border-2 border-white overflow-hidden">
-                    {resolveImageUrl(heroMatch.team_b_logo) && heroMatch.team_b_logo !== '/cricket/team_b.png' ? (
-                      <img src={resolveImageUrl(heroMatch.team_b_logo)} alt={heroMatch.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.innerHTML = heroMatch.team_b_code || heroMatch.team_b?.slice(0, 3).toUpperCase(); }} />
-                    ) : (heroMatch.team_b_code || heroMatch.team_b?.slice(0, 3).toUpperCase())}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Right Action Card & Prize Structure Column (3D Distinct Border Box) */}
-            <div className="lg:col-span-5 flex flex-col justify-between h-full prime-card-3d p-6 space-y-5 border-2 border-[#94A3B8]">
-              {heroMatch.status === 'live' ? (
-                <>
-                  <div>
-                    <span className="pd-eyebrow block text-[#64748B]">Live match status</span>
-                    <h3 className="text-lg font-black text-[#0F172A] mt-1">{heroMatch.live_data?.status_text || 'Live score syncing'}</h3>
-                    <p className="text-xs text-[#64748B] mt-3">
-                      Source: {heroMatch.live_data?.source || 'Cricbuzz'}
-                      {heroMatch.last_live_poll_at ? ` · Updated ${Math.max(0, Math.round((Date.now() - new Date(heroMatch.last_live_poll_at).getTime()) / 1000))}s ago` : ''}
+                    <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug">
+                      {currentSlideData.title}
+                    </h2>
+                    <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-medium">
+                      {currentSlideData.subtitle}
                     </p>
                   </div>
-                  <Link href={`/match/${heroMatch.id}`} className="prime-btn-3d text-center text-xs font-black uppercase tracking-wider">
-                    <span>View Live Score</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </Link>
-                </>
-              ) : (
-                <>
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="pd-eyebrow block text-[#64748B]">
-                    Colosseum Championship
-                  </span>
-                  <h3 className="text-lg font-black text-[#0F172A] mt-1">Mega Grand Entry Pass</h3>
-                </div>
-                <div className="text-right">
-                  <span className="pd-num text-3xl font-black text-transparent bg-clip-text bg-gradient-to-b from-[#F59E0B] to-[#B45309] drop-shadow-sm font-mono">
-                    {heroMatch.min_entry_fee > 0 ? `₹${heroMatch.min_entry_fee}` : '₹49'}
-                  </span>
-                  <span className="text-[10px] text-[#64748B] font-bold block uppercase">Entry Fee</span>
-                </div>
-              </div>
 
-              {/* Spots Fill Meter (3D Tube) */}
-              <div className="space-y-2">
-                <div className="flex justify-between text-xs font-black">
-                  <span className="text-[#DC2626] flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-[#EF4444] animate-ping" />
-                    2,450 Spots Left
-                  </span>
-                  <span className="text-[#64748B]">Max 20 Teams</span>
+                  <div className="shrink-0 flex flex-col items-stretch sm:items-center gap-1.5 sm:gap-2">
+                    <button
+                      onClick={handleClaimDailyReward}
+                      disabled={claimingDaily}
+                      className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 text-slate-950 text-xs sm:text-sm font-black hover:scale-105 transition shadow-[0_10px_25px_rgba(245,158,11,0.5)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                    >
+                      <Sparkles className="w-4 h-4 text-amber-700" />
+                      <span>{claimingDaily ? 'Claiming Coins...' : '⚡ CLAIM DAILY REWARD NOW'}</span>
+                    </button>
+                    <span className="text-[10px] sm:text-[11px] text-white/80 font-bold text-center">100% Free • One-click credit</span>
+                  </div>
                 </div>
-                <div className="w-full h-3 bg-[#E2E8F0] rounded-full overflow-hidden p-0.5 border border-[#CBD5E1] shadow-inner">
-                  <div className="h-full bg-gradient-to-r from-[#3B82F6] via-[#0EA5E9] to-[#06B6D4] rounded-full shadow-sm" style={{ width: '84%' }} />
-                </div>
-              </div>
-
-              {/* 3D Tactile Water Action Buttons */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-                <Link
-                  href={`/team-builder/${heroMatch.id}`}
-                  className="prime-btn-dark-3d text-center text-xs font-black uppercase tracking-wider"
-                >
-                  <Users className="w-4 h-4 text-[#2563EB]" />
-                  <span>Create Team</span>
-                </Link>
-
-                <Link
-                  href={`/match/${heroMatch.id}`}
-                  className="prime-btn-3d text-center text-xs font-black uppercase tracking-wider"
-                >
-                  <span>Join Contests</span>
-                  <ArrowRight className="w-4 h-4" />
-                </Link>
-              </div>
-                </>
               )}
+
+              {/* ─── SLIDE TYPE 4: REFERRAL & SHARE BONUS BANNER ─── */}
+              {currentSlideData.type === 'referral_bonus' && (
+                <div className="relative z-10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sm:gap-6 py-1 sm:py-2">
+                  <div className="space-y-1.5 sm:space-y-2 max-w-xl">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-orange-500 text-white shadow-md">
+                      <Share2 className="w-3.5 h-3.5" />
+                      {currentSlideData.badge}
+                    </span>
+                    <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug">
+                      {currentSlideData.title}
+                    </h2>
+                    <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-medium">
+                      {currentSlideData.subtitle}
+                    </p>
+                    <div className="flex items-center gap-2 sm:gap-3 pt-1 flex-wrap">
+                      <span className="text-xs text-amber-300 font-bold">Your Referral Code:</span>
+                      <span className="px-2.5 py-0.5 rounded-lg bg-black/40 border border-white/20 font-mono font-black text-white text-xs">
+                        {currentSlideData.referralCode}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="shrink-0 flex flex-col items-stretch sm:items-center gap-1.5 sm:gap-2">
+                    <button
+                      onClick={handleCopyReferral}
+                      className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-white text-slate-900 text-xs sm:text-sm font-black hover:bg-slate-100 hover:scale-105 transition shadow-[0_10px_25px_rgba(255,255,255,0.3)] flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {copiedReferral ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-[#2563EB]" />}
+                      <span>{copiedReferral ? 'Link Copied!' : '📲 SHARE LINK & CLAIM BONUS'}</span>
+                    </button>
+                    <span className="text-[10px] sm:text-[11px] text-white/80 font-bold text-center">Invite friends via WhatsApp or Link</span>
+                  </div>
+                </div>
+              )}
+
+              {/* ─── SLIDE TYPE 5: 100% DEPOSIT BOOST BANNER ─── */}
+              {currentSlideData.type === 'deposit_boost' && (
+                <div className="relative z-10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sm:gap-6 py-1 sm:py-2">
+                  <div className="space-y-1.5 sm:space-y-2 max-w-xl">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-purple-400 text-slate-950 shadow-md">
+                      <Coins className="w-3.5 h-3.5" />
+                      WALLET CASH BONUS
+                    </span>
+                    <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug">
+                      {currentSlideData.title}
+                    </h2>
+                    <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-medium">
+                      {currentSlideData.subtitle}
+                    </p>
+                  </div>
+
+                  <div className="shrink-0">
+                    <Link
+                      href={currentSlideData.actionLink}
+                      className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 text-xs sm:text-sm font-black hover:scale-105 transition shadow-[0_10px_25px_rgba(245,158,11,0.5)] flex items-center justify-center gap-2"
+                    >
+                      <span>💰 ADD CASH &amp; CLAIM 100% BONUS</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </div>
+                </div>
+              )}
+
+              {/* Bottom Bar: Manual Arrows + Slide Dots Navigation */}
+              <div className="relative z-10 pt-3 sm:pt-4 mt-2 border-t border-white/15 flex items-center justify-between">
+                {/* Prev / Next Controls */}
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <button
+                    onClick={() => setActiveSlide((prev) => (prev - 1 + bannerSlides.length) % bannerSlides.length)}
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition cursor-pointer"
+                    aria-label="Previous Slide"
+                  >
+                    <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  </button>
+                  <button
+                    onClick={() => setActiveSlide((prev) => (prev + 1) % bannerSlides.length)}
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition cursor-pointer"
+                    aria-label="Next Slide"
+                  >
+                    <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  </button>
+                  <span className="text-[10px] sm:text-[11px] text-white/70 font-mono font-bold ml-1">
+                    {activeSlide + 1} / {bannerSlides.length}
+                  </span>
+                </div>
+
+                {/* Inside Slide Indicator Dots */}
+                <div className="flex items-center gap-1.5">
+                  {bannerSlides.map((s, idx) => (
+                    <button
+                      key={s.id}
+                      onClick={() => setActiveSlide(idx)}
+                      className={`h-2 rounded-full transition-all cursor-pointer ${
+                        activeSlide === idx
+                          ? 'w-6 sm:w-7 bg-white shadow-md'
+                          : 'w-2 bg-white/35 hover:bg-white/60'
+                      }`}
+                      aria-label={`Jump to slide ${idx + 1}`}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
+
+          {/* 🔘 PROMINENT HIGHLIGHTED INDICATOR DOTS BENEATH BANNER */}
+          {bannerSlides.length > 1 && (
+            <div className="flex items-center justify-center gap-2 pt-1 pb-0.5">
+              {bannerSlides.map((s, idx) => (
+                <button
+                  key={s.id}
+                  onClick={() => setActiveSlide(idx)}
+                  className={`h-2.5 rounded-full transition-all duration-300 cursor-pointer ${
+                    activeSlide === idx
+                      ? 'w-8 bg-[#2563EB] shadow-[0_0_12px_rgba(37,99,235,0.7)]'
+                      : 'w-2.5 bg-[#CBD5E1] hover:bg-[#94A3B8]'
+                  }`}
+                  aria-label={`Jump to banner ${idx + 1}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {/* Section 5.4: User-Side Category Filter Tabs (3D Buttons) */}
-      <div className="space-y-3 pt-2">
+      {/* Section 5.4: User-Side Category Filter Tabs */}
+      <div className="space-y-3 pt-1 sm:pt-2">
         <CategoryFilterTabs
           selectedCategory={selectedCategory}
           onSelect={(cat) => setSelectedCategory(cat)}
@@ -370,7 +742,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
             </span>
           </div>
 
-          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 touch-pan-x">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-y]">
             {liveMatches.map((m) => (
               <Link
                 key={m.id}
@@ -378,7 +750,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                 className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3 flex flex-col justify-between group border border-emerald-300 shadow-[0_0_22px_rgba(34,197,94,0.20)] hover:border-emerald-500 hover:shadow-[0_0_28px_rgba(34,197,94,0.34)]"
               >
                 <div>
-                  {/* Match Poster Frame — Always Prominently Visible */}
+                  {/* Match Poster Frame */}
                   <MatchPosterFrame
                     poster={m.match_poster}
                     title={m.title || `${m.team_a} vs ${m.team_b}`}
@@ -439,7 +811,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
                 <div className="pt-2.5 border-t border-[#E2E8F0] mt-2.5 flex items-center justify-between">
                   <span className="text-[11px] font-bold text-[#64748B]">
-                    {m.contests_count ? `🏆 ${m.contests_count} Contests` : `Score: Cricbuzz`}
+                    {m.contests_count ? `🏆 ${m.contests_count} Contests` : `Score: Live Feed`}
                   </span>
                   <span className="prime-btn-3d !py-1.5 !px-3 !text-xs group-hover:scale-105">
                     <span>View Live Score</span>
@@ -467,7 +839,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
         </div>
 
         {loading ? (
-          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 touch-pan-x">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-y]">
             {[1, 2, 3].map((n) => (
               <div key={n} className="h-48 min-w-[270px] max-w-[300px] shrink-0 snap-start rounded-2xl bg-white/70 animate-pulse border-2 border-[#CBD5E1]" />
             ))}
@@ -477,14 +849,14 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
             No upcoming matches in this category for the next 6 days.
           </div>
         ) : (
-          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 touch-pan-x">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-y]">
             {upcomingMatches.map((m) => (
               <div
                 key={m.id}
                 className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3 flex flex-col justify-between group border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)]"
               >
                 <div>
-                  {/* Match Poster Frame — Always Prominently Visible */}
+                  {/* Match Poster Frame */}
                   <MatchPosterFrame
                     poster={m.match_poster}
                     title={m.title || `${m.team_a} vs ${m.team_b}`}
@@ -539,28 +911,28 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                   </div>
                 </div>
 
-                  <div className="pt-2.5 border-t border-[#E2E8F0] mt-2 flex items-center justify-between text-xs">
-                    <div>
-                      <span className="text-[#64748B] block text-[9px] font-bold uppercase">Prize Pool</span>
-                      <span className="font-black text-[#D97706] text-xs sm:text-sm font-mono">
-                        ₹{m.total_prize_pool > 0 ? m.total_prize_pool.toLocaleString('en-IN') : '10,00,000'}
-                      </span>
-                    </div>
+                <div className="pt-2.5 border-t border-[#E2E8F0] mt-2 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-[#64748B] block text-[9px] font-bold uppercase">Prize Pool</span>
+                    <span className="font-black text-[#D97706] text-xs sm:text-sm font-mono">
+                      ₹{m.total_prize_pool > 0 ? m.total_prize_pool.toLocaleString('en-IN') : '10,00,000'}
+                    </span>
+                  </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <Link
-                        href={`/team-builder/${m.id}`}
-                        className="prime-btn-dark-3d !py-1.5 !px-2.5 !text-xs font-black"
-                      >
-                        XI
-                      </Link>
-                      <Link href={`/match/${m.id}`} className="prime-btn-3d !py-1.5 !px-3 !text-xs font-black uppercase tracking-wider">
-                        Join
-                      </Link>
-                    </div>
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      href={`/team-builder/${m.id}`}
+                      className="prime-btn-dark-3d !py-1.5 !px-2.5 !text-xs font-black"
+                    >
+                      XI
+                    </Link>
+                    <Link href={`/match/${m.id}`} className="prime-btn-3d !py-1.5 !px-3 !text-xs font-black uppercase tracking-wider">
+                      Join
+                    </Link>
                   </div>
                 </div>
-              ))}
+              </div>
+            ))}
           </div>
         )}
       </div>
@@ -581,14 +953,13 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
             </span>
           </div>
 
-          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 touch-pan-x">
+          <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-y]">
             {comingSoonMatches.map((m) => (
               <div
                 key={m.id}
                 className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3 flex flex-col justify-between space-y-2.5 border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)]"
               >
                 <div>
-                  {/* Match Poster Frame — Always Prominently Visible */}
                   <MatchPosterFrame
                     poster={m.match_poster}
                     title={m.title}
@@ -625,20 +996,20 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                   </div>
                 </div>
 
-                  <div className="pt-2.5 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
-                    <span className="text-[#64748B] font-bold text-[11px]">
-                      📅 {m.match_date} • ⏰ {m.match_time}
-                    </span>
-                    <Link
-                      href={`/match/${m.id}`}
-                      className="text-[#2563EB] font-black hover:underline flex items-center gap-1 group text-xs"
-                    >
-                      <span>Preview</span>
-                      <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                    </Link>
-                  </div>
+                <div className="pt-2.5 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
+                  <span className="text-[#64748B] font-bold text-[11px]">
+                    📅 {m.match_date} • ⏰ {m.match_time}
+                  </span>
+                  <Link
+                    href={`/match/${m.id}`}
+                    className="text-[#2563EB] font-black hover:underline flex items-center gap-0.5 group text-xs"
+                  >
+                    <span>Preview</span>
+                    <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                  </Link>
                 </div>
-              ))}
+              </div>
+            ))}
           </div>
         </div>
       )}

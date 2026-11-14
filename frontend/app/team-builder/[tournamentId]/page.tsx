@@ -474,7 +474,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
             <span className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-md">🔒</span>
             <div>
               <h3 className="font-black text-sm text-red-950">Squads Locked (Match In-Play)</h3>
-              <p className="text-xs text-red-700 font-medium">Match shuru ho chuka hai. Dream11 rules ke anusar live match me nayi team create ya edit nahi ki ja sakti.</p>
+              <p className="text-xs text-red-700 font-medium">Match shuru ho chuka hai. Official rules ke anusar live match me nayi team create ya edit nahi ki ja sakti.</p>
             </div>
           </div>
           <Link href={`/match/${matchId}`} className="prime-btn-dark-3d !py-2 !px-3 text-xs shrink-0">
