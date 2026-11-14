@@ -121,8 +121,29 @@ Alternatively, you can deploy both services in 1-click using Render Blueprints:
 ## 🔍 Verification & Health Check
 
 After deployment:
-- **Backend Health Check:** `https://prime-dreems-backend.onrender.com/health` (should return `{ status: "ok" }`).
+- **Frontend App:** [https://prime-dreams.onrender.com](https://prime-dreams.onrender.com)
+- **Backend Health Check:** [https://prime-dreems-backend.onrender.com/health](https://prime-dreems-backend.onrender.com/health) (returns `{ status: "ok", platform: "Prime Dreems" }`).
 - **Matches Endpoint:** `https://prime-dreems-backend.onrender.com/api/matches`.
 - **Bot Network Status:** `https://prime-dreems-backend.onrender.com/bot-manager/status`.
 - **WebSocket Gateway:** `wss://prime-dreems-backend.onrender.com/ws`.
-- **Frontend App:** Visit `https://prime-dreems-frontend.onrender.com` to explore live matches, team creation, pitch view, and contest participation.
+
+---
+
+## 🔑 Active Production Credentials & API Keys
+
+### 🐘 Neon Cloud Database
+- **Neon API Key:** `napi_t52a4ufhryl01f2dmkv5lupt8c5zuw2d0nme4m6evp3oq44waqalx8qgem1wsn00`
+- **Project Name:** `prime-dreems-db`
+- **Project ID:** `green-king-11132071`
+- **Region:** `aws-us-east-1`
+- **Connection URI:**
+  ```text
+  postgresql://neondb_owner:npg_LBfph3bq5Dad@ep-lucky-river-bce9e3a8.c-16.us-east-1.aws.neon.tech/neondb?sslmode=require
+  ```
+
+### 🚀 Render Cloud Platform
+- **Render API Key:** `rnd_hBKXOM27KGyA7eKKrdV7CzYXhPta`
+- **Account:** `qspanther@gmail.com`
+- **Backend Service:** `srv-dbpmlr3l550s73dqb4q0` ([https://prime-dreems-backend.onrender.com](https://prime-dreems-backend.onrender.com))
+- **Frontend Service:** `srv-dbo89095efls73d4qesg` ([https://prime-dreams.onrender.com](https://prime-dreams.onrender.com))
+- **Internal Bot Key:** `c11_bot_mgr_sec_9938a7fbc21d49e`
