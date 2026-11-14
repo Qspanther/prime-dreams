@@ -25,6 +25,12 @@ services:
         generateValue: true
       - key: FRONTEND_URL
         value: https://prime-dreems-frontend.onrender.com
+      # ─── EXTERNAL CLOUD DATABASE ───
+      # Paste your external Neon / Supabase / Railway Postgres URL in Render Dashboard
+      - key: DATABASE_URL
+        sync: false
+      - key: DB_SSL
+        value: "true"
 
   # ─── FRONTEND NEXT.JS WEB APP ───
   - type: web
@@ -44,3 +50,8 @@ services:
       # Server-side rewrite target for /api-backend/* and /uploads/*
       - key: BACKEND_URL
         value: https://prime-dreems-backend.onrender.com
+      # Direct Client-side API & Real-Time WebSocket Streaming
+      - key: NEXT_PUBLIC_API_URL
+        value: https://prime-dreems-backend.onrender.com
+      - key: NEXT_PUBLIC_WEBSOCKET_URL
+        value: wss://prime-dreems-backend.onrender.com/ws

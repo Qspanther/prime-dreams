@@ -121,16 +121,16 @@ export default function PrimeLogo({
       {/* Brand Razor-Sharp Typography */}
       <div className={`${compactOnMobile ? 'hidden sm:flex' : 'flex'} flex-col leading-none min-w-0`}>
         <div className="flex items-center gap-1.5">
-          <span className={`font-black tracking-wider text-white uppercase ${textSizes[size]} drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-['Montserrat',sans-serif]`}>
+          <span className={`font-black tracking-wider text-[#0F172A] uppercase ${textSizes[size]} font-['Montserrat',sans-serif]`}>
             PRIME
           </span>
-          <span className={`font-black tracking-wider bg-gradient-to-r from-[#FFF9C4] via-[#FFD700] to-[#FFA000] bg-clip-text text-transparent uppercase ${textSizes[size]} drop-shadow-[0_0_15px_rgba(255,215,0,0.6)] font-['Montserrat',sans-serif]`}>
+          <span className={`font-black tracking-wider bg-gradient-to-r from-[#D97706] via-[#B45309] to-[#92400E] bg-clip-text text-transparent uppercase ${textSizes[size]} font-['Montserrat',sans-serif]`}>
             DREEMS
           </span>
         </div>
         <div className={`${compactOnMobile ? 'hidden md:flex' : 'flex'} items-center gap-1.5 mt-1`}>
           <span className="w-2 h-2 rounded-full bg-[#FF1744] shadow-[0_0_8px_#FF1744] animate-pulse" />
-          <span className="text-[10px] font-black tracking-widest text-[#FF1744] uppercase drop-shadow-[0_0_6px_rgba(255,23,68,0.5)]">
+          <span className="text-[10px] font-black tracking-widest text-[#B91C1C] uppercase">
             Cricket Fantasy Colosseum
           </span>
         </div>

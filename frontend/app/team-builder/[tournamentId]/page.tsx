@@ -3,11 +3,13 @@
 import React, { useState, useEffect, use } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Crown, Check, ArrowLeft, AlertCircle, ChevronRight } from 'lucide-react';
+import { Crown, Check, ArrowLeft, AlertCircle, ChevronRight, Eye, Info, MapPin, Lock, Trophy } from 'lucide-react';
 import { apiGet, apiPost, apiPut, resolveImageUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import CategoryBadge from '../../components/ui/CategoryBadge';
 import PlayerPhoto from '../../components/ui/PlayerPhoto';
+import CricketPitchView from '../../components/ui/CricketPitchView';
+import PlayerDetailModal from '../../components/ui/PlayerDetailModal';
 
 interface Player {
   id: string;
@@ -26,6 +28,14 @@ interface Player {
 
 const TOTAL_CREDITS = 105;
 
+function normalizeRole(role?: string): 'WK' | 'BAT' | 'AR' | 'BOWL' {
+  const r = (role || '').toUpperCase().trim();
+  if (r.includes('WK') || r.includes('KEEP')) return 'WK';
+  if (r.includes('AR') || r.includes('ALL') || r.includes('ROUND')) return 'AR';
+  if (r.includes('BOWL')) return 'BOWL';
+  return 'BAT';
+}
+
 export default function CricketTeamBuilderPage({ params }: { params: Promise<{ tournamentId: string }> }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -42,7 +52,6 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const [selectedPlayerIds, setSelectedPlayerIds] = useState<string[]>([]);
   const [captainId, setCaptainId] = useState<string | null>(null);
   const [viceCaptainId, setViceCaptainId] = useState<string | null>(null);
-  const [showCapModal, setShowCapModal] = useState(false);
   const [capMode, setCapMode] = useState<'C' | 'VC' | null>(null);
   const [teamName, setTeamName] = useState('My Prime XI');
   const [loading, setLoading] = useState(true);
@@ -52,6 +61,27 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const [myTeams, setMyTeams] = useState<any[]>([]);
   const [switchContestId, setSwitchContestId] = useState('');
   const [switching, setSwitching] = useState(false);
+  const [showPitchPreview, setShowPitchPreview] = useState(false);
+  const [pitchMode, setPitchMode] = useState<'view' | 'select_cap'>('select_cap');
+  const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [selectedContestId, setSelectedContestId] = useState<string>(contestId || '');
+
+  useEffect(() => {
+    if (!token) return;
+    apiGet('/wallet/balance', token)
+      .then((res) => {
+        if (typeof res?.balance === 'number') setWalletBalance(res.balance);
+      })
+      .catch(() => {});
+  }, [token]);
+
+  useEffect(() => {
+    if (!selectedContestId && !h2hFlow && match?.contests?.length) {
+      const openContest = match.contests.find((c: any) => c.status === 'open' && !c.is_private) || match.contests[0];
+      if (openContest) setSelectedContestId(openContest.id);
+    }
+  }, [match?.contests, selectedContestId, h2hFlow]);
 
   const loadTeamIntoBuilder = (t: any) => {
     setEditingTeamId(t.id);
@@ -149,6 +179,9 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
         if (cancelled || !res?.match) return;
         setMatch(res.match);
         setPlayers(res.match.players || []);
+        if (typeof window !== 'undefined' && res.match.id && res.match.id !== matchId) {
+          window.history.replaceState(null, '', `/team-builder/${res.match.id}${h2hFlow ? '?h2h=1' : contestId ? `?contestId=${contestId}` : ''}`);
+        }
         if (!token) return;
         try {
           const endpoint = teamId
@@ -174,26 +207,47 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const lockTime = match
     ? new Date(new Date(match.start_time).getTime() - (match.lock_time_minutes || 15) * 60000)
     : null;
+  const scoreSummary = match?.score_summary || {};
+  const hasLiveScore = !!(
+    (scoreSummary?.team_a?.overs > 0 || scoreSummary?.team_a?.runs > 0) ||
+    (scoreSummary?.team_b?.overs > 0 || scoreSummary?.team_b?.runs > 0)
+  );
+  const isLive = match?.status === 'live' || hasLiveScore;
   const isLocked = !!match && (
-    match.is_locked || match.status === 'live' || match.status === 'completed' ||
-    (lockTime !== null && lockClockNow >= lockTime.getTime())
+    match.is_locked ||
+    isLive ||
+    match.status === 'completed' ||
+    (match.start_time && new Date() >= new Date(new Date(match.start_time).getTime() - (match.lock_time_minutes || 15) * 60000))
   );
 
-  const selectedPlayers = players.filter((p) => selectedPlayerIds.includes(p.id));
-  const totalCreditsUsed = selectedPlayers.reduce((sum, p) => sum + (Number(p.credits) || 9.0), 0);
+  const { selectedPlayers, totalCreditsUsed, roleCounts, teamCounts } = React.useMemo(() => {
+    const selMap = new Set(selectedPlayerIds);
+    const sel: Player[] = [];
+    let credits = 0;
+    const rc = { WK: 0, BAT: 0, AR: 0, BOWL: 0 };
+    const tc: Record<string, number> = {};
+
+    for (const p of players) {
+      if (selMap.has(p.id)) {
+        sel.push(p);
+        credits += Number(p.credits) || 9.0;
+        rc[normalizeRole(p.role)]++;
+        tc[p.team_name] = (tc[p.team_name] || 0) + 1;
+      }
+    }
+    return {
+      selectedPlayers: sel,
+      totalCreditsUsed: credits,
+      roleCounts: rc,
+      teamCounts: tc,
+    };
+  }, [players, selectedPlayerIds]);
+
   const creditsLeft = Math.round((TOTAL_CREDITS - totalCreditsUsed) * 10) / 10;
 
-  const roleCounts = {
-    WK: selectedPlayers.filter((p) => p.role === 'WK').length,
-    BAT: selectedPlayers.filter((p) => p.role === 'BAT').length,
-    AR: selectedPlayers.filter((p) => p.role === 'AR').length,
-    BOWL: selectedPlayers.filter((p) => p.role === 'BOWL').length,
-  };
-
-  const teamCounts: Record<string, number> = {};
-  selectedPlayers.forEach((p) => {
-    teamCounts[p.team_name] = (teamCounts[p.team_name] || 0) + 1;
-  });
+  const activeContest = (match?.contests || []).find((c: any) => c.id === selectedContestId);
+  const entryFee = (!editingTeamId && !h2hFlow && activeContest) ? (Number(activeContest.entry_fee) || 0) : 0;
+  const isLowBalance = !editingTeamId && !h2hFlow && entryFee > 0 && walletBalance !== null && walletBalance < entryFee;
 
   const togglePlayer = (p: Player) => {
     if (isLocked) {
@@ -240,25 +294,33 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   };
 
   const validateTeamComposition = () => {
-    if (selectedPlayerIds.length !== 11) {
-      return 'Exactly 11 players required.';
+    if (selectedPlayerIds.length < 11) {
+      const remaining = 11 - selectedPlayerIds.length;
+      return `Please pick ${remaining} more player${remaining === 1 ? '' : 's'} to complete 11 players (${selectedPlayerIds.length}/11 selected).`;
     }
-    if (roleCounts.WK < 1) return 'Pick at least 1 Wicket Keeper (1-4).';
-    if (roleCounts.BAT < 3) return 'Pick at least 3 Batters (3-6).';
-    if (roleCounts.AR < 1) return 'Pick at least 1 All-Rounder (1-4).';
-    if (roleCounts.BOWL < 3) return 'Pick at least 3 Bowlers (3-6).';
+    if (selectedPlayerIds.length > 11) {
+      return 'You can only pick exactly 11 players.';
+    }
+    if (roleCounts.WK < 1) return 'Pick at least 1 Wicket Keeper (WK).';
+    if (roleCounts.BAT < 3) return `Pick at least 3 Batters (BAT) — currently ${roleCounts.BAT}.`;
+    if (roleCounts.AR < 1) return 'Pick at least 1 All-Rounder (AR).';
+    if (roleCounts.BOWL < 3) return `Pick at least 3 Bowlers (BOWL) — currently ${roleCounts.BOWL}.`;
     return null;
   };
 
   const handleProceedToCaptain = () => {
+    if (isLocked) {
+      setError('This match has ended. Team editing is closed.');
+      return;
+    }
     const validationError = validateTeamComposition();
     if (validationError) {
       setError(validationError);
       return;
     }
     setError(null);
-    setCapMode(null);
-    setShowCapModal(true);
+    setPitchMode('select_cap');
+    setShowPitchPreview(true);
   };
 
   const assignCapRole = (p: Player) => {
@@ -285,6 +347,18 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
       return;
     }
 
+    // Pre-check wallet balance before submitting
+    if (!editingTeamId && !h2hFlow && entryFee > 0 && walletBalance !== null && walletBalance < entryFee) {
+      const needed = Math.round((entryFee - walletBalance) * 100) / 100;
+      const returnUrl = `/team-builder/${matchId}${selectedContestId ? `?contestId=${selectedContestId}` : ''}`;
+      setError(`Aapke wallet me paryapt balance nahi hai (Available: ₹${walletBalance}, Required: ₹${entryFee}). Redirecting to Add Cash...`);
+      setShowPitchPreview(false);
+      setTimeout(() => {
+        router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(returnUrl)}&message=Contest (₹${entryFee}) join karne ke liye funds add karein`);
+      }, 1500);
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -297,7 +371,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
       };
       const res = editingTeamId
         ? await apiPut(`/matches/${matchId}/teams/${editingTeamId}`, payload, token)
-        : await apiPost(`/matches/${matchId}/teams`, { ...payload, contest_id: h2hFlow ? null : contestId || null }, token);
+        : await apiPost(`/matches/${matchId}/teams`, { ...payload, contest_id: h2hFlow ? null : (selectedContestId || null) }, token);
 
       if (res?.success) {
         if (h2hFlow && !editingTeamId && res.team?.id) {
@@ -306,10 +380,28 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
           router.push('/my-teams');
         }
       } else {
-        setError(res?.error || 'Failed to submit team');
+        if (/insufficient/i.test(res?.error || '') || res?.code === 'INSUFFICIENT_BALANCE') {
+          const needed = walletBalance !== null ? Math.max(10, entryFee - walletBalance) : entryFee;
+          setError(`Insufficient wallet balance! ₹${entryFee} required. Redirecting to Add Cash...`);
+          setShowPitchPreview(false);
+          setTimeout(() => {
+            router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(window.location.href)}&message=Contest ke liye funds add karein`);
+          }, 1500);
+        } else {
+          setError(res?.error || 'Failed to submit team');
+        }
       }
     } catch (err: any) {
-      setError(err?.message || 'Error saving team. Check contest lock and balance.');
+      if (/insufficient/i.test(err?.message || '') || err?.code === 'INSUFFICIENT_BALANCE') {
+        const needed = walletBalance !== null ? Math.max(10, entryFee - walletBalance) : entryFee;
+        setError(`Insufficient wallet balance! ₹${entryFee} required. Redirecting to Add Cash...`);
+        setShowPitchPreview(false);
+        setTimeout(() => {
+          router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(window.location.href)}&message=Contest ke liye funds add karein`);
+        }, 1500);
+      } else {
+        setError(err?.message || 'Error saving team. Check contest lock and balance.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -324,7 +416,28 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
     );
   }
 
-  const roleFilteredPlayers = players.filter((p) => p.role === selectedRole);
+  if (!match) {
+    return (
+      <div className="py-24 text-center text-[#0F172A] space-y-4 max-w-md mx-auto px-4">
+        <div className="w-16 h-16 rounded-2xl bg-blue-50 border-2 border-blue-200 flex items-center justify-center mx-auto text-3xl shadow-sm">
+          🏏
+        </div>
+        <div>
+          <p className="text-xl font-black text-[#0F172A] mb-1">Match Expired or Moved</p>
+          <p className="text-xs text-[#64748B] font-medium leading-relaxed">
+            Ye match complete ho chuka hai ya iska ID update ho gaya hai. Active matches par jaakar nayi team banayein.
+          </p>
+        </div>
+        <div className="pt-2">
+          <Link href="/" className="prime-btn-3d inline-flex items-center gap-2">
+            <span>Explore All Matches</span>
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  const roleFilteredPlayers = players.filter((p) => normalizeRole(p.role) === selectedRole);
 
   return (
     <div className="px-3 sm:px-6 py-6 max-w-4xl mx-auto w-full space-y-6 bg-transparent text-[#0F172A]">
@@ -351,6 +464,22 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
               ? 'Contest is locked. Your saved team can no longer be edited.'
               : 'Edit mode: your saved team is loaded. Update it as many times as you like until the contest locks.'}
           </span>
+        </div>
+      )}
+
+      {/* Squads Locked Banner */}
+      {isLocked && (
+        <div className="rounded-2xl bg-red-50 border-2 border-red-300 p-4 flex flex-wrap items-center justify-between gap-3 text-red-900 shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-md">🔒</span>
+            <div>
+              <h3 className="font-black text-sm text-red-950">Squads Locked (Match In-Play)</h3>
+              <p className="text-xs text-red-700 font-medium">Match shuru ho chuka hai. Dream11 rules ke anusar live match me nayi team create ya edit nahi ki ja sakti.</p>
+            </div>
+          </div>
+          <Link href={`/match/${matchId}`} className="prime-btn-dark-3d !py-2 !px-3 text-xs shrink-0">
+            Live Score &amp; Leaderboard →
+          </Link>
         </div>
       )}
 
@@ -411,7 +540,24 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
             </div>
             <div className="p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1]">
               <span className="pd-eyebrow !tracking-normal text-[10px] text-[#64748B] block">Squad Pool</span>
-              <span className="pd-num font-black text-base text-[#0F172A] font-mono">30 Total</span>
+              <span className="pd-num font-black text-base text-[#0F172A] font-mono">{players.length || 22} Total</span>
+            </div>
+          </div>
+
+          {/* Dream11-Style Pitch & Stadium Insights Bar */}
+          <div className="rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] p-3 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-1.5 font-black text-[#0F172A]">
+                <MapPin className="w-4 h-4 text-[#2563EB]" />
+                <span>{match.venue || 'Wankhede Stadium, Mumbai'}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] font-bold text-[#475569]">
+                <span>Pitch: <strong className="text-[#0F172A]">Batting Friendly</strong></span>
+                <span>•</span>
+                <span>Good for: <strong className="text-[#2563EB]">Pacers (64%)</strong></span>
+                <span>•</span>
+                <span>Avg 1st Inn: <strong className="text-[#D97706] font-mono">168</strong></span>
+              </div>
             </div>
           </div>
         </div>
@@ -488,231 +634,337 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
         </div>
       )}
 
-      {/* Role Navigation Tabs */}
-      <div className="grid grid-cols-4 gap-2.5">
-        {(['WK', 'BAT', 'AR', 'BOWL'] as const).map((role) => (
+      {/* Contest Selection & Wallet Balance Bar */}
+      {!h2hFlow && (
+        <div className="prime-card-3d p-4 bg-gradient-to-r from-blue-50/70 via-amber-50/50 to-slate-50 border-2 border-blue-200/90 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <label className="pd-label !text-blue-900 text-[11px] font-black uppercase flex items-center gap-1.5 mb-1.5">
+                <Trophy className="w-3.5 h-3.5 text-[#D97706]" /> Target Contest
+              </label>
+              <select
+                value={selectedContestId}
+                onChange={(e) => setSelectedContestId(e.target.value)}
+                className="pd-input text-xs font-bold text-[#0F172A] bg-white border-blue-300 w-full"
+              >
+                {(match?.contests || [])
+                  .filter((c: any) => c.is_active && !c.is_private)
+                  .map((c: any) => (
+                    <option key={c.id} value={c.id}>
+                      {c.title} • {c.type === 'practice' || Number(c.entry_fee) === 0 ? 'FREE' : `₹${c.entry_fee} Entry`} • Pool ₹{Number(c.prize_pool || 0).toLocaleString('en-IN')}
+                    </option>
+                  ))}
+                <option value="practice_free">Practice Contest (Free)</option>
+              </select>
+            </div>
+
+            <div className="flex items-center gap-3 shrink-0 pt-3 sm:pt-0">
+              <div className="text-right">
+                <span className="text-[10px] text-[#64748B] font-bold block">Entry Fee</span>
+                <span className="font-mono text-sm font-black text-[#2563EB]">
+                  {entryFee === 0 ? 'FREE' : `₹${entryFee}`}
+                </span>
+              </div>
+
+              <div className="h-8 w-px bg-slate-300" />
+
+              <div className="text-right">
+                <span className="text-[10px] text-[#64748B] font-bold block">Wallet Balance</span>
+                <span className={`font-mono text-sm font-black ${isLowBalance ? 'text-red-600' : 'text-emerald-700'}`}>
+                  ₹{walletBalance != null ? Number(walletBalance).toFixed(0) : '0'}
+                </span>
+              </div>
+
+              {isLowBalance ? (
+                <Link
+                  href={`/wallet?depositAmount=${entryFee - (walletBalance || 0)}&needed=${entryFee}&returnUrl=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname + window.location.search : '')}`}
+                  className="prime-btn-gold-3d !py-2 !px-3 text-xs font-black uppercase shrink-0"
+                >
+                  + Add ₹{entryFee - (walletBalance || 0)}
+                </Link>
+              ) : (
+                <Link
+                  href="/wallet"
+                  className="prime-btn-dark-3d !py-2 !px-3 text-xs font-black uppercase shrink-0"
+                >
+                  + Add Cash
+                </Link>
+              )}
+            </div>
+          </div>
+
+          {isLowBalance && (
+            <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 border border-red-200 text-xs font-bold text-red-700">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>Insufficient balance for this contest. ₹{entryFee - (walletBalance || 0)} add karein team enter karne ke liye.</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Role Navigation Tabs with Limits */}
+      <div className="grid grid-cols-4 gap-2">
+        {([
+          { key: 'WK', label: 'WK', limit: '1-4' },
+          { key: 'BAT', label: 'BAT', limit: '3-6' },
+          { key: 'AR', label: 'AR', limit: '1-4' },
+          { key: 'BOWL', label: 'BOWL', limit: '3-6' },
+        ] as const).map(({ key, label, limit }) => (
           <button
-            key={role}
-            onClick={() => setSelectedRole(role)}
-            className={`p-3 rounded-xl border text-center transition cursor-pointer ${selectedRole === role
-                ? 'prime-btn-3d !p-3'
-                : 'prime-btn-dark-3d !p-3 !text-[#64748B]'
-              }`}
+            key={key}
+            onClick={() => setSelectedRole(key)}
+            className={`py-2.5 px-2 rounded-xl border text-center transition cursor-pointer ${
+              selectedRole === key
+                ? 'prime-btn-3d !py-2.5 !px-2'
+                : 'bg-white border-[#CBD5E1] text-[#64748B] hover:border-[#93C5FD] hover:text-[#2563EB]'
+            }`}
           >
-            <div className="font-black text-sm">{role}</div>
-            <div className="text-[11px] font-black mt-0.5">({roleCounts[role]})</div>
+            <div className="font-black text-xs sm:text-sm">{label} ({roleCounts[key]})</div>
+            <div className="text-[10px] font-bold opacity-80 mt-0.5">{limit}</div>
           </button>
         ))}
       </div>
 
-      {error && !showCapModal && (
+      <div className="flex items-center justify-between text-xs px-1 text-[#64748B] font-bold">
+        <span>
+          {selectedRole === 'WK' && 'Pick 1 - 4 Wicket Keepers'}
+          {selectedRole === 'BAT' && 'Pick 3 - 6 Batters'}
+          {selectedRole === 'AR' && 'Pick 1 - 4 All-Rounders'}
+          {selectedRole === 'BOWL' && 'Pick 3 - 6 Bowlers'}
+        </span>
+        <span className="text-[11px] text-[#2563EB] font-mono">
+          {roleFilteredPlayers.length} Players Available
+        </span>
+      </div>
+
+      {error && !showPitchPreview && (
         <div className="pd-error">
           <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Players Grid for Selected Role — 3 compact photos per row, names below */}
-      <div className="grid grid-cols-3 gap-2.5 max-h-[36rem] overflow-y-auto pr-1">
+      {/* Compact Rectangular Players Card Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-2.5 max-h-[38rem] overflow-y-auto pr-1">
         {roleFilteredPlayers.map((p) => {
           const isSelected = selectedPlayerIds.includes(p.id);
+          const prevMatchPts = p.last_match_points != null ? p.last_match_points : (p.points || 0);
+
           return (
-            <button
+            <div
               key={p.id}
-              type="button"
               onClick={() => togglePlayer(p)}
-              className={`relative rounded-xl border-2 p-2 flex flex-col items-center text-center cursor-pointer transition-all select-none ${isSelected
-                  ? 'bg-[#EFF6FF] border-[#2563EB] shadow-[0_0_14px_rgba(37,99,235,0.35)]'
-                  : 'bg-white border-[#CBD5E1] hover:border-[#93C5FD] hover:shadow-[0_0_10px_rgba(37,99,235,0.18)]'
-                }`}
+              className={`relative rounded-xl border-2 p-2 sm:p-2.5 flex flex-col items-center text-center cursor-pointer transition-all select-none ${
+                isSelected
+                  ? 'bg-[#EFF6FF] border-[#2563EB] shadow-[0_0_12px_rgba(37,99,235,0.25)]'
+                  : 'bg-white border-[#CBD5E1] hover:border-[#93C5FD] hover:shadow-xs'
+              }`}
             >
-              <div className="relative w-full aspect-square mb-1.5">
+              {/* Card Top Header: Team Badge, Info Icon, & Checkbox/Plus */}
+              <div className="w-full flex items-center justify-between mb-1">
+                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-[#0F172A] text-white border border-black/10">
+                  {p.team_name?.slice(0, 3).toUpperCase()}
+                </span>
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDetailPlayer(p);
+                    }}
+                    className="w-5 h-5 rounded-full bg-[#F1F5F9] hover:bg-[#E2E8F0] border border-[#CBD5E1] text-[#64748B] hover:text-[#2563EB] flex items-center justify-center transition cursor-pointer"
+                    title="View Player Stats & Recent 5 Matches"
+                  >
+                    <Info className="w-3 h-3" />
+                  </button>
+
+                  <span
+                    className={`w-5 h-5 rounded-full border flex items-center justify-center font-black text-xs transition-all ${
+                      isSelected
+                        ? 'bg-[#2563EB] text-white border-[#2563EB] shadow-[0_0_6px_rgba(37,99,235,0.4)]'
+                        : 'bg-[#F1F5F9] border-[#CBD5E1] text-[#64748B]'
+                    }`}
+                  >
+                    {isSelected ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : '+'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Player Photo — Compact Portrait Rectangle Frame (for uploaded photos) */}
+              <div className="relative w-20 h-24 sm:w-22 sm:h-26 rounded-lg overflow-hidden border border-[#CBD5E1] bg-[#F1F5F9] my-0.5 shadow-inner">
                 <PlayerPhoto
                   name={p.name}
                   photoUrl={p.photo_url}
-                  boxClass="w-full h-full rounded-lg bg-[#F1F5F9] border border-[#CBD5E1] text-xl text-[#94A3B8]"
+                  boxClass="w-full h-full text-base text-[#64748B] flex items-center justify-center font-bold"
                 />
-                <span className={`absolute top-1 right-1 w-6 h-6 rounded-full border-2 flex items-center justify-center font-black text-xs ${isSelected
-                    ? 'bg-[#2563EB] text-white border-white shadow-[0_0_6px_rgba(37,99,235,0.6)]'
-                    : 'bg-white/90 border-[#CBD5E1] text-[#64748B]'
-                  }`}>
-                  {isSelected ? <Check className="w-3.5 h-3.5" /> : '+'}
-                </span>
               </div>
-              <span className="font-black text-[11px] text-[#0F172A] leading-tight line-clamp-2 min-h-[2rem] flex items-center">{p.name}</span>
-              {p.is_playing_xi && (
-                <span className="text-[8px] font-black uppercase px-1.5 py-0.5 rounded bg-green-100 border border-green-300 text-green-700">Playing XI</span>
-              )}
-              <span className="text-[9px] text-[#64748B] font-bold mt-0.5 truncate w-full">
-                {p.team_name} • <span className="text-[#D97706]">{p.points || 0} pts</span>
+
+              {/* Player Name */}
+              <span className="font-black text-xs sm:text-[13px] text-[#0F172A] truncate w-full mt-1">
+                {p.name}
               </span>
-              <div className="mt-1 grid grid-cols-3 gap-1 w-full text-[8px] font-bold text-[#475569]">
-                <span className="rounded bg-[#F1F5F9] border border-[#E2E8F0] py-0.5" title="Selected by">
-                  {p.selected_by_pct != null ? `${Math.round(p.selected_by_pct)}%` : '—'}
-                </span>
-                <span className="rounded bg-[#F1F5F9] border border-[#E2E8F0] py-0.5" title="Last match points">
-                  {p.last_match_points != null ? `${p.last_match_points}` : '—'}
-                </span>
-                <span className="rounded bg-[#F1F5F9] border border-[#E2E8F0] py-0.5" title="Average points">
-                  {p.avg_points != null ? `${Math.round(p.avg_points)}` : '—'}
-                </span>
+
+              {/* Team & Role + Playing status */}
+              <div className="flex items-center gap-1 text-[10px] text-[#64748B] font-semibold">
+                <span className="font-bold text-[#1E3A8A]">{p.role}</span>
+                <span>•</span>
+                <span>Sel {p.selected_by_pct != null ? `${Math.round(p.selected_by_pct)}%` : '—'}</span>
               </div>
-              <div className="mt-0.5 flex items-center justify-between w-full gap-1">
-                <span className="text-[8px] font-bold text-[#64748B] truncate" title="Recent form">
-                  {p.form ? `Form: ${p.form}` : 'Form: —'}
+              {p.is_playing_xi === false ? (
+                <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-50 border border-amber-300 text-amber-800 mt-0.5">
+                  ● Bench / Unannounced
                 </span>
-                <span className="px-2 py-0.5 rounded-md bg-[#FFFBEB] border border-[#FDE68A] font-mono font-black text-[10px] text-[#B45309] shrink-0">
-                  {p.credits} CR
+              ) : (
+                <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-emerald-50 border border-emerald-300 text-emerald-700 mt-0.5">
+                  ● Playing XI
                 </span>
+              )}
+
+              {/* Compact Stats Badges: Prev Match Points & Credits */}
+              <div className="grid grid-cols-2 gap-1.5 w-full mt-2 pt-1.5 border-t border-[#E2E8F0]">
+                {/* Prev Points */}
+                <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-md py-0.5 px-1 text-center">
+                  <span className="text-[8px] text-[#1D4ED8] block uppercase font-bold leading-tight">Prev Pts</span>
+                  <span className="font-mono font-black text-xs text-[#1E3A8A] leading-tight block">
+                    {prevMatchPts}
+                  </span>
+                </div>
+
+                {/* Credits */}
+                <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-md py-0.5 px-1 text-center">
+                  <span className="text-[8px] text-[#B45309] block uppercase font-bold leading-tight">Credits</span>
+                  <span className="font-mono font-black text-xs text-[#B45309] leading-tight block">
+                    {p.credits}
+                  </span>
+                </div>
               </div>
-            </button>
+            </div>
           );
         })}
       </div>
 
       {/* Bottom Floating Bar */}
-      <div className="sticky bottom-4 z-20 p-4 bg-white/95 backdrop-blur-xl rounded-2xl border-2 border-[#CBD5E1] flex items-center justify-between shadow-[0_10px_30px_rgba(30,58,138,0.18)]">
-        <div>
-          <span className="text-xs font-black text-[#0F172A] block">{selectedPlayerIds.length}/11 Players Picked</span>
-          <span className="text-xs text-[#D97706] font-mono font-black">{creditsLeft} CR left</span>
-        </div>
-        <button
-          onClick={handleProceedToCaptain}
-          disabled={selectedPlayerIds.length !== 11 || isLocked}
-          className="prime-btn-3d !py-2.5 !px-6 text-xs font-black uppercase tracking-wider disabled:opacity-40"
-        >
-          <span>Choose C / VC</span>
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
-
-      {/* Captain & Vice-Captain Selection Modal — mode-based with photos */}
-      {showCapModal && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-2xl prime-card-3d p-6 space-y-4 border-2 border-[#2563EB] max-h-[90vh] flex flex-col bg-white">
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
-              <div>
-                <h3 className="font-black text-[#0F172A] text-base flex items-center gap-2">
-                  <Crown className="w-5 h-5 text-[#D97706]" /> Assign Multipliers
-                </h3>
-                <p className="text-xs text-[#64748B] font-bold">Captain gets 2× Points • Vice-Captain gets 1.5× Points</p>
-              </div>
-              <button onClick={() => setShowCapModal(false)} className="text-[#64748B] hover:text-[#0F172A] text-lg">✕</button>
+      <div className="sticky bottom-4 z-20 space-y-2">
+        {error && !showPitchPreview && (
+          <div className="p-3 rounded-xl bg-red-50 border-2 border-red-400 text-red-700 text-xs font-bold flex items-center justify-between shadow-xl">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+              <span>{error}</span>
             </div>
+            <button
+              type="button"
+              onClick={() => setError(null)}
+              className="text-red-700 hover:text-red-900 font-black text-sm px-1.5 cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
-            <div>
-              <label className="pd-label">Team Name</label>
-              <input
-                type="text"
-                value={teamName}
-                onChange={(e) => setTeamName(e.target.value)}
-                className="pd-input font-black"
-                placeholder="My Prime XI"
-              />
+        <div className="p-3 sm:p-4 bg-white/95 backdrop-blur-xl rounded-2xl border-2 border-[#CBD5E1] flex items-center justify-between shadow-[0_10px_30px_rgba(30,58,138,0.18)]">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-black ${selectedPlayerIds.length === 11 ? 'text-green-700' : 'text-[#0F172A]'}`}>
+                {selectedPlayerIds.length}/11 Players Picked
+              </span>
+              {selectedPlayerIds.length === 11 && (
+                <span className="text-[10px] font-black text-green-700 bg-green-100 border border-green-300 px-1.5 py-0.2 rounded">
+                  ✓ 11 Selected
+                </span>
+              )}
             </div>
+            <span className="text-xs text-[#D97706] font-mono font-black">{creditsLeft} CR left</span>
+          </div>
 
-            <p className={`text-xs font-black text-center py-1.5 rounded-lg ${capMode
-                ? capMode === 'C' ? 'bg-[#EFF6FF] text-[#1D4ED8]' : 'bg-[#FFFBEB] text-[#B45309]'
-                : 'bg-[#F1F5F9] text-[#64748B]'
-              }`}>
-              {capMode
-                ? `All players highlighted — tap one to make ${capMode === 'C' ? 'Captain (2×)' : 'Vice-Captain (1.5×)'}`
-                : 'Tap C or VC below, then tap a player to assign'}
-            </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPitchMode('view');
+                setShowPitchPreview(true);
+              }}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white !py-2.5 !px-3 sm:!px-4 text-xs font-black flex items-center gap-1.5 rounded-xl shadow-lg border-2 border-emerald-400 cursor-pointer transition-transform hover:scale-105"
+              title="View on Cricket Stadium Ground"
+            >
+              <Eye className="w-4 h-4 text-emerald-200" />
+              <span>Preview XI</span>
+            </button>
 
-            {/* Selected XI photo grid */}
-            <div className="flex-1 overflow-y-auto pr-1">
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                {selectedPlayers.map((p) => {
-                  const isC = captainId === p.id;
-                  const isVC = viceCaptainId === p.id;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => assignCapRole(p)}
-                      className={`rounded-xl border-2 p-2 flex flex-col items-center text-center transition cursor-pointer ${isC
-                          ? 'bg-[#EFF6FF] border-[#2563EB] shadow-[0_0_14px_rgba(37,99,235,0.45)]'
-                          : isVC
-                          ? 'bg-[#FFFBEB] border-[#F59E0B] shadow-[0_0_14px_rgba(245,158,11,0.45)]'
-                          : capMode
-                          ? capMode === 'C'
-                            ? 'bg-white border-[#93C5FD] shadow-[0_0_10px_rgba(37,99,235,0.3)] hover:border-[#2563EB]'
-                            : 'bg-white border-[#FDE68A] shadow-[0_0_10px_rgba(245,158,11,0.3)] hover:border-[#F59E0B]'
-                          : 'bg-[#F8FAFC] border-[#CBD5E1]'
-                        }`}
-                    >
-                      <div className="relative w-full aspect-square mb-1.5">
-                        <PlayerPhoto
-                          name={p.name}
-                          photoUrl={p.photo_url}
-                          boxClass="w-full h-full rounded-lg bg-[#F1F5F9] border border-[#CBD5E1] text-xl text-[#94A3B8]"
-                        />
-                        {isC && (
-                          <span className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-[#2563EB] text-white text-xs font-black flex items-center justify-center border-2 border-white shadow-[0_0_8px_rgba(37,99,235,0.6)]">C</span>
-                        )}
-                        {isVC && (
-                          <span className="absolute -top-1.5 -right-1.5 w-7 h-7 rounded-full bg-[#F59E0B] text-white text-[10px] font-black flex items-center justify-center border-2 border-white shadow-[0_0_8px_rgba(245,158,11,0.6)]">VC</span>
-                        )}
-                      </div>
-                      <span className="font-bold text-[#0F172A] text-[11px] leading-tight line-clamp-2">{p.name}</span>
-                      <span className="text-[9px] text-[#64748B] font-bold mt-0.5">{p.team_name} • {p.role}</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* C / VC mode buttons */}
-            <div className="grid grid-cols-2 gap-3">
+            {isLocked ? (
               <button
                 type="button"
-                onClick={() => setCapMode(capMode === 'C' ? null : 'C')}
-                className={`py-3 rounded-xl font-black text-sm border-2 transition cursor-pointer flex items-center justify-center gap-2 ${capMode === 'C'
-                    ? 'bg-[#2563EB] text-white border-[#93C5FD] shadow-[0_0_16px_rgba(37,99,235,0.5)]'
-                    : 'bg-white text-[#1D4ED8] border-[#93C5FD] hover:bg-[#EFF6FF]'
-                  }`}
+                disabled
+                className="px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-[#E2E8F0] text-[#94A3B8] border border-[#CBD5E1] cursor-not-allowed flex items-center gap-1.5 shadow-none"
               >
-                <span className="w-7 h-7 rounded-full bg-white/20 border border-current flex items-center justify-center text-xs">C</span>
-                Captain (2×)
-                {captainId && <Check className="w-4 h-4" />}
+                <Lock className="w-4 h-4 text-[#94A3B8]" />
+                <span>Squads Locked</span>
               </button>
+            ) : (
               <button
                 type="button"
-                onClick={() => setCapMode(capMode === 'VC' ? null : 'VC')}
-                className={`py-3 rounded-xl font-black text-sm border-2 transition cursor-pointer flex items-center justify-center gap-2 ${capMode === 'VC'
-                    ? 'bg-[#F59E0B] text-white border-[#FDE68A] shadow-[0_0_16px_rgba(245,158,11,0.5)]'
-                    : 'bg-white text-[#B45309] border-[#FDE68A] hover:bg-[#FFFBEB]'
-                  }`}
+                onClick={handleProceedToCaptain}
+                className={`prime-btn-3d !py-2.5 !px-4 sm:!px-6 text-xs font-black uppercase tracking-wider cursor-pointer ${
+                  selectedPlayerIds.length === 11 ? 'shadow-[0_0_16px_rgba(37,99,235,0.6)]' : 'opacity-90'
+                }`}
               >
-                <span className="w-7 h-7 rounded-full bg-white/20 border border-current flex items-center justify-center text-[10px]">VC</span>
-                Vice-Captain (1.5×)
-                {viceCaptainId && <Check className="w-4 h-4" />}
+                <span>{isLowBalance ? `Add ₹${entryFee - (walletBalance || 0)} to Join →` : entryFee > 0 ? `Pay ₹${entryFee} • Choose C / VC →` : 'Choose C / VC →'}</span>
+                <ChevronRight className="w-4 h-4" />
               </button>
-            </div>
-
-            {error && <div className="pd-error">{error}</div>}
-
-            <div className="pt-3 border-t border-[#E2E8F0] flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setShowCapModal(false)}
-                className="prime-btn-dark-3d text-xs !py-2 !px-4"
-              >
-                Back to XI
-              </button>
-              <button
-                type="button"
-                onClick={handleSubmitTeam}
-                disabled={submitting || !captainId || !viceCaptainId}
-                className="prime-btn-3d text-xs !py-2 !px-5 font-black disabled:opacity-40"
-              >
-                {submitting ? 'Saving...' : editingTeamId ? 'Update Team' : 'Submit Team'}
-              </button>
-            </div>
+            )}
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Dream11-Style Cricket Pitch Ground Preview & Captain/Vice-Captain Selector */}
+      <CricketPitchView
+        isOpen={showPitchPreview}
+        onClose={() => setShowPitchPreview(false)}
+        mode={pitchMode}
+        teamName={teamName}
+        onTeamNameChange={setTeamName}
+        players={selectedPlayers.map((p) => ({
+          id: p.id,
+          name: p.name,
+          team_name: p.team_name,
+          role: p.role,
+          credits: p.credits,
+          points: p.last_match_points || p.points,
+          photo_url: p.photo_url,
+          is_captain: p.id === captainId,
+          is_vice_captain: p.id === viceCaptainId,
+        }))}
+        captainId={captainId}
+        viceCaptainId={viceCaptainId}
+        onSelectCaptain={(pId) => {
+          if (viceCaptainId === pId) setViceCaptainId(null);
+          setCaptainId(pId);
+        }}
+        onSelectViceCaptain={(pId) => {
+          if (captainId === pId) setCaptainId(null);
+          setViceCaptainId(pId);
+        }}
+        onSubmitTeam={handleSubmitTeam}
+        submitting={submitting}
+        isEditing={!!editingTeamId}
+        teamA={match?.team_a}
+        teamB={match?.team_b}
+        teamACount={teamCounts[match?.team_a] || 0}
+        teamBCount={teamCounts[match?.team_b] || 0}
+        creditsLeft={creditsLeft}
+        entryFee={entryFee}
+        walletBalance={walletBalance}
+        isLowBalance={isLowBalance}
+        error={error}
+      />
+
+      {/* Player Detailed Stats & 5-Match Performance Modal */}
+      <PlayerDetailModal
+        player={detailPlayer}
+        onClose={() => setDetailPlayer(null)}
+        isSelected={detailPlayer ? selectedPlayerIds.includes(detailPlayer.id) : false}
+        onToggleSelect={(p) => togglePlayer(p as any)}
+      />
     </div>
   );
 }

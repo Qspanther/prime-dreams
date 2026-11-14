@@ -11,6 +11,7 @@ const { calculateFantasyPoints, auditPointsChange } = require('../scoring/scorin
 const wsGateway = require('../websocket/wsGateway');
 const config = require('../../config');
 const { Op } = require('sequelize');
+const { botScheduler, checkIsEndGame, rearrangeBotsForEndGame } = require('../botScheduler');
 
 let workerInterval = null;
 let isProcessing = false;
@@ -86,6 +87,56 @@ async function createDiscoveredLiveMatch(feedMatch) {
     is_degraded: false,
   });
   console.log(`🆕 [Ingestion] Discovered live match "${match.title}" from Cricbuzz.`);
+
+  // Auto-seed players (15 Team A + 15 Team B) immediately so roster is never empty
+  try {
+    const { generateSquad } = require('../cricbuzzAdapter');
+    const squadA = generateSquad(match.team_a, match.team_a_code);
+    const squadB = generateSquad(match.team_b, match.team_b_code);
+    for (const p of squadA) {
+      await CricketPlayer.create({
+        match_id: match.id,
+        team_name: match.team_a,
+        name: p.name,
+        role: p.role,
+        photo_url: p.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(p.name)}`,
+        credits: p.credits || 9.0,
+        points: 0,
+        stats: { runs: 0, balls: 0, wickets: 0, overs: 0 },
+      });
+    }
+    for (const p of squadB) {
+      await CricketPlayer.create({
+        match_id: match.id,
+        team_name: match.team_b,
+        name: p.name,
+        role: p.role,
+        photo_url: p.photo_url || `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(p.name)}`,
+        credits: p.credits || 9.0,
+        points: 0,
+        stats: { runs: 0, balls: 0, wickets: 0, overs: 0 },
+      });
+    }
+  } catch (err) {
+    console.warn(`[Ingestion] Could not auto-seed players for ${match.title}: ${err.message}`);
+  }
+
+  // Auto-seed standard contests for newly discovered match so contest cards always show
+  try {
+    const defaultTemplates = [
+      { type: 'standard', title: 'Mega Contest (Grand League)', prize_pool: 10000, entry_fee: 49, total_spots: 250, filled_spots: 184, is_active: true, is_private: false, status: 'open' },
+      { type: 'standard', title: 'Winner Takes All', prize_pool: 5000, entry_fee: 99, total_spots: 55, filled_spots: 41, is_active: true, is_private: false, status: 'open' },
+      { type: 'h2h', title: 'Head-to-Head Duel', prize_pool: 90, entry_fee: 50, total_spots: 2, filled_spots: 1, is_active: true, is_private: false, status: 'open' },
+      { type: 'practice', title: 'Practice Contest (Free)', prize_pool: 0, entry_fee: 0, total_spots: 100, filled_spots: 32, is_active: true, is_private: false, status: 'open' },
+      { type: 'standard', title: 'Rookie Contest (Beginner Arena)', prize_pool: 1500, entry_fee: 19, total_spots: 100, filled_spots: 78, is_active: true, is_private: false, status: 'open' },
+    ];
+    for (const tmpl of defaultTemplates) {
+      await MatchContest.create({ ...tmpl, match_id: match.id });
+    }
+  } catch (err) {
+    console.warn(`[Ingestion] Could not auto-seed contests for ${match.title}: ${err.message}`);
+  }
+
   return match;
 }
 
@@ -151,18 +202,19 @@ async function processLiveIngestionTick() {
 
       if (!cricbuzzMatch) {
         if (match.status === 'live') {
+          const hasScore = (match.score_summary?.team_a?.overs > 0 || match.score_summary?.team_a?.runs > 0 || match.score_summary?.team_b?.overs > 0);
           const lastEvidence = match.last_live_poll_at || match.updatedAt || match.createdAt;
           const lastSuccessfulPoll = lastEvidence ? new Date(lastEvidence).getTime() : 0;
           if (!sourceFeedHealthy && lastSuccessfulPoll && Date.now() - lastSuccessfulPoll >= 60000) {
+            // Keep status as 'live' if match has started; never demote an in-play match to 'upcoming'
             await match.update({
-              status: 'upcoming',
+              status: hasScore ? 'live' : 'upcoming',
               live_data: {
                 ...(match.live_data || {}),
-                status_text: 'Live status unconfirmed: Cricbuzz feed is unavailable.',
+                status_text: hasScore ? 'In-play: Live telemetry syncing...' : 'Scheduled match.',
                 source: 'Cricbuzz',
               },
             });
-            console.warn(`⚠️ [Ingestion] Hid LIVE status for "${match.title}" because its score feed is stale.`);
             continue;
           }
         }
@@ -171,17 +223,20 @@ async function processLiveIngestionTick() {
           const misses = (missingFeedPolls.get(match.id) || 0) + 1;
           missingFeedPolls.set(match.id, misses);
           if (misses >= MISSING_FEED_POLLS_BEFORE_END) {
+            const hasScore = (match.score_summary?.team_a?.overs > 0 || match.score_summary?.team_a?.runs > 0 || match.score_summary?.team_b?.overs > 0);
+            // In-play matches that drop from live feed are either concluded or in break; never upcoming!
+            const newStatus = hasScore ? (match.live_data?.status_text?.toLowerCase().includes('won') ? 'completed' : 'live') : 'upcoming';
             await match.update({
-              status: 'upcoming',
+              status: newStatus,
               live_data: {
                 ...(match.live_data || {}),
-                status_text: 'Live status unconfirmed: Cricbuzz no longer reports this fixture as live.',
+                status_text: hasScore ? (match.live_data?.status_text || 'Match in break / between sessions') : 'Scheduled fixture',
                 source: 'Cricbuzz',
                 last_source_sync_at: new Date().toISOString(),
               },
             });
             missingFeedPolls.delete(match.id);
-            console.warn(`⏹️ [Ingestion] Hid stale LIVE status for "${match.title}" after ${misses} successful source polls without the fixture.`);
+            console.log(`ℹ️ [Ingestion] Maintained "${match.title}" status as ${newStatus} (in-play score preserved).`);
           }
         }
         continue;
@@ -361,6 +416,19 @@ async function processLiveIngestionTick() {
         // Recalculate Fantasy Player Points & Team Totals (Section 6)
         await updatePlayerFantasyPoints(match.id, normalized, eventId, playerSnapshot);
 
+        // Dynamic End-Game Tactical Rearrangement Check (Last 6-10 Balls Stage)
+        try {
+          const updatedMatch = await CricketMatch.findByPk(match.id);
+          const eg = checkIsEndGame(updatedMatch);
+          if (eg.isEndGame && !botScheduler.endGameProcessed.has(match.id)) {
+            console.log(`⚡ [Ingestion Live Hook] Match "${match.title}" reached death stage: ${eg.remainingBalls} balls remaining! Triggering bot rearrangement...`);
+            await rearrangeBotsForEndGame(match.id);
+            botScheduler.endGameProcessed.add(match.id);
+          }
+        } catch (egHookErr) {
+          console.warn(`⚠️ [Ingestion EndGame Hook Warning]:`, egHookErr.message);
+        }
+
         // Broadcast lean 200-byte DELTA to connected WebSocket clients (Section 3.2)
         wsGateway.broadcastDelta(match.id, {
           over: activeScore.overs,
@@ -411,8 +479,8 @@ async function updatePlayerFantasyPoints(matchId, scoreData, eventId, playerSnap
         const existing = playerByName.get(keyFor(name, teamName));
         if (existing) {
           const stats = sourcePlayer.stats || existing.stats;
-          if (existing.role !== (sourcePlayer.role || existing.role) || JSON.stringify(existing.stats || {}) !== JSON.stringify(stats || {})) {
-            await existing.update({ stats, role: sourcePlayer.role || existing.role });
+          if (JSON.stringify(existing.stats || {}) !== JSON.stringify(stats || {})) {
+            await existing.update({ stats });
           }
         } else {
           const created = await CricketPlayer.create({

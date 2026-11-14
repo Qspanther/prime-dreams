@@ -64,9 +64,12 @@ function AdminCricketMatchesContent() {
   });
 
   const [contests, setContests] = useState<any[]>([
-    { type: 'standard', title: 'Mega Grand Contest ₹1,00,000', prize_pool: 100000, entry_fee: 49, total_spots: 2500 },
-    { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 99, total_spots: 25 },
-    { type: 'h2h', title: 'H2H Custom Duel', prize_pool: 0, entry_fee: 0, total_spots: 2 },
+    { type: 'mega', title: 'Mega Grand Contest ₹1,00,000', prize_pool: 100000, entry_fee: 49, total_spots: 10000, bot_spots: 10000 },
+    { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 99, total_spots: 25, bot_spots: 7 },
+    { type: 'mini', title: 'Mini Quick Contest ₹1,000', prize_pool: 1000, entry_fee: 25, total_spots: 100, bot_spots: 25 },
+    { type: 'practice', title: 'Practice Contest (Free)', prize_pool: 0, entry_fee: 0, total_spots: 50, bot_spots: 10 },
+    { type: 'private', title: 'Private Friends Contest', prize_pool: 500, entry_fee: 25, total_spots: 20, bot_spots: 0 },
+    { type: 'h2h', title: 'H2H Custom Duel', prize_pool: 0, entry_fee: 0, total_spots: 2, bot_spots: 0 },
   ]);
 
   const handleSelectCricbuzzFixture = (cbMatch: any) => {
@@ -663,10 +666,18 @@ function AdminCricketMatchesContent() {
 
                           <div className="grid sm:grid-cols-4 gap-2">
                             {(m.contests || []).map((c: any) => (
-                              <div key={c.id} className="p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-xs shadow-xs">
-                                <span className="font-black text-[#0F172A] block truncate">{c.title}</span>
+                              <div key={c.id} className="p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-xs shadow-xs space-y-1">
+                                <div className="flex justify-between items-center gap-1">
+                                  <span className="font-black text-[#0F172A] block truncate">{c.title}</span>
+                                  <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-[#EFF6FF] text-[#1D4ED8]">
+                                    {c.type}
+                                  </span>
+                                </div>
                                 <span className="text-[#D97706] text-[10px] font-mono block font-bold">
                                   {c.type === 'h2h' ? 'H2H Duel (User Fee)' : `Fee: ₹${c.entry_fee} • Pool: ₹${c.prize_pool}`}
+                                </span>
+                                <span className="text-[10px] font-mono block font-bold text-[#2563EB]">
+                                  {c.type === 'h2h' || c.is_private ? '🚫 Bots: 0 (Protected)' : `🤖 Bots: ${c.bot_spots || 'Auto'} teams`}
                                 </span>
                               </div>
                             ))}
@@ -1229,24 +1240,43 @@ function AdminCricketMatchesContent() {
               {currentStep === 4 && (
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
-                    <span className="font-black text-[#1E3A8A] uppercase">Contests Configuration</span>
+                    <div>
+                      <span className="font-black text-[#1E3A8A] uppercase block">Contests Configuration & Bot Quotas</span>
+                      <span className="text-[11px] text-[#64748B]">
+                        Mega, Battlefield, Mini, Practice, Private & H2H contests configure karein aur unke Bot spots set karein.
+                      </span>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setContests(prev => [...prev, { type: 'standard', title: `Contest #${prev.length + 1}`, prize_pool: 10000, entry_fee: 25, total_spots: 500 }])}
-                      className="prime-btn-3d !py-1.5 !px-3 !text-xs"
+                      onClick={() => setContests(prev => [...prev, {
+                        type: 'mega',
+                        title: `Mega Contest #${prev.length + 1}`,
+                        prize_pool: 25000,
+                        entry_fee: 49,
+                        total_spots: 1000,
+                        bot_spots: 500
+                      }])}
+                      className="prime-btn-3d !py-1.5 !px-3 !text-xs shrink-0"
                     >
                       + Add Contest
                     </button>
                   </div>
-                  <p className="text-[11px] text-[#64748B] font-bold">
-                    Har contest ka type, name, prize pool, entry fee aur total spots aap khud decide karein.
-                  </p>
 
-                  <div className="space-y-3 max-h-[26rem] overflow-y-auto pr-1">
+                  <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-1">
                     {contests.map((c, idx) => (
                       <div key={idx} className="p-3.5 rounded-xl bg-white border-2 border-[#CBD5E1] shadow-[0_0_12px_rgba(37,99,235,0.10)] space-y-3">
                         <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-black uppercase tracking-wider text-[#2563EB]">Contest #{idx + 1}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-[#2563EB]">Contest #{idx + 1}</span>
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">
+                              {c.type === 'mega' ? '🏆 Mega Grand' :
+                               c.type === 'multi_battlefield' ? '⚔️ Battlefield (25)' :
+                               c.type === 'mini' ? '🎯 Mini (100)' :
+                               c.type === 'practice' ? '🆓 Practice' :
+                               c.type === 'private' ? '🔒 Private' :
+                               c.type === 'h2h' ? '🥊 H2H Duel' : '📊 Standard'}
+                            </span>
+                          </div>
                           {contests.length > 1 && (
                             <button type="button" onClick={() => setContests(prev => prev.filter((_, i) => i !== idx))} className="text-[#64748B] hover:text-red-600 text-xs font-black">
                               ✕ Remove
@@ -1269,19 +1299,85 @@ function AdminCricketMatchesContent() {
                             />
                           </div>
 
-                          <div>
+                          <div className="sm:col-span-2">
                             <label className="pd-label">Contest Type</label>
                             <select
                               value={c.type}
                               onChange={(e) => {
-                                const val = e.target.value;
-                                setContests(prev => prev.map((item, i) => i === idx ? { ...item, type: val } : item));
+                                const newType = e.target.value;
+                                setContests(prev => prev.map((item, i) => {
+                                  if (i !== idx) return item;
+                                  const updated = { ...item, type: newType };
+                                  if (newType === 'mega') {
+                                    if (!updated.title || updated.title.startsWith('Contest #') || updated.title.startsWith('Mega Contest #')) {
+                                      updated.title = 'Mega Grand Contest ₹1,00,000';
+                                    }
+                                    updated.total_spots = 10000;
+                                    updated.bot_spots = 10000;
+                                    updated.entry_fee = 49;
+                                    updated.prize_pool = 100000;
+                                    updated.is_private = false;
+                                  } else if (newType === 'multi_battlefield') {
+                                    if (!updated.title || updated.title.startsWith('Contest #') || updated.title.startsWith('Mega Contest #')) {
+                                      updated.title = 'PUBG Battlefield Room #1';
+                                    }
+                                    updated.total_spots = 25;
+                                    updated.spots_per_battlefield = 25;
+                                    updated.bot_spots = 7;
+                                    updated.entry_fee = 99;
+                                    updated.prize_pool = 2500;
+                                    updated.is_private = false;
+                                  } else if (newType === 'mini') {
+                                    if (!updated.title || updated.title.startsWith('Contest #') || updated.title.startsWith('Mega Contest #')) {
+                                      updated.title = 'Mini Quick Contest ₹1,000';
+                                    }
+                                    updated.total_spots = 100;
+                                    updated.bot_spots = 25;
+                                    updated.entry_fee = 25;
+                                    updated.prize_pool = 2500;
+                                    updated.is_private = false;
+                                  } else if (newType === 'practice') {
+                                    if (!updated.title || updated.title.startsWith('Contest #') || updated.title.startsWith('Mega Contest #')) {
+                                      updated.title = 'Practice Contest (Free)';
+                                    }
+                                    updated.total_spots = 50;
+                                    updated.bot_spots = 10;
+                                    updated.entry_fee = 0;
+                                    updated.prize_pool = 0;
+                                    updated.is_private = false;
+                                  } else if (newType === 'private') {
+                                    if (!updated.title || updated.title.startsWith('Contest #') || updated.title.startsWith('Mega Contest #')) {
+                                      updated.title = 'Private Friends Contest';
+                                    }
+                                    updated.total_spots = 20;
+                                    updated.bot_spots = 0;
+                                    updated.entry_fee = 25;
+                                    updated.prize_pool = 500;
+                                    updated.is_private = true;
+                                  } else if (newType === 'h2h') {
+                                    if (!updated.title || updated.title.startsWith('Contest #') || updated.title.startsWith('Mega Contest #')) {
+                                      updated.title = 'H2H Custom Duel';
+                                    }
+                                    updated.total_spots = 2;
+                                    updated.bot_spots = 0;
+                                    updated.entry_fee = 0;
+                                    updated.prize_pool = 0;
+                                    updated.is_private = false;
+                                  } else {
+                                    updated.is_private = false;
+                                  }
+                                  return updated;
+                                }));
                               }}
                               className="pd-input font-bold text-[#2563EB]"
                             >
-                              <option value="standard">Standard Pool</option>
-                              <option value="multi_battlefield">PUBG Battlefield</option>
-                              <option value="h2h">Head-to-Head (H2H)</option>
+                              <option value="mega">🏆 Mega Grand Contest (Up to 10,000 Teams)</option>
+                              <option value="multi_battlefield">⚔️ PUBG Battlefield (25 spots, Room Auto-Clone)</option>
+                              <option value="mini">🎯 Mini Contest (10 - 100 spots)</option>
+                              <option value="practice">🆓 Practice Contest (Free Entry)</option>
+                              <option value="private">🔒 Private Contest (Invite Only, 0 Bots)</option>
+                              <option value="h2h">🥊 Head-to-Head Duel (1v1, 0 Bots)</option>
+                              <option value="standard">📊 Standard Public Contest</option>
                             </select>
                           </div>
 
@@ -1306,7 +1402,7 @@ function AdminCricketMatchesContent() {
                               type="number"
                               min={0}
                               value={c.entry_fee}
-                              disabled={c.type === 'h2h'}
+                              disabled={c.type === 'h2h' || c.type === 'practice'}
                               onChange={(e) => {
                                 const val = parseFloat(e.target.value) || 0;
                                 setContests(prev => prev.map((item, i) => i === idx ? { ...item, entry_fee: val } : item));
@@ -1321,13 +1417,59 @@ function AdminCricketMatchesContent() {
                               type="number"
                               min={0}
                               value={c.prize_pool}
-                              disabled={c.type === 'h2h'}
+                              disabled={c.type === 'h2h' || c.type === 'practice'}
                               onChange={(e) => {
                                 const val = parseFloat(e.target.value) || 0;
                                 setContests(prev => prev.map((item, i) => i === idx ? { ...item, prize_pool: val } : item));
                               }}
                               className="pd-input font-mono disabled:opacity-50"
                             />
+                          </div>
+
+                          {/* 🤖 BOTS TEAMS COUNT FIELD */}
+                          <div className="sm:col-span-2 p-3 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <label className="text-[11px] font-black uppercase text-[#1D4ED8] flex items-center gap-1.5">
+                                <span>🤖 Bots Ki Teams (Bot Spots)</span>
+                                <span className="text-[9px] font-bold bg-[#DBEAFE] px-2 py-0.5 rounded-full text-[#1E40AF]">Autonomous Allocation</span>
+                              </label>
+                              {(c.type === 'h2h' || c.type === 'private') ? (
+                                <span className="text-[10px] font-bold text-[#DC2626] bg-red-50 border border-red-200 px-2 py-0.5 rounded">
+                                  🚫 Bots Disabled for {c.type === 'h2h' ? 'H2H' : 'Private'}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-mono text-[#2563EB] font-bold">
+                                  {c.bot_spots ? `${c.bot_spots} Teams set` : 'Default Rule Active'}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="number"
+                                min={0}
+                                max={c.type === 'mega' ? 10000 : c.total_spots}
+                                value={c.type === 'h2h' || c.type === 'private' ? 0 : (c.bot_spots !== undefined ? c.bot_spots : '')}
+                                disabled={c.type === 'h2h' || c.type === 'private'}
+                                placeholder={
+                                  c.type === 'mega' ? '10000' :
+                                  c.type === 'multi_battlefield' ? '7' :
+                                  c.total_spots === 100 ? '25' :
+                                  'e.g. 500 (Bots 500 teams banayenge)'
+                                }
+                                onChange={(e) => {
+                                  const val = parseInt(e.target.value, 10) || 0;
+                                  setContests(prev => prev.map((item, i) => i === idx ? { ...item, bot_spots: val } : item));
+                                }}
+                                className="pd-input font-mono font-bold disabled:opacity-50 disabled:bg-[#F1F5F9]"
+                              />
+                            </div>
+
+                            <p className="text-[10px] text-[#64748B]">
+                              {c.type === 'h2h' || c.type === 'private'
+                                ? '⚠️ Rules Guard: Head-to-Head aur Private contests me bots 100% block rehte hain.'
+                                : '💡 Is contest me bots kitni teams banayenge (e.g. 500 likhne par bots 500 teams banayenge). Default rules: 25 spots me 7 bots, 100 spots me 25 bots, Mega me 10,000 teams.'}
+                            </p>
                           </div>
                         </div>
 

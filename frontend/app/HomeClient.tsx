@@ -6,11 +6,12 @@ import { useAuth } from './lib/auth-context';
 import { apiGet, resolveImageUrl } from './lib/api';
 import {
   Trophy, Clock, Users, ArrowRight, Shield, Activity,
-  Radio, Sparkles, ChevronRight, AlertCircle, Calendar, Zap
+  Radio, Sparkles, ChevronRight, AlertCircle, Calendar, Zap, Bell
 } from 'lucide-react';
 import CategoryFilterTabs from './components/ui/CategoryFilterTabs';
 import CategoryBadge from './components/ui/CategoryBadge';
 import PrimeLogo from './components/ui/PrimeLogo';
+import MatchPosterFrame from './components/ui/MatchPosterFrame';
 
 function getLiveScoreText(match: any, side: 'team_a' | 'team_b') {
   const score = match.score_summary?.[side];
@@ -25,6 +26,11 @@ function getLiveScoreSummary(match: any) {
   return `${getLiveScoreText(match, 'team_a')}  •  ${getLiveScoreText(match, 'team_b')}`;
 }
 
+function getDaysUntilMatch(startTimeStr: string) {
+  if (!startTimeStr) return 0;
+  return (new Date(startTimeStr).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+}
+
 interface HomeClientProps {
   initialMatches?: any[];
 }
@@ -35,6 +41,19 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
   const [matches, setMatches] = useState<any[]>(initialMatches);
   const [loading, setLoading] = useState<boolean>(initialMatches.length === 0);
   const [bannerDismissed, setBannerDismissed] = useState<boolean>(false);
+  const [reminders, setReminders] = useState<Record<string, boolean>>({});
+  const [reminderToast, setReminderToast] = useState<string | null>(null);
+
+  const toggleReminder = (e: React.MouseEvent, matchId: string, matchTitle: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setReminders((prev) => {
+      const next = !prev[matchId];
+      setReminderToast(next ? `🔔 Reminder active for ${matchTitle} (30m before match)` : `Reminder removed`);
+      setTimeout(() => setReminderToast(null), 3000);
+      return { ...prev, [matchId]: next };
+    });
+  };
 
   // Fetch matches from API with category filter
   const fetchMatches = async () => {
@@ -75,30 +94,35 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
     }
   };
 
-  // Helper to calculate days until match
-  const getDaysUntilMatch = (startTimeStr: string) => {
-    const start = new Date(startTimeStr).getTime();
+  // 1. Live, Upcoming & Coming Soon Matches (Optimized single-pass memoization)
+  const { liveMatches, upcomingMatches, comingSoonMatches } = React.useMemo(() => {
     const now = Date.now();
-    const diffDays = (start - now) / (1000 * 60 * 60 * 24);
-    return diffDays;
-  };
+    const live: any[] = [];
+    const upcoming: any[] = [];
+    const comingSoon: any[] = [];
 
-  // 1. Live Matches (Sabse Pehle)
-  const liveMatches = matches.filter((m) => m.status === 'live');
+    for (const m of matches) {
+      if (m.status === 'completed') continue;
+      const hasLiveScore = !!(
+        (m.score_summary?.team_a?.overs > 0 || m.score_summary?.team_a?.runs > 0) ||
+        (m.score_summary?.team_b?.overs > 0 || m.score_summary?.team_b?.runs > 0)
+      );
+      const startMs = m.start_time ? new Date(m.start_time).getTime() : 0;
+      const startTimePassed = startMs > 0 && now >= startMs;
 
-  // 2. Upcoming Matches (Starting within next 6 days)
-  const upcomingMatches = matches.filter((m) => {
-    if (m.status !== 'upcoming') return false;
-    const days = getDaysUntilMatch(m.start_time);
-    return days <= 6;
-  });
-
-  // 3. Coming Soon Matches (Scheduled > 6 days later)
-  const comingSoonMatches = matches.filter((m) => {
-    if (m.status !== 'upcoming') return false;
-    const days = getDaysUntilMatch(m.start_time);
-    return days > 6;
-  });
+      if (m.status === 'live' || hasLiveScore || startTimePassed) {
+        live.push(m);
+      } else if (m.status === 'upcoming') {
+        const diffDays = (startMs - now) / (1000 * 60 * 60 * 24);
+        if (diffDays <= 6) {
+          upcoming.push(m);
+        } else {
+          comingSoon.push(m);
+        }
+      }
+    }
+    return { liveMatches: live, upcomingMatches: upcoming, comingSoonMatches: comingSoon };
+  }, [matches]);
 
   // Featured Hero Match (either first live match or first upcoming match)
   const heroMatch = liveMatches[0] || upcomingMatches[0] || matches[0];
@@ -319,6 +343,14 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
         />
       </div>
 
+      {/* Floating Reminder Toast Banner */}
+      {reminderToast && (
+        <div className="fixed bottom-6 right-6 z-50 p-3 rounded-xl bg-slate-900 text-white border border-amber-400 text-xs font-black shadow-2xl flex items-center gap-2 animate-in fade-in slide-in-from-bottom duration-200">
+          <Bell className="w-4 h-4 text-amber-400 animate-bounce" />
+          <span>{reminderToast}</span>
+        </div>
+      )}
+
       {/* ======================================================== */}
       {/* 1. 🔴 LIVE MATCHES (SABSE PEHLE) */}
       {/* ======================================================== */}
@@ -343,81 +375,71 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
               <Link
                 key={m.id}
                 href={`/match/${m.id}`}
-                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3.5 flex flex-col justify-between group border border-emerald-300 shadow-[0_0_22px_rgba(34,197,94,0.20)] hover:border-emerald-500 hover:shadow-[0_0_28px_rgba(34,197,94,0.34)]"
+                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3 flex flex-col justify-between group border border-emerald-300 shadow-[0_0_22px_rgba(34,197,94,0.20)] hover:border-emerald-500 hover:shadow-[0_0_28px_rgba(34,197,94,0.34)]"
               >
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <CategoryBadge category={m.category} size="xs" />
-                    <span className="neon-badge-red px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                      LIVE
-                    </span>
-                  </div>
+                  {/* Match Poster Frame — Always Prominently Visible */}
+                  <MatchPosterFrame
+                    poster={m.match_poster}
+                    title={m.title || `${m.team_a} vs ${m.team_b}`}
+                    category={m.category}
+                    venue={m.venue || m.title || 'Live Match Arena'}
+                    topRightBadge={
+                      <span className="neon-badge-red px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-md">
+                        <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                        LIVE
+                      </span>
+                    }
+                    heightClass="h-32 sm:h-36 mb-2.5"
+                  />
 
-                  {resolveImageUrl(m.match_poster) && (
-                    <div className="relative h-28 w-full overflow-hidden rounded-xl border border-emerald-300 bg-emerald-50 shadow-[0_0_18px_rgba(34,197,94,0.32)]">
-                      <img
-                        src={resolveImageUrl(m.match_poster)}
-                        alt={m.title || `${m.team_a} vs ${m.team_b}`}
-                        className="h-full w-full object-cover"
-                        onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                      />
-                      <span className="absolute bottom-1.5 left-2 rounded bg-emerald-950/75 px-2 py-0.5 text-[9px] font-black text-white">LIVE MATCH</span>
-                    </div>
-                  )}
-
-                  {/* Team A vs Team B Live Scores */}
-                  <div className="grid grid-cols-2 gap-3 items-center py-2">
-                    <div>
-                      <span className="text-xs font-black text-[#0F172A] block truncate">{m.team_a}</span>
-                      <p className="pd-num text-2xl font-black text-[#2563EB] font-mono">
-                        {getLiveScoreText(m, 'team_a')}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-xs font-black text-[#0F172A] block truncate">{m.team_b}</span>
-                      <p className="text-xs font-bold text-[#64748B]">{getLiveScoreText(m, 'team_b')}</p>
-                    </div>
-                  </div>
-                  <p className="text-xs font-semibold text-[#64748B] mt-1" aria-live="polite">
-                    {m.live_data?.status_text || 'Live score syncing'}
-                  </p>
-
-                  {/* Striker & Bowler Live Telemetry Snippet */}
-                  {m.live_data?.current_striker && (
-                    <div className="bg-[#F8FAFC] rounded-xl p-3 mt-3 border border-[#CBD5E1] flex items-center justify-between text-xs shadow-inner">
-                      <div className="flex items-center gap-1.5 truncate">
-                        <span className="text-[#2563EB]">🏏</span>
-                        <span className="text-[#0F172A] font-black truncate">
-                          {m.live_data.current_striker.name}*
-                        </span>
-                        <span className="text-[#2563EB] font-mono font-bold">
-                          {m.live_data.current_striker.runs} ({m.live_data.current_striker.balls})
-                        </span>
+                  {/* Team A vs Team B Clash */}
+                  <div className="grid grid-cols-7 items-center py-1 px-0.5">
+                    <div className="col-span-3 flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#EF4444] to-[#B91C1C] border border-white flex items-center justify-center font-black text-[11px] text-white shadow-xs overflow-hidden shrink-0">
+                        {resolveImageUrl(m.team_a_logo) && m.team_a_logo !== '/cricket/team_a.png' ? (
+                          <img src={resolveImageUrl(m.team_a_logo)} alt={m.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                        ) : (m.team_a_code || m.team_a?.slice(0, 3).toUpperCase())}
                       </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        {(m.live_data.recent_balls || []).slice(-4).map((b: string, i: number) => (
-                          <span
-                            key={i}
-                            className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black shadow-sm ${
-                              b === 'W'
-                                ? 'bg-[#EF4444] text-white'
-                                : b === '4' || b === '6'
-                                ? 'bg-[#2563EB] text-white'
-                                : 'bg-white border border-[#CBD5E1] text-[#0F172A]'
-                            }`}
-                          >
-                            {b}
-                          </span>
-                        ))}
+                      <span className="text-xs font-black text-[#0F172A] truncate">{m.team_a}</span>
+                    </div>
+
+                    <div className="col-span-1 text-center font-black text-xs text-[#2563EB] italic">
+                      VS
+                    </div>
+
+                    <div className="col-span-3 flex items-center justify-end gap-2 text-right min-w-0">
+                      <span className="text-xs font-black text-[#0F172A] truncate">{m.team_b}</span>
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-white flex items-center justify-center font-black text-[11px] text-white shadow-xs overflow-hidden shrink-0">
+                        {resolveImageUrl(m.team_b_logo) && m.team_b_logo !== '/cricket/team_b.png' ? (
+                          <img src={resolveImageUrl(m.team_b_logo)} alt={m.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                        ) : (m.team_b_code || m.team_b?.slice(0, 3).toUpperCase())}
                       </div>
                     </div>
-                  )}
+                  </div>
+
+                  {/* Compact Live Score at the Bottom */}
+                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl p-2 mt-2 space-y-1 shadow-inner">
+                    <div className="flex items-center justify-between text-[11px] font-mono">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
+                        <span className="font-black text-[#1D4ED8] truncate">
+                          {getLiveScoreText(m, 'team_a')}
+                        </span>
+                      </div>
+                      <span className="font-bold text-[#64748B] shrink-0 text-right">
+                        {getLiveScoreText(m, 'team_b')}
+                      </span>
+                    </div>
+                    <p className="text-[10px] font-semibold text-[#64748B] truncate leading-tight">
+                      {m.live_data?.status_text || 'Live score syncing'}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="pt-4 border-t border-[#E2E8F0] mt-4 flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#64748B]">
-                    {m.contests_count ? `🏆 ${m.contests_count} Contests Active` : `Score source · ${m.live_data?.source || 'Cricbuzz'}`}
+                <div className="pt-2.5 border-t border-[#E2E8F0] mt-2.5 flex items-center justify-between">
+                  <span className="text-[11px] font-bold text-[#64748B]">
+                    {m.contests_count ? `🏆 ${m.contests_count} Contests` : `Score: Cricbuzz`}
                   </span>
                   <span className="prime-btn-3d !py-1.5 !px-3 !text-xs group-hover:scale-105">
                     <span>View Live Score</span>
@@ -459,39 +481,44 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
             {upcomingMatches.map((m) => (
               <div
                 key={m.id}
-                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3.5 flex flex-col justify-between group border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)]"
+                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3 flex flex-col justify-between group border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)]"
               >
                 <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <CategoryBadge category={m.category} size="xs" />
-                    <span className="bg-[#E0F2FE] text-[#0369A1] text-[10px] font-black px-2.5 py-1 rounded-lg border border-[#BAE6FD] flex items-center gap-1.5 shadow-sm">
-                      <Clock className="w-3 h-3 text-[#2563EB]" />
-                      {m.match_time}
-                    </span>
-                  </div>
-
-                  {/* Match Poster Banner if uploaded */}
-                  {resolveImageUrl(m.match_poster) && (
-                    <div className="relative h-28 w-full rounded-xl overflow-hidden mb-3 border border-amber-300 shadow-[0_0_16px_rgba(245,158,11,0.28)]">
-                      <img
-                        src={resolveImageUrl(m.match_poster)}
-                        alt={m.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
-                      <span className="absolute bottom-1.5 left-2 text-[10px] font-black text-white px-2 py-0.5 rounded bg-black/60 backdrop-blur-xs">
-                        📍 {m.venue || 'Stadium'}
-                      </span>
-                    </div>
-                  )}
+                  {/* Match Poster Frame — Always Prominently Visible */}
+                  <MatchPosterFrame
+                    poster={m.match_poster}
+                    title={m.title || `${m.team_a} vs ${m.team_b}`}
+                    category={m.category}
+                    venue={m.venue || m.title || 'Stadium'}
+                    topRightBadge={
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => toggleReminder(e, m.id, `${m.team_a} vs ${m.team_b}`)}
+                          className={`p-1.5 rounded-lg backdrop-blur-md transition cursor-pointer ${
+                            reminders[m.id]
+                              ? 'bg-amber-400 text-slate-950 shadow-[0_0_8px_rgba(245,158,11,0.8)]'
+                              : 'bg-black/50 text-white hover:bg-black/75'
+                          }`}
+                          title={reminders[m.id] ? 'Reminder active' : 'Set match reminder'}
+                        >
+                          <Bell className="w-3 h-3" />
+                        </button>
+                        <span className="bg-[#E0F2FE]/95 backdrop-blur-xs text-[#0369A1] text-[10px] font-black px-2 py-0.5 rounded-lg border border-[#BAE6FD] flex items-center gap-1 shadow-md">
+                          <Clock className="w-3 h-3 text-[#2563EB]" />
+                          {m.match_time}
+                        </span>
+                      </div>
+                    }
+                    heightClass="h-32 sm:h-36 mb-2.5"
+                  />
 
                   {/* Team A vs Team B Head-to-Head */}
-                  <div className="grid grid-cols-7 items-center py-3">
-                    <div className="col-span-3 flex items-center gap-2.5">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#EF4444] to-[#B91C1C] border border-white flex items-center justify-center font-black text-xs text-white shadow-sm overflow-hidden">
+                  <div className="grid grid-cols-7 items-center py-1.5 px-0.5">
+                    <div className="col-span-3 flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#EF4444] to-[#B91C1C] border border-white flex items-center justify-center font-black text-[11px] text-white shadow-xs overflow-hidden shrink-0">
                         {resolveImageUrl(m.team_a_logo) && m.team_a_logo !== '/cricket/team_a.png' ? (
-                          <img src={resolveImageUrl(m.team_a_logo)} alt={m.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.innerHTML = m.team_a_code || m.team_a?.slice(0,3).toUpperCase(); }} />
+                          <img src={resolveImageUrl(m.team_a_logo)} alt={m.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         ) : (m.team_a_code || m.team_a?.slice(0, 3).toUpperCase())}
                       </div>
                       <span className="text-xs font-black text-[#0F172A] truncate">{m.team_a}</span>
@@ -501,43 +528,39 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                       VS
                     </div>
 
-                    <div className="col-span-3 flex items-center justify-end gap-2.5 text-right">
+                    <div className="col-span-3 flex items-center justify-end gap-2 text-right min-w-0">
                       <span className="text-xs font-black text-[#0F172A] truncate">{m.team_b}</span>
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-white flex items-center justify-center font-black text-xs text-white shadow-sm overflow-hidden">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-white flex items-center justify-center font-black text-[11px] text-white shadow-xs overflow-hidden shrink-0">
                         {resolveImageUrl(m.team_b_logo) && m.team_b_logo !== '/cricket/team_b.png' ? (
-                          <img src={resolveImageUrl(m.team_b_logo)} alt={m.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.innerHTML = m.team_b_code || m.team_b?.slice(0,3).toUpperCase(); }} />
+                          <img src={resolveImageUrl(m.team_b_logo)} alt={m.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                         ) : (m.team_b_code || m.team_b?.slice(0, 3).toUpperCase())}
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-[#E2E8F0] mt-3 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-[#64748B] block text-[10px] font-bold uppercase">Prize Pool</span>
-                    <span className="font-black text-[#D97706] text-sm font-mono">
-                      ₹{m.total_prize_pool > 0 ? m.total_prize_pool.toLocaleString('en-IN') : '10,00,000'}
-                    </span>
-                  </div>
+                  <div className="pt-2.5 border-t border-[#E2E8F0] mt-2 flex items-center justify-between text-xs">
+                    <div>
+                      <span className="text-[#64748B] block text-[9px] font-bold uppercase">Prize Pool</span>
+                      <span className="font-black text-[#D97706] text-xs sm:text-sm font-mono">
+                        ₹{m.total_prize_pool > 0 ? m.total_prize_pool.toLocaleString('en-IN') : '10,00,000'}
+                      </span>
+                    </div>
 
-                  <div className="flex items-center gap-2">
-                    <Link
-                      href={`/team-builder/${m.id}`}
-                      className={`prime-btn-dark-3d !py-1.5 !px-3 !text-xs font-black ${m.is_locked ? 'pointer-events-none opacity-45' : ''}`}
-                      aria-disabled={m.is_locked}
-                      tabIndex={m.is_locked ? -1 : 0}
-                    >
-                      XI
-                    </Link>
-                    {m.is_locked ? (
-                      <span className="rounded-xl border border-red-300 bg-red-50 px-3 py-1.5 text-[10px] font-black text-red-700">🔒 LOCKED</span>
-                    ) : (
-                      <Link href={`/match/${m.id}`} className="prime-btn-3d !py-1.5 !px-4 !text-xs font-black uppercase tracking-wider">Join</Link>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      <Link
+                        href={`/team-builder/${m.id}`}
+                        className="prime-btn-dark-3d !py-1.5 !px-2.5 !text-xs font-black"
+                      >
+                        XI
+                      </Link>
+                      <Link href={`/match/${m.id}`} className="prime-btn-3d !py-1.5 !px-3 !text-xs font-black uppercase tracking-wider">
+                        Join
+                      </Link>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         )}
       </div>
@@ -562,63 +585,60 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
             {comingSoonMatches.map((m) => (
               <div
                 key={m.id}
-                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3.5 flex flex-col justify-between space-y-3 border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)]"
+                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3 flex flex-col justify-between space-y-2.5 border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)]"
               >
-                <div className="flex items-center justify-between">
-                  <CategoryBadge category={m.category} size="xs" />
-                  <span className="bg-[#E0F2FE] text-[#0369A1] text-[10px] font-black px-2.5 py-1 rounded-lg border border-[#BAE6FD]">
-                    Starts in {Math.round(getDaysUntilMatch(m.start_time))} Days
-                  </span>
-                </div>
+                <div>
+                  {/* Match Poster Frame — Always Prominently Visible */}
+                  <MatchPosterFrame
+                    poster={m.match_poster}
+                    title={m.title}
+                    category={m.category}
+                    venue={m.venue || m.title || 'Stadium'}
+                    topRightBadge={
+                      <span className="bg-[#E0F2FE]/95 backdrop-blur-xs text-[#0369A1] text-[10px] font-black px-2 py-0.5 rounded-lg border border-[#BAE6FD]">
+                        Starts in {Math.round(getDaysUntilMatch(m.start_time))} Days
+                      </span>
+                    }
+                    heightClass="h-32 sm:h-36 mb-2.5"
+                  />
 
-                {/* Match Poster Banner if uploaded */}
-                {resolveImageUrl(m.match_poster) && (
-                  <div className="relative h-28 w-full rounded-xl overflow-hidden border border-amber-300 shadow-[0_0_16px_rgba(245,158,11,0.28)]">
-                    <img
-                      src={resolveImageUrl(m.match_poster)}
-                      alt={m.title}
-                      className="w-full h-full object-cover"
-                      onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
-                    />
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between py-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-b from-[#EF4444] to-[#B91C1C] border border-white flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
-                      {resolveImageUrl(m.team_a_logo) ? (
-                        <img src={resolveImageUrl(m.team_a_logo)} alt={m.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
-                      ) : (m.team_a_code || m.team_a?.slice(0, 3).toUpperCase())}
+                  <div className="flex items-center justify-between py-1.5 px-0.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#EF4444] to-[#B91C1C] border border-white flex items-center justify-center font-black text-[11px] text-white overflow-hidden shrink-0">
+                        {resolveImageUrl(m.team_a_logo) ? (
+                          <img src={resolveImageUrl(m.team_a_logo)} alt={m.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                        ) : (m.team_a_code || m.team_a?.slice(0, 3).toUpperCase())}
+                      </div>
+                      <span className="text-xs font-black text-[#0F172A] truncate">{m.team_a}</span>
                     </div>
-                    <span className="text-xs font-black text-[#0F172A] truncate">{m.team_a}</span>
-                  </div>
 
-                  <span className="text-xs font-black text-[#2563EB] px-2 italic">VS</span>
+                    <span className="text-xs font-black text-[#2563EB] px-1 italic">VS</span>
 
-                  <div className="flex items-center gap-2 min-w-0 justify-end">
-                    <span className="text-xs font-black text-[#0F172A] truncate text-right">{m.team_b}</span>
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-white flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
-                      {resolveImageUrl(m.team_b_logo) ? (
-                        <img src={resolveImageUrl(m.team_b_logo)} alt={m.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
-                      ) : (m.team_b_code || m.team_b?.slice(0, 3).toUpperCase())}
+                    <div className="flex items-center gap-2 min-w-0 justify-end">
+                      <span className="text-xs font-black text-[#0F172A] truncate text-right">{m.team_b}</span>
+                      <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-white flex items-center justify-center font-black text-[11px] text-white overflow-hidden shrink-0">
+                        {resolveImageUrl(m.team_b_logo) ? (
+                          <img src={resolveImageUrl(m.team_b_logo)} alt={m.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                        ) : (m.team_b_code || m.team_b?.slice(0, 3).toUpperCase())}
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="pt-3 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
-                  <span className="text-[#64748B] font-bold">
-                    📅 {m.match_date} • ⏰ {m.match_time}
-                  </span>
-                  <Link
-                    href={`/match/${m.id}`}
-                    className="text-[#2563EB] font-black hover:underline flex items-center gap-1 group"
-                  >
-                    <span>Preview</span>
-                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </Link>
+                  <div className="pt-2.5 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
+                    <span className="text-[#64748B] font-bold text-[11px]">
+                      📅 {m.match_date} • ⏰ {m.match_time}
+                    </span>
+                    <Link
+                      href={`/match/${m.id}`}
+                      className="text-[#2563EB] font-black hover:underline flex items-center gap-1 group text-xs"
+                    >
+                      <span>Preview</span>
+                      <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       )}

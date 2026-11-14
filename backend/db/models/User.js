@@ -16,6 +16,10 @@ const User = sequelize.define('User', {
     allowNull: true,
     unique: true,
   },
+  age: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+  },
   role: {
     type: DataTypes.STRING,
     defaultValue: 'user', // 'user' or 'admin'

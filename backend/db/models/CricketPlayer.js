@@ -56,6 +56,10 @@ const CricketPlayer = sequelize.define('CricketPlayer', {
   },
 }, {
   tableName: 'cricket_players',
+  indexes: [
+    { fields: ['match_id'] },
+    { fields: ['match_id', 'points'] },
+  ],
 });
 
 module.exports = CricketPlayer;

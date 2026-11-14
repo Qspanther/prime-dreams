@@ -12,7 +12,7 @@ const MatchContest = sequelize.define('MatchContest', {
     allowNull: false,
   },
   type: {
-    type: DataTypes.ENUM('standard', 'multi_battlefield', 'h2h', 'private', 'practice'),
+    type: DataTypes.STRING,
     allowNull: false,
     defaultValue: 'standard',
   },
@@ -35,6 +35,11 @@ const MatchContest = sequelize.define('MatchContest', {
   filled_spots: {
     type: DataTypes.INTEGER,
     defaultValue: 0,
+  },
+  bot_spots: {
+    type: DataTypes.INTEGER,
+    defaultValue: 0,
+    allowNull: true,
   },
   // Type 2 Multi-Battlefield settings
   spots_per_battlefield: {
@@ -73,6 +78,11 @@ const MatchContest = sequelize.define('MatchContest', {
   },
 }, {
   tableName: 'match_contests',
+  indexes: [
+    { fields: ['match_id'] },
+    { fields: ['match_id', 'is_active'] },
+    { fields: ['invite_code'] },
+  ],
 });
 
 module.exports = MatchContest;

@@ -103,6 +103,7 @@ async function handleBattlefieldFill(contest) {
       filled_spots: 0,
       spots_per_battlefield: spotsPerRoom,
       battlefield_number: nextNumber,
+      bot_spots: contest.bot_spots || (spotsPerRoom === 25 ? 7 : Math.max(7, Math.floor(spotsPerRoom * 0.28))),
       is_active: true,
       status: 'open',
     });

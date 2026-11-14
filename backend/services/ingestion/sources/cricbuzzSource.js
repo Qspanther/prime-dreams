@@ -62,6 +62,70 @@ function roleFromSquad(role, keeper = false) {
   return 'BAT';
 }
 
+function balanceSquadRoles(players) {
+  if (!Array.isArray(players) || players.length === 0) return players;
+
+  // Group by team
+  const teams = new Map();
+  for (const p of players) {
+    const team = p.team_name || 'Unknown';
+    if (!teams.has(team)) teams.set(team, []);
+    teams.get(team).push(p);
+  }
+
+  for (const [teamName, teamPlayers] of teams.entries()) {
+    // 1. Balance Wicket-Keepers: A cricket team plays 1 designated WK (or max 2 in 15-player squads).
+    // Reassign excess WK players to BAT.
+    const wks = teamPlayers.filter(p => p.role === 'WK');
+    const maxWk = teamPlayers.length > 13 ? 2 : 1;
+    if (wks.length > maxWk) {
+      for (let i = maxWk; i < wks.length; i++) {
+        wks[i].role = 'BAT';
+      }
+    }
+
+    // 2. Ensure at least 4 BAT players per team
+    let batCount = teamPlayers.filter(p => p.role === 'BAT').length;
+    if (batCount < 4) {
+      const ars = teamPlayers.filter(p => p.role === 'AR');
+      for (const ar of ars) {
+        if (batCount >= 4) break;
+        if (teamPlayers.filter(p => p.role === 'AR').length <= 2 && teamPlayers.length >= 8) break;
+        ar.role = 'BAT';
+        batCount++;
+      }
+    }
+
+    // 3. Ensure at least 3 BOWL players per team
+    let bowlCount = teamPlayers.filter(p => p.role === 'BOWL').length;
+    if (bowlCount < 3) {
+      const ars = teamPlayers.filter(p => p.role === 'AR');
+      for (const ar of ars) {
+        if (bowlCount >= 3) break;
+        if (teamPlayers.filter(p => p.role === 'AR').length <= 2 && teamPlayers.length >= 8) break;
+        ar.role = 'BOWL';
+        bowlCount++;
+      }
+    }
+
+    // 4. Absolute guarantee: If BAT < 3, convert any extra player to BAT
+    while (teamPlayers.filter(p => p.role === 'BAT').length < 3 && teamPlayers.length >= 6) {
+      const candidate = teamPlayers.find(p => p.role === 'AR') || teamPlayers.find(p => p.role === 'BOWL');
+      if (!candidate) break;
+      candidate.role = 'BAT';
+    }
+
+    // 5. Absolute guarantee: If BOWL < 3, convert any extra AR to BOWL
+    while (teamPlayers.filter(p => p.role === 'BOWL').length < 3 && teamPlayers.length >= 6) {
+      const candidate = teamPlayers.find(p => p.role === 'AR');
+      if (!candidate) break;
+      candidate.role = 'BOWL';
+    }
+  }
+
+  return players;
+}
+
 function emptyPlayerStats() {
   return {
     runs: 0, balls: 0, fours: 0, sixes: 0, wickets: 0, maidens: 0,
@@ -111,7 +175,7 @@ async function fetchMatchSquad(rawId, scorecardHtml, scorecardData) {
     } catch (_) { /* Ignore malformed individual squad blocks. */ }
   }
 
-  const players = [...playersById.values()];
+  const players = balanceSquadRoles([...playersById.values()]);
   squadCache.set(String(rawId), { players, expiresAt: Date.now() + 90000 });
   return players;
 }
@@ -180,7 +244,7 @@ async function fetchLivePlayerSnapshot(rawId) {
     }
 
     const snapshot = {
-      players: [...playerMap.values()],
+      players: balanceSquadRoles([...playerMap.values()]),
       source_updated_at: scorecard.responseLastUpdated || null,
     };
     playerSnapshotCache.set(key, { snapshot, expiresAt: Date.now() + 5000 });
@@ -395,13 +459,17 @@ async function fetchLiveFeed() {
     else if (format.toUpperCase() === 'T20' || matchDesc.toUpperCase().includes('T20')) category = 'T20';
 
     const normalizedState = state.toLowerCase();
-    const isAbandoned = /abandon|cancel|no result/i.test(status);
-    const isPaused = /stumps|lunch|tea|rain|weather|delay|bad light|break/i.test(status);
+    const isAbandoned = /abandon|cancel|no result/i.test(status) || /abandon|cancel|no result/i.test(state);
+    const isCompleted = normalizedState === 'complete' || normalizedState === 'completed' || /won by|match tied|drawn|draw|innings and/i.test(status);
+    const hasLiveScore = (score1.runs > 0 || score1.overs > 0 || score2.runs > 0 || score2.overs > 0);
+    const isLiveState = /in progress|innings break|stumps|tea|lunch|drink|rain|delay|bad light/i.test(state) ||
+                        /in progress|innings break|stumps|trail by|lead by|day \d|need \d+ runs|opt to|chose to/i.test(status);
+
     const matchStatus = isAbandoned
       ? 'abandoned'
-      : normalizedState === 'complete' || normalizedState === 'completed'
+      : isCompleted
         ? 'completed'
-        : (normalizedState === 'in progress' || normalizedState === 'innings break') && !isPaused && scoreDataAvailable
+        : (isLiveState || hasLiveScore || normalizedState === 'in progress')
           ? 'live'
           : 'upcoming';
     const startTimeMs = Number(String(startDate).replace(/^"|"$/g, '')) || null;

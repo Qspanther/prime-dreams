@@ -4,12 +4,12 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { apiPost } from '../lib/api';
-import { Mail, Lock, User, ArrowRight, AlertCircle, Gift } from 'lucide-react';
+import { ArrowRight, AlertCircle } from 'lucide-react';
 import PrimeLogo from '../components/ui/PrimeLogo';
 
 export default function SignupPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', promoCode: '' });
+  const [form, setForm] = useState({ name: '', username: '', email: '', password: '', age: '', promoCode: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -25,10 +25,28 @@ export default function SignupPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+
+    const parsedAge = parseInt(form.age, 10);
+    if (!form.age || isNaN(parsedAge)) {
+      setError('Age is mandatory.');
+      return;
+    }
+    if (parsedAge < 18) {
+      setError('You must be at least 18 years old to create an account. Minimum age requirement is 18.');
+      return;
+    }
+    if (parsedAge > 120) {
+      setError('Please enter a valid age.');
+      return;
+    }
+
+    setLoading(true);
     try {
-      await apiPost('/auth/signup', form);
+      await apiPost('/auth/signup', {
+        ...form,
+        age: parsedAge,
+      });
       if (typeof window !== 'undefined') {
         sessionStorage.setItem('otp_email', form.email);
       }
@@ -64,68 +82,72 @@ export default function SignupPage() {
             <label className="block text-xs font-bold text-[#D97706] uppercase mb-1">
               Full Name
             </label>
-            <div className="relative">
-              <User className="absolute left-3 top-2.5 w-4 h-4 text-[#64748B]" />
-              <input
-                type="text"
-                placeholder="Rohit Verma"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                required
-                className="w-full pl-9 pr-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] text-sm focus:border-[#2563EB] outline-none"
-              />
-            </div>
+            <input
+              type="text"
+              placeholder="Rohit Verma"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              required
+              className="w-full px-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] text-sm focus:border-[#2563EB] outline-none"
+            />
           </div>
 
           <div>
             <label className="block text-xs font-bold text-[#D97706] uppercase mb-1">
-              Unique Username (§10)
+              Unique Username
             </label>
-            <div className="relative">
-              <span className="absolute left-3 top-2.5 text-xs font-bold text-[#64748B]">@</span>
-              <input
-                type="text"
-                placeholder="rohit_v"
-                value={form.username}
-                onChange={(e) => setForm({ ...form, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
-                required
-                className="w-full pl-8 pr-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] text-sm focus:border-[#2563EB] outline-none font-mono"
-              />
-            </div>
+            <input
+              type="text"
+              placeholder="rohit_v"
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, '') })}
+              required
+              className="w-full px-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] text-sm focus:border-[#2563EB] outline-none font-mono"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-[#D97706] uppercase mb-1">
+              Age (Mandatory • 18+ Only)
+            </label>
+            <input
+              type="number"
+              placeholder="e.g. 21"
+              min="18"
+              max="120"
+              value={form.age}
+              onChange={(e) => setForm({ ...form, age: e.target.value })}
+              required
+              className="w-full px-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] text-sm focus:border-[#2563EB] outline-none"
+            />
           </div>
 
           <div>
             <label className="block text-xs font-bold text-[#D97706] uppercase mb-1">
               Email Address
             </label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-2.5 w-4 h-4 text-[#64748B]" />
-              <input
-                type="email"
-                placeholder="you@domain.com"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                required
-                className="w-full pl-9 pr-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] text-sm focus:border-[#2563EB] outline-none"
-              />
-            </div>
+            <input
+              type="email"
+              placeholder="you@domain.com"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+              required
+              className="w-full px-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] text-sm focus:border-[#2563EB] outline-none"
+            />
           </div>
 
           <div>
             <label className="block text-xs font-bold text-[#D97706] uppercase mb-1">
               Password (min 6 characters)
             </label>
-            <div className="relative">
-              <Lock className="absolute left-3 top-2.5 w-4 h-4 text-[#64748B]" />
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                required
-                className="w-full pl-9 pr-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] text-sm focus:border-[#2563EB] outline-none"
-              />
-            </div>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              required
+              className="w-full px-3 py-2 rounded-lg bg-white border border-[#CBD5E1] text-[#0F172A] text-sm focus:border-[#2563EB] outline-none"
+            />
           </div>
 
           <button

@@ -2,7 +2,9 @@ const express = require('express');
 const net = require('net');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { Op } = require('sequelize');
 const config = require('../config');
+const sequelize = require('../db/index');
 const { User, Wallet, SystemSetting, ReferralLog, Notification } = require('../db/models');
 const { sendSignupOtp, sendPasswordResetOtp } = require('../services/emailService');
 const { triggerInstantSync } = require('../services/tursoSyncService');
@@ -13,14 +15,35 @@ const router = express.Router();
 // POST /auth/signup
 router.post('/signup', async (req, res) => {
   try {
-    const { name, email, password, phone, promoCode, referralCode } = req.body;
+    const { name, username, email, password, phone, age, promoCode, referralCode } = req.body;
 
     const cleanName = String(name || '').trim().slice(0, 100);
     const cleanEmail = String(email || '').trim().toLowerCase();
     const cleanPassword = String(password || '');
+    const cleanUsername = String(username || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '');
 
     if (!cleanName || !cleanEmail || !cleanPassword) {
       return res.status(400).json({ error: 'Name, email, and password are required' });
+    }
+
+    if (!cleanUsername) {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+
+    if (cleanUsername.length < 3 || cleanUsername.length > 30) {
+      return res.status(400).json({ error: 'Username must be between 3 and 30 alphanumeric characters' });
+    }
+
+    // Mandatory Age Check (Strictly 18 or above)
+    if (age === undefined || age === null || String(age).trim() === '') {
+      return res.status(400).json({ error: 'Age is mandatory' });
+    }
+    const parsedAge = parseInt(age, 10);
+    if (isNaN(parsedAge) || parsedAge < 18) {
+      return res.status(400).json({ error: 'You must be at least 18 years old to create an account' });
+    }
+    if (parsedAge > 120) {
+      return res.status(400).json({ error: 'Please enter a valid age' });
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -36,8 +59,21 @@ router.post('/signup', async (req, res) => {
       return res.status(400).json({ error: 'Password cannot exceed 128 characters' });
     }
 
-    // Check if user exists
+    // Check if username is already taken by anyone
+    const existingUserWithUsername = await User.findOne({
+      where: sequelize.where(
+        sequelize.fn('lower', sequelize.col('username')),
+        cleanUsername
+      )
+    });
+
+    // Check if user exists by email
     const existing = await User.findOne({ where: { email: cleanEmail } });
+
+    if (existingUserWithUsername && existingUserWithUsername.id !== existing?.id) {
+      return res.status(409).json({ error: 'Username is already taken. Please choose another username.' });
+    }
+
     if (existing) {
       if (existing.otp_verified) {
         return res.status(409).json({ error: 'Email already registered. Please login.' });
@@ -50,6 +86,8 @@ router.post('/signup', async (req, res) => {
 
       await existing.update({
         name: cleanName,
+        username: cleanUsername,
+        age: parsedAge,
         password_hash,
         phone: phone || existing.phone,
         otp_code,
@@ -101,7 +139,9 @@ router.post('/signup', async (req, res) => {
     // Create user
     const user = await User.create({
       name: cleanName,
+      username: cleanUsername,
       email: cleanEmail,
+      age: parsedAge,
       password_hash,
       phone: phone || null,
       otp_code,
@@ -338,25 +378,25 @@ router.post('/resend-otp', async (req, res) => {
 // POST /auth/login
 router.post('/login', async (req, res) => {
   try {
-    const { email, password } = req.body;
-    const cleanEmail = String(email || '').trim().toLowerCase();
-    const cleanPassword = String(password || '');
+    const rawIdentifier = req.body.email || req.body.username || req.body.identifier || req.body.emailOrUsername || '';
+    const cleanIdentifier = String(rawIdentifier).trim().toLowerCase();
+    const cleanPassword = String(req.body.password || '');
 
-    if (!cleanEmail || !cleanPassword) {
-      return res.status(400).json({ error: 'Email and password are required' });
+    if (!cleanIdentifier || !cleanPassword) {
+      return res.status(400).json({ error: 'Username/Email and password are required' });
     }
 
-    // Find by email or username
+    // Find by email or username (case-insensitive)
     const user = await User.findOne({
       where: {
-        [require('sequelize').Op.or]: [
-          { email: cleanEmail },
-          { username: cleanEmail },
+        [Op.or]: [
+          sequelize.where(sequelize.fn('lower', sequelize.col('email')), cleanIdentifier),
+          sequelize.where(sequelize.fn('lower', sequelize.col('username')), cleanIdentifier),
         ]
       }
     });
     if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'Invalid username/email or password' });
     }
 
     let validPassword = await bcrypt.compare(cleanPassword, user.password_hash);
@@ -394,6 +434,7 @@ router.post('/login', async (req, res) => {
         name: user.name,
         username: user.username || user.name.replace(/\s+/g, '_').toLowerCase(),
         email: user.email,
+        age: user.age,
         kycStatus: user.kyc_status,
         role: user.role,
       },

@@ -19,6 +19,11 @@ const BotWinHistory = sequelize.define('BotWinHistory', {
     type: DataTypes.INTEGER,
     allowNull: false,
   },
+  phase: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: 1,
+  },
   points: {
     type: DataTypes.DECIMAL(10, 4),
     allowNull: true,

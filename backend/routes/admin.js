@@ -1059,34 +1059,57 @@ router.post('/cricket/matches/verify-and-create', async (req, res) => {
       });
     }
 
-    // Step 4: Create Contests (Standard, Multi-Battlefield, H2H) (§7)
+    // Step 4: Create Contests (Standard, Multi-Battlefield, H2H, Mega, Mini, Practice, Private)
     if (Array.isArray(contests) && contests.length > 0) {
       for (const c of contests) {
         const isH2H = c.type === 'h2h';
+        const isPrivate = c.type === 'private' || Boolean(c.is_private);
+        const totalSpots = isH2H ? 2 : (parseInt(c.total_spots, 10) || 100);
+        let botSpots = 0;
+        if (!isH2H && !isPrivate) {
+          if (c.bot_spots !== undefined && c.bot_spots !== null && c.bot_spots !== '') {
+            botSpots = parseInt(c.bot_spots, 10) || 0;
+          } else {
+            if (c.type === 'mega' || String(c.title || '').toLowerCase().includes('mega')) {
+              botSpots = Math.min(10000, totalSpots);
+            } else if (c.type === 'multi_battlefield' || totalSpots === 25) {
+              botSpots = 7;
+            } else if (totalSpots === 100) {
+              botSpots = 25;
+            } else {
+              botSpots = Math.max(1, Math.floor(totalSpots * 0.25));
+            }
+          }
+        }
+
         await MatchContest.create({
           match_id: newMatch.id,
           type: c.type || 'standard',
-          title: c.title || (isH2H ? 'Head-to-Head Custom Challenge' : `${newMatch.team_a} vs ${newMatch.team_b} Mega Contest`),
-          prize_pool: isH2H ? 0 : (parseFloat(c.prize_pool) || 10000),
-          entry_fee: isH2H ? 0 : (parseFloat(c.entry_fee) || 49),
-          total_spots: isH2H ? 2 : (parseInt(c.total_spots, 10) || 250),
+          title: c.title || (isH2H ? 'Head-to-Head Custom Challenge' : `${newMatch.team_a} vs ${newMatch.team_b} Contest`),
+          prize_pool: isH2H ? 0 : (parseFloat(c.prize_pool) || 0),
+          entry_fee: isH2H ? 0 : (parseFloat(c.entry_fee) || 0),
+          total_spots: totalSpots,
           filled_spots: 0,
-          spots_per_battlefield: c.type === 'multi_battlefield' ? (parseInt(c.spots_per_battlefield, 10) || 25) : null,
+          spots_per_battlefield: c.type === 'multi_battlefield' ? (parseInt(c.spots_per_battlefield, 10) || totalSpots) : null,
           battlefield_number: 1,
+          bot_spots: botSpots,
+          is_private: isPrivate,
           is_active: true,
           status: 'open',
         });
       }
     } else {
-      // Default 3 standard contests if none supplied
+      // Default standard contests if none supplied
       await MatchContest.create({
         match_id: newMatch.id,
-        type: 'standard',
+        type: 'mega',
         title: `Mega Contest ₹50,000 (${category})`,
         prize_pool: 50000,
         entry_fee: 49,
-        total_spots: 1200,
+        total_spots: 10000,
         filled_spots: 0,
+        bot_spots: 10000,
+        is_private: false,
         status: 'open',
       });
       await MatchContest.create({
@@ -1095,9 +1118,11 @@ router.post('/cricket/matches/verify-and-create', async (req, res) => {
         title: `PUBG Battlefield Room #1 (${category})`,
         prize_pool: 2500,
         entry_fee: 99,
-        total_spots: 30,
-        spots_per_battlefield: 30,
+        total_spots: 25,
+        spots_per_battlefield: 25,
         battlefield_number: 1,
+        bot_spots: 7,
+        is_private: false,
         status: 'open',
       });
     }
@@ -1174,16 +1199,37 @@ router.put('/cricket/matches/:id', async (req, res) => {
         await MatchContest.destroy({ where: { match_id: match.id } });
         for (const c of contests) {
           const isH2H = c.type === 'h2h';
+          const isPrivate = c.type === 'private' || Boolean(c.is_private);
+          const totalSpots = isH2H ? 2 : (parseInt(c.total_spots, 10) || 100);
+          let botSpots = 0;
+          if (!isH2H && !isPrivate) {
+            if (c.bot_spots !== undefined && c.bot_spots !== null && c.bot_spots !== '') {
+              botSpots = parseInt(c.bot_spots, 10) || 0;
+            } else {
+              if (c.type === 'mega' || String(c.title || '').toLowerCase().includes('mega')) {
+                botSpots = Math.min(10000, totalSpots);
+              } else if (c.type === 'multi_battlefield' || totalSpots === 25) {
+                botSpots = 7;
+              } else if (totalSpots === 100) {
+                botSpots = 25;
+              } else {
+                botSpots = Math.max(1, Math.floor(totalSpots * 0.25));
+              }
+            }
+          }
+
           await MatchContest.create({
             match_id: match.id,
             type: c.type || 'standard',
             title: c.title || (isH2H ? 'Head-to-Head Custom Challenge' : `${match.team_a} vs ${match.team_b} Contest`),
-            prize_pool: isH2H ? 0 : (parseFloat(c.prize_pool) || 10000),
-            entry_fee: isH2H ? 0 : (parseFloat(c.entry_fee) || 49),
-            total_spots: isH2H ? 2 : (parseInt(c.total_spots, 10) || 250),
+            prize_pool: isH2H ? 0 : (parseFloat(c.prize_pool) || 0),
+            entry_fee: isH2H ? 0 : (parseFloat(c.entry_fee) || 0),
+            total_spots: totalSpots,
             filled_spots: 0,
-            spots_per_battlefield: c.type === 'multi_battlefield' ? (parseInt(c.spots_per_battlefield, 10) || 25) : null,
+            spots_per_battlefield: c.type === 'multi_battlefield' ? (parseInt(c.spots_per_battlefield, 10) || totalSpots) : null,
             battlefield_number: 1,
+            bot_spots: botSpots,
+            is_private: isPrivate,
             is_active: true,
             status: 'open',
           });

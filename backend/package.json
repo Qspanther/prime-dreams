@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "seed": "node db/seed.js"
+    "build": "echo 'Backend ready'",
+    "seed": "node db/seed.js",
+    "seed:bots": "node services/seed-10000-bots.js"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

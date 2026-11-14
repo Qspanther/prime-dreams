@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Users, Coins, ArrowRight, ShieldCheck, UserPlus, X } from 'lucide-react';
 import Link from 'next/link';
+import PrizeBreakupModal from '../../../components/ui/PrizeBreakupModal';
 
 interface Contest {
   id: string;
@@ -38,6 +39,7 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
   const [selectedTeamId, setSelectedTeamId] = useState<string>('');
   const [joinLoading, setJoinLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [breakupContest, setBreakupContest] = useState<any>(null);
 
   useEffect(() => {
     if (!token) {
@@ -117,6 +119,21 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
             <p className="font-bold text-[#2563EB] flex items-center justify-end gap-1">
               <Trophy size={14} /> ₹{contest.prize_pool}
             </p>
+            <button
+              type="button"
+              onClick={() => setBreakupContest({
+                id: contest.id,
+                title: contest.name,
+                entry_fee: Number(contest.entry_fee) || 0,
+                prize_pool: Number(contest.prize_pool) || 0,
+                total_spots: contest.max_participants,
+                filled_spots: contest.joined_participants,
+                type: contest.type,
+              })}
+              className="text-[10px] font-black text-[#D97706] hover:underline uppercase mt-1 cursor-pointer"
+            >
+              Prize Breakup
+            </button>
           </div>
         </div>
 
@@ -308,6 +325,11 @@ export default function ContestsPage({ params }: { params: Promise<{ id: string 
         )}
       </AnimatePresence>
 
+      <PrizeBreakupModal
+        isOpen={!!breakupContest}
+        onClose={() => setBreakupContest(null)}
+        contest={breakupContest}
+      />
     </div>
   );
 }

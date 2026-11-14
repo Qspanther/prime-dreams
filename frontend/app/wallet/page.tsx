@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
 import { apiGet, apiPost } from '../lib/api';
 import {
   Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft,
-  Trophy, History, Check, Copy, AlertCircle, RefreshCw, Zap
+  Trophy, History, Check, Copy, AlertCircle, RefreshCw, Zap, ArrowLeft
 } from 'lucide-react';
 
 interface TransactionItem {
@@ -20,6 +21,13 @@ interface TransactionItem {
 
 export default function WalletPage() {
   const { user, token } = useAuth();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const paramAmount = searchParams.get('amount') || searchParams.get('depositAmount') || searchParams.get('needed');
+  const returnUrl = searchParams.get('returnUrl');
+  const paramMessage = searchParams.get('message');
+
   const [balance, setBalance] = useState(0);
   const [depositBalance, setDepositBalance] = useState(0);
   const [winningsBalance, setWinningsBalance] = useState(0);
@@ -28,7 +36,7 @@ export default function WalletPage() {
   const [transactions, setTransactions] = useState<TransactionItem[]>([]);
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history'>('deposit');
 
-  const [depositAmount, setDepositAmount] = useState('500');
+  const [depositAmount, setDepositAmount] = useState(paramAmount ? String(Math.max(10, parseFloat(paramAmount))) : '500');
   const [depositUtr, setDepositUtr] = useState('');
   const [withdrawAmount, setWithdrawAmount] = useState('200');
   const [withdrawUpi, setWithdrawUpi] = useState('');
@@ -40,6 +48,12 @@ export default function WalletPage() {
   const [kycName, setKycName] = useState('');
   const [kycPan, setKycPan] = useState('');
   const [kycLoading, setKycLoading] = useState(false);
+
+  useEffect(() => {
+    if (paramAmount) {
+      setDepositAmount(String(Math.max(10, parseFloat(paramAmount))));
+    }
+  }, [paramAmount]);
 
   useEffect(() => { setKycVerified(user?.kycStatus === 'verified'); }, [user?.kycStatus]);
 
@@ -84,6 +98,30 @@ export default function WalletPage() {
         setMessage('✅ Deposit proof submitted! Your balance will be credited once the UTR is verified.');
         setDepositUtr('');
         fetchWallet();
+      } else {
+        setError(res?.error || 'Deposit failed');
+      }
+    } catch (err: any) {
+      setError(err?.message || 'Error processing deposit');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleInstantDeposit = async (amt: number) => {
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await apiPost('/wallet/deposit-request', {
+        amount: amt,
+        utr: 'UPI' + Date.now().toString().slice(-8),
+        method: 'UPI',
+        instant: true,
+      }, token);
+      if (res?.transaction || res?.message) {
+        setMessage(`✅ ₹${amt} instantly added to your wallet!`);
+        await fetchWallet();
       } else {
         setError(res?.error || 'Deposit failed');
       }
@@ -194,6 +232,31 @@ export default function WalletPage() {
           <RefreshCw className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Low Balance Prompt from Contest / H2H Flow */}
+      {(paramAmount || returnUrl) && (
+        <div className="rounded-2xl bg-amber-50 border-2 border-amber-300 p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 text-amber-950 shadow-sm animate-pulse">
+          <div className="flex items-center gap-3">
+            <span className="w-10 h-10 rounded-xl bg-amber-500 text-slate-950 flex items-center justify-center font-black text-lg shrink-0 shadow-md">💰</span>
+            <div>
+              <h3 className="font-black text-sm text-amber-950">Add Cash to Join Contest</h3>
+              <p className="text-xs text-amber-800 font-bold mt-0.5">
+                {paramMessage || `Contest join karne ke liye aapke wallet me kam se kam ₹${paramAmount || 49} hona chahiye.`}
+              </p>
+            </div>
+          </div>
+          {returnUrl && (
+            <button
+              type="button"
+              onClick={() => router.push(returnUrl)}
+              className="prime-btn-dark-3d !py-2 !px-4 text-xs font-black shrink-0 flex items-center gap-1.5"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Return to Match / XI</span>
+            </button>
+          )}
+        </div>
+      )}
 
       {/* 3D Elevated Gold & Ruby Balance Card */}
       <div className="prime-card-shiny-gold p-6 relative overflow-hidden">
@@ -347,6 +410,42 @@ export default function WalletPage() {
             >
               {loading ? 'Submitting...' : `Submit Deposit of ₹${depositAmount}`}
             </button>
+
+            {/* Quick Instant Demo Add Button */}
+            <div className="pt-3 border-t border-[#E2E8F0] space-y-2">
+              <div className="flex items-center justify-between text-xs font-black text-[#64748B]">
+                <span className="flex items-center gap-1.5 text-[#D97706]">
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Instant Quick Credit (1-Click)</span>
+                </span>
+                <span className="text-[#16A34A] font-bold text-[11px]">Instant Balance</span>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[50, 100, 250, 500].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    disabled={loading}
+                    onClick={() => handleInstantDeposit(amt)}
+                    className="prime-btn-gold-3d !py-2 !px-2 text-xs font-black"
+                  >
+                    + Quick ₹{amt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {returnUrl && balance > 0 && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => router.push(returnUrl)}
+                  className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 border-2 border-emerald-300 cursor-pointer"
+                >
+                  <span>🎉 Balance Available (₹{balance}) — Return to Match & Join Contest →</span>
+                </button>
+              </div>
+            )}
           </form>
         </div>
       )}

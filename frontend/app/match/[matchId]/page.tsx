@@ -5,12 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   Trophy, Swords, Users, Clock, Shield, Radio, Lock,
-  ArrowLeft, AlertCircle, Zap, Calendar, MapPin
+  ArrowLeft, ArrowRight, AlertCircle, Zap, Calendar, MapPin, Share2, ShieldCheck, CheckCircle2
 } from 'lucide-react';
-import { apiGet, apiPost, resolveImageUrl } from '../../lib/api';
+import { apiGet, apiPost, resolveImageUrl, getWebSocketUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import CategoryBadge from '../../components/ui/CategoryBadge';
 import PlayerPhoto from '../../components/ui/PlayerPhoto';
+import PrizeBreakupModal from '../../components/ui/PrizeBreakupModal';
 
 interface MatchDetailProps {
   params: Promise<{ matchId: string }>;
@@ -178,13 +179,34 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
     } catch (err) { /* clipboard unavailable */ }
   };
 
+  const shareViaWhatsApp = (code: string, title?: string, fee?: number | string) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const text = `🏏 Join my private contest "${title || 'Battle'}" on Prime Dreems!\n💰 Entry Fee: ₹${fee || 0}\n🔑 Contest Code: ${code}\n👉 Join here: ${origin}/match/${matchId}`;
+    if (typeof window !== 'undefined') {
+      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    }
+  };
+
   const fetchMatchData = async () => {
     try {
       const [mRes, tRes] = await Promise.all([
         apiGet(`/matches/${matchId}`),
         apiGet(`/matches/${matchId}/telemetry`).catch(() => null)
       ]);
-      if (mRes?.match) setMatch(mRes.match);
+      if (mRes?.match) {
+        setMatch(mRes.match);
+        if (typeof window !== 'undefined' && mRes.match.id && mRes.match.id !== matchId) {
+          window.history.replaceState(null, '', `/match/${mRes.match.id}`);
+        }
+      } else {
+        // Fallback: fetch active match list
+        const listRes = await apiGet('/matches').catch(() => null);
+        const fallback = (listRes?.matches || []).find((m: any) => m.status === 'live' || m.status === 'upcoming') || listRes?.matches?.[0];
+        if (fallback && typeof window !== 'undefined') {
+          window.location.replace(`/match/${fallback.id}`);
+          return;
+        }
+      }
       if (tRes?.success) setTelemetry(tRes);
     } catch (err) {
       console.error('Error fetching match details:', err);
@@ -204,10 +226,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
     const connectWebSocket = () => {
       if (isUnmounted) return;
       try {
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.hostname || 'localhost';
-        const wsUrl = `${protocol}//${host}:5000/ws`;
-        ws = new WebSocket(wsUrl);
+        ws = new WebSocket(getWebSocketUrl());
 
         ws.onopen = () => {
           ws?.send(JSON.stringify({ action: 'subscribe', matchId }));
@@ -294,16 +313,39 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
 
   if (!match) {
     return (
-      <div className="py-24 text-center text-[#0F172A]">
-        <p className="text-xl font-black mb-3">Match not found in database</p>
-        <Link href="/" className="prime-btn-3d inline-flex">Back to Matches</Link>
+      <div className="py-24 text-center text-[#0F172A] space-y-4 max-w-md mx-auto px-4">
+        <div className="w-16 h-16 rounded-2xl bg-blue-50 border-2 border-blue-200 flex items-center justify-center mx-auto text-3xl shadow-sm">
+          🏏
+        </div>
+        <div>
+          <p className="text-xl font-black text-[#0F172A] mb-1">Match Expired or Moved</p>
+          <p className="text-xs text-[#64748B] font-medium leading-relaxed">
+            Ye match complete ho chuka hai ya iska ID update ho gaya hai. Live Cricket Arena par jaakar active matches explore karein.
+          </p>
+        </div>
+        <div className="pt-2">
+          <Link href="/" className="prime-btn-3d inline-flex items-center gap-2">
+            <span>Explore All Live Matches</span>
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
       </div>
     );
   }
 
-  const isLive = match.status === 'live';
   const liveData = telemetry?.match?.live_data || match.live_data || {};
   const scoreSummary = telemetry?.match?.score_summary || match.score_summary || {};
+  const hasLiveScore = !!(
+    (scoreSummary?.team_a?.overs > 0 || scoreSummary?.team_a?.runs > 0) ||
+    (scoreSummary?.team_b?.overs > 0 || scoreSummary?.team_b?.runs > 0)
+  );
+  const isLive = match.status === 'live' || hasLiveScore;
+  const isLocked = !!(
+    match.is_locked ||
+    isLive ||
+    match.status === 'completed' ||
+    (match.start_time && new Date() >= new Date(new Date(match.start_time).getTime() - (match.lock_time_minutes || 15) * 60000))
+  );
   const players = match.players || telemetry?.players || [];
   const teamAPlayers = players.filter((p: any) => p.team_name === match.team_a);
   const teamBPlayers = players.filter((p: any) => p.team_name === match.team_b);
@@ -616,14 +658,35 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
 
         {/* Action Buttons */}
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            onClick={() => router.push(`/team-builder/${matchId}?h2h=1`)}
-            className="prime-btn-dark-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"
-          >
-            <Swords className="w-4 h-4 text-[#D97706]" />
-            <span>H2H Duel</span>
-          </button>
-          {!match.is_locked && (
+          {isLocked ? (
+            <button
+              disabled
+              title="Match is in progress / locked. H2H challenges are closed."
+              className="px-4 py-2 rounded-xl text-xs font-black bg-[#F1F5F9] text-[#94A3B8] border border-[#CBD5E1] cursor-not-allowed flex items-center gap-1.5 opacity-80"
+            >
+              <Lock className="w-4 h-4 text-[#94A3B8]" />
+              <span>H2H Locked</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => router.push(`/team-builder/${matchId}?h2h=1`)}
+              className="prime-btn-dark-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"
+            >
+              <Swords className="w-4 h-4 text-[#D97706]" />
+              <span>H2H Duel</span>
+            </button>
+          )}
+
+          {isLocked ? (
+            <button
+              disabled
+              title="Match has started. Team creation is closed."
+              className="px-4 py-2 rounded-xl text-xs font-black bg-[#F1F5F9] text-[#94A3B8] border border-[#CBD5E1] cursor-not-allowed flex items-center gap-1.5 opacity-80"
+            >
+              <Lock className="w-4 h-4 text-[#94A3B8]" />
+              <span>Squads Locked (Match In-Play)</span>
+            </button>
+          ) : (
             <Link
               href={`/team-builder/${matchId}`}
               className="prime-btn-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"
@@ -632,6 +695,14 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               <span>Create My XI</span>
             </Link>
           )}
+
+          <Link
+            href={`/match/${matchId}/leaderboard`}
+            className="prime-btn-gold-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"
+          >
+            <Trophy className="w-4 h-4" />
+            <span>Leaderboard & Teams</span>
+          </Link>
         </div>
       </div>
 
@@ -746,6 +817,13 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
           {/* ─── PRIVATE CONTESTS (Invite Code) VIEW ─── */}
           {selectedContestTab === 'private' && (
             <div className="space-y-5">
+              {(isLive || match.is_locked) && (
+                <div className="rounded-xl bg-[#FEF2F2] border-2 border-[#FCA5A5] p-4 flex items-center gap-3 text-xs font-black text-[#991B1B]">
+                  <Lock className="w-5 h-5 shrink-0 text-[#DC2626]" />
+                  <span>🔒 Match in-play / locked hone ke baad private contests create ya join nahi kiye ja sakte (Dream11 Rules).</span>
+                </div>
+              )}
+
               {/* Join by Code */}
               <div className="prime-card-3d p-5 space-y-4">
                 <div className="flex items-center gap-2">
@@ -759,14 +837,15 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                     onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                     placeholder="e.g. AB7K2M9P"
                     maxLength={12}
-                    className="pd-input flex-1 min-w-[140px] font-mono font-black tracking-widest uppercase"
+                    disabled={isLive || match.is_locked}
+                    className="pd-input flex-1 min-w-[140px] font-mono font-black tracking-widest uppercase disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <button
                     onClick={handleJoinByCode}
-                    disabled={joinResolving || !token}
-                    className="prime-btn-3d !py-2.5 !px-4 !text-xs shrink-0"
+                    disabled={joinResolving || !token || isLive || match.is_locked}
+                    className="prime-btn-3d !py-2.5 !px-4 !text-xs shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {joinResolving ? 'Checking...' : 'Find Contest'}
+                    {isLive || match.is_locked ? 'Locked' : joinResolving ? 'Checking...' : 'Find Contest'}
                   </button>
                 </div>
                 {joinCodeError && (
@@ -804,9 +883,10 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                   </div>
                   <button
                     onClick={() => setShowCreatePrivate(!showCreatePrivate)}
-                    className="prime-btn-dark-3d !py-1.5 !px-3 !text-xs shrink-0"
+                    disabled={isLocked}
+                    className="prime-btn-dark-3d !py-1.5 !px-3 !text-xs shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {showCreatePrivate ? 'Close' : '+ Create'}
+                    {isLocked ? '🔒 Contests Locked' : showCreatePrivate ? 'Close' : '+ Create'}
                   </button>
                 </div>
 
@@ -876,6 +956,14 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                       >
                         {copiedCode === createResult.invite_code ? 'Copied!' : 'Copy'}
                       </button>
+                      <button
+                        onClick={() => shareViaWhatsApp(createResult.invite_code, createResult.title, createResult.entry_fee)}
+                        className="bg-[#25D366] hover:bg-[#20BD5A] text-white font-black rounded-xl p-2 text-xs flex items-center gap-1 shadow-sm shrink-0"
+                        title="Share on WhatsApp"
+                      >
+                        <Share2 className="w-3.5 h-3.5" />
+                        <span>WhatsApp</span>
+                      </button>
                     </div>
                     <Link
                       href={`/team-builder/${matchId}?contestId=${createResult.id}`}
@@ -907,9 +995,15 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                         >
                           {copiedCode === c.invite_code ? 'Copied!' : c.invite_code}
                         </button>
-                        <Link href={`/team-builder/${matchId}?contestId=${c.id}`} className="prime-btn-3d !py-1.5 !px-3 !text-[10px] shrink-0">
-                          Join
-                        </Link>
+                        {isLocked ? (
+                          <span className="rounded-lg border border-[#CBD5E1] bg-[#F1F5F9] px-2.5 py-1 text-[10px] font-black uppercase text-[#94A3B8]">
+                            Locked
+                          </span>
+                        ) : (
+                          <Link href={`/team-builder/${matchId}?contestId=${c.id}`} className="prime-btn-3d !py-1.5 !px-3 !text-[10px] shrink-0">
+                            Join
+                          </Link>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -950,8 +1044,10 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
             {filteredContests.map((c: any) => {
               const spotsLeft = Math.max(0, (c.total_spots || 100) - (c.filled_spots || 0));
               const percentFilled = Math.min(100, Math.round(((c.filled_spots || 0) / (c.total_spots || 100)) * 100));
-              const contestLocked = c.status !== 'open' || match.is_locked || ['live', 'completed'].includes(match.status);
+              const contestLocked = c.status !== 'open' || isLocked;
               const contestFull = spotsLeft === 0;
+
+              const firstPrize = Math.round(Number(c.prize_pool || 0) * (c.total_spots <= 2 ? 1 : 0.35));
 
               return (
                 <div key={c.id} className="contest-card-3d p-5 flex flex-col justify-between">
@@ -967,15 +1063,30 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                       </div>
                     </div>
 
-                    <h4 className="font-black text-[#0F172A] text-base mb-1">{c.title}</h4>
-                    <p className="text-xs text-[#64748B] font-bold">
-                      Prize Pool: <span className="font-black text-[#D97706] font-mono">₹{c.prize_pool.toLocaleString('en-IN')}</span>
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-black text-[#0F172A] text-base">{c.title}</h4>
+                      {c.type !== 'practice' && (
+                        <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 text-[9px] font-black uppercase text-emerald-700">
+                          <ShieldCheck className="w-3 h-3" /> Guaranteed
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="mt-1 flex items-baseline justify-between">
+                      <p className="text-xs text-[#64748B] font-bold">
+                        Prize Pool: <span className="font-black text-[#D97706] font-mono text-sm">₹{Number(c.prize_pool || 0).toLocaleString('en-IN')}</span>
+                      </p>
+                      {firstPrize > 0 && (
+                        <span className="text-[11px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded font-mono">
+                          🥇 1st: ₹{firstPrize.toLocaleString('en-IN')}
+                        </span>
+                      )}
+                    </div>
 
                     <div className="mt-4 space-y-1.5">
                       <div className="flex items-center justify-between text-xs font-bold">
                         <span className="text-[#2563EB] font-black">{spotsLeft} spots left</span>
-                        <span className="text-[#64748B]">{c.total_spots} total</span>
+                        <span className="text-[#64748B]">{percentFilled}% filled • {c.total_spots} total</span>
                       </div>
                       <div className="h-2 w-full bg-[#E2E8F0] rounded-full overflow-hidden border border-[#CBD5E1]">
                         <div
@@ -987,19 +1098,34 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                   </div>
 
                   <div className="mt-5 pt-3 border-t border-[#E2E8F0] space-y-2">
-                    <button
-                      onClick={() => openPrizeBreakup(c)}
-                      className="w-full text-[11px] font-black text-[#2563EB] hover:text-[#1D4ED8] uppercase tracking-wider flex items-center justify-center gap-1"
-                    >
-                      <Trophy className="w-3.5 h-3.5" /> Prize Breakup &amp; Winners
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => openPrizeBreakup(c)}
+                        className="text-[11px] font-black text-[#2563EB] hover:text-[#1D4ED8] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer py-1.5 border border-blue-100 rounded-lg hover:bg-blue-50"
+                      >
+                        <Trophy className="w-3.5 h-3.5" /> Prize Breakup
+                      </button>
+                      <Link
+                        href={`/match/${matchId}/leaderboard?contestId=${c.id}`}
+                        className="text-[11px] font-black text-[#D97706] hover:text-[#B45309] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer py-1.5 border border-amber-100 rounded-lg hover:bg-amber-50"
+                      >
+                        <Users className="w-3.5 h-3.5" /> Teams ({c.filled_spots || 0})
+                      </Link>
+                    </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-[#64748B] font-bold">
-                        {c.type === 'practice' ? 'Practice • No cash risk' : /rookie/i.test(c.title || '') ? 'Rookie • Beginner' : c.type === 'multi_battlefield' ? 'Auto-clones' : 'Guaranteed'}
+                      <span className="text-[10px] text-[#64748B] font-bold flex items-center gap-1">
+                        <span>{c.total_spots > 2 ? 'Up to 20 Teams' : 'Single Entry'}</span>
+                        <span>•</span>
+                        <span>{c.type === 'practice' ? 'Practice' : /rookie/i.test(c.title || '') ? 'Rookie' : 'Flexible'}</span>
                       </span>
                       {contestLocked || contestFull ? (
-                        <button type="button" disabled className="cursor-not-allowed rounded-xl border border-slate-300 bg-slate-100 px-4 py-2 text-[10px] font-black uppercase text-slate-500">
-                          {contestLocked ? 'Contest Locked' : 'Contest Full'}
+                        <button
+                          type="button"
+                          disabled
+                          className="cursor-not-allowed rounded-xl border border-[#CBD5E1] bg-[#F1F5F9] px-3.5 py-1.5 text-xs font-black uppercase text-[#94A3B8] inline-flex items-center gap-1.5 shadow-none"
+                        >
+                          <Lock className="w-3.5 h-3.5 text-[#94A3B8]" />
+                          <span>{contestLocked ? 'Locked' : 'Contest Full'}</span>
                         </button>
                       ) : (
                         <Link
@@ -1046,19 +1172,29 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                 <span className="text-xs font-mono font-bold text-[#64748B]">{teamAPlayers.length || 15} Players</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 max-h-[32rem] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[32rem] overflow-y-auto pr-1">
                 {(teamAPlayers.length > 0 ? teamAPlayers : Array.from({ length: 15 }, (_, i) => ({ id: `a-${i}`, name: `${match.team_a} Player ${i + 1}`, role: 'BAT', credits: 9.0 }))).map((p: any, idx: number) => (
-                  <div key={p.id || idx} className="rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] p-2.5 flex flex-col items-center text-center shadow-xs">
-                    <PlayerPhoto
-                      name={p.name}
-                      photoUrl={p.photo_url}
-                      boxClass="w-full aspect-square rounded-lg bg-[#EFF6FF] border border-[#BFDBFE] text-2xl text-[#93C5FD] mb-2"
-                    />
-                    <span className="font-bold text-[#0F172A] text-xs leading-tight line-clamp-2 min-h-[2rem] flex items-center">{p.name}</span>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-[#EFF6FF] text-[#1D4ED8] border border-[#BFDBFE]">{p.role}</span>
-                      <span className="font-mono text-[10px] text-[#64748B] font-bold">{p.credits || 9.0} Cr</span>
+                  <div key={p.id || idx} className="flex items-center justify-between p-2 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] hover:bg-white transition-all shadow-xs">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div className="w-9 h-9 rounded-full overflow-hidden border border-[#BFDBFE] bg-[#EFF6FF] shrink-0">
+                        <PlayerPhoto
+                          name={p.name}
+                          photoUrl={p.photo_url}
+                          boxClass="w-full h-full text-xs text-[#1D4ED8] flex items-center justify-center font-bold"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="font-bold text-[#0F172A] text-xs truncate block">{p.name}</span>
+                        <div className="flex items-center gap-1.5 text-[10px] text-[#64748B] font-semibold">
+                          <span className="font-bold text-[#1D4ED8]">{p.role}</span>
+                          <span>•</span>
+                          <span>Prev: <span className="font-bold text-[#2563EB]">{p.last_match_points || p.points || 0} pts</span></span>
+                        </div>
+                      </div>
                     </div>
+                    <span className="font-mono text-xs font-black text-[#D97706] shrink-0 px-2 py-0.5 rounded bg-[#FFFBEB] border border-[#FDE68A]">
+                      {p.credits || 9.0} Cr
+                    </span>
                   </div>
                 ))}
               </div>
@@ -1071,19 +1207,29 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                 <span className="text-xs font-mono font-bold text-[#64748B]">{teamBPlayers.length || 15} Players</span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 max-h-[32rem] overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-[32rem] overflow-y-auto pr-1">
                 {(teamBPlayers.length > 0 ? teamBPlayers : Array.from({ length: 15 }, (_, i) => ({ id: `b-${i}`, name: `${match.team_b} Player ${i + 1}`, role: 'BAT', credits: 9.0 }))).map((p: any, idx: number) => (
-                  <div key={p.id || idx} className="rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] p-2.5 flex flex-col items-center text-center shadow-xs">
-                    <PlayerPhoto
-                      name={p.name}
-                      photoUrl={p.photo_url}
-                      boxClass="w-full aspect-square rounded-lg bg-[#FEF3C7] border border-[#FDE68A] text-2xl text-[#FCD34D] mb-2"
-                    />
-                    <span className="font-bold text-[#0F172A] text-xs leading-tight line-clamp-2 min-h-[2rem] flex items-center">{p.name}</span>
-                    <div className="flex items-center gap-1.5 mt-1">
-                      <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-[#FEF3C7] text-[#D97706] border border-[#FDE68A]">{p.role}</span>
-                      <span className="font-mono text-[10px] text-[#64748B] font-bold">{p.credits || 9.0} Cr</span>
+                  <div key={p.id || idx} className="flex items-center justify-between p-2 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] hover:bg-white transition-all shadow-xs">
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div className="w-9 h-9 rounded-full overflow-hidden border border-[#FDE68A] bg-[#FEF3C7] shrink-0">
+                        <PlayerPhoto
+                          name={p.name}
+                          photoUrl={p.photo_url}
+                          boxClass="w-full h-full text-xs text-[#D97706] flex items-center justify-center font-bold"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="font-bold text-[#0F172A] text-xs truncate block">{p.name}</span>
+                        <div className="flex items-center gap-1.5 text-[10px] text-[#64748B] font-semibold">
+                          <span className="font-bold text-[#D97706]">{p.role}</span>
+                          <span>•</span>
+                          <span>Prev: <span className="font-bold text-[#2563EB]">{p.last_match_points || p.points || 0} pts</span></span>
+                        </div>
+                      </div>
                     </div>
+                    <span className="font-mono text-xs font-black text-[#D97706] shrink-0 px-2 py-0.5 rounded bg-[#FFFBEB] border border-[#FDE68A]">
+                      {p.credits || 9.0} Cr
+                    </span>
                   </div>
                 ))}
               </div>
@@ -1092,48 +1238,12 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         </div>
       )}
 
-      {/* Prize Breakup & Winners Modal */}
-      {breakupContest && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-lg prime-card-3d p-6 space-y-4 border-2 border-[#D97706] bg-white text-[#0F172A] max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between border-b border-[#E2E8F0] pb-3">
-              <div>
-                <h3 className="font-black text-base flex items-center gap-2"><Trophy className="w-5 h-5 text-[#D97706]" /> Prize Breakup</h3>
-                <p className="text-xs text-[#64748B] font-bold">{breakupContest.title} • Pool ₹{Number(breakupContest.prize_pool || 0).toLocaleString('en-IN')}</p>
-              </div>
-              <button onClick={() => { setBreakupContest(null); setBreakupData(null); }} className="text-[#64748B] hover:text-[#0F172A] text-lg">✕</button>
-            </div>
-            {breakupLoading ? (
-              <p className="text-xs text-[#64748B] font-bold text-center py-6">Loading breakup...</p>
-            ) : breakupData ? (
-              <>
-                <div className="space-y-1.5">
-                  <h4 className="font-black text-xs uppercase text-[#64748B]">Rank-wise Prizes</h4>
-                  {(breakupData.breakup || []).map((b: any, i: number) => (
-                    <div key={i} className="flex items-center justify-between p-2 rounded-lg bg-[#F1F5F9] border border-[#E2E8F0] text-xs font-bold">
-                      <span className="text-[#475569]">Rank {b.rank_from}{b.rank_to !== b.rank_from ? `–${b.rank_to}` : ''}</span>
-                      <span className="font-mono font-black text-[#D97706]">₹{Number(b.prize || 0).toLocaleString('en-IN')}</span>
-                    </div>
-                  ))}
-                </div>
-                {(breakupData.winners || []).length > 0 && (
-                  <div className="space-y-1.5">
-                    <h4 className="font-black text-xs uppercase text-[#64748B]">Current Winners</h4>
-                    {breakupData.winners.map((w: any) => (
-                      <div key={w.rank} className="flex items-center justify-between p-2 rounded-lg bg-green-50 border border-green-200 text-xs font-bold">
-                        <span className="text-[#0F172A]">#{w.rank} {w.team_name} <span className="text-[#64748B]">({w.user_name})</span></span>
-                        <span className="font-mono font-black text-[#16A34A]">{w.points} pts • ₹{Number(w.prize || 0).toLocaleString('en-IN')}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className="text-xs text-[#64748B] font-bold text-center py-6">Breakup unavailable.</p>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Dream11-Style Guaranteed Prize Breakup Modal */}
+      <PrizeBreakupModal
+        isOpen={!!breakupContest}
+        onClose={() => { setBreakupContest(null); setBreakupData(null); }}
+        contest={breakupContest}
+      />
 
     </div>
   );

@@ -18,6 +18,8 @@ const ScoreAuditLog = require('./ScoreAuditLog');
 const PlayerPointsLog = require('./PlayerPointsLog');
 const UserReward = require('./UserReward');
 const GuruTeam = require('./GuruTeam');
+const ContestParticipant = require('./ContestParticipant');
+const BotWinHistory = require('./BotWinHistory');
 
 // ─── Associations ───
 
@@ -106,4 +108,6 @@ module.exports = {
   PlayerPointsLog,
   UserReward,
   GuruTeam,
+  ContestParticipant,
+  BotWinHistory,
 };

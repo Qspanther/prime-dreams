@@ -47,6 +47,20 @@ if (isPostgres) {
 sequelize.authenticate().then(async () => {
   if (isPostgres) {
     console.log('🐘 Cloud PostgreSQL authenticated & ready.');
+    try {
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_matches_category ON cricket_matches(category);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_matches_status ON cricket_matches(status);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_players_match_id ON cricket_players(match_id);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_match_contests_match_id ON match_contests(match_id);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_match_id ON cricket_teams(match_id);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_user_id ON cricket_teams(user_id);').catch(() => {});
+      await sequelize.query('ALTER TABLE match_contests ADD COLUMN IF NOT EXISTS bot_spots INTEGER DEFAULT 0;').catch(() => {});
+      await sequelize.query('ALTER TABLE cricket_teams ADD COLUMN IF NOT EXISTS phase INTEGER DEFAULT 1;').catch(() => {});
+      await sequelize.query('ALTER TABLE bot_win_history ADD COLUMN IF NOT EXISTS phase INTEGER DEFAULT 1;').catch(() => {});
+      console.log('🐘 Cloud PostgreSQL schema verified & indexes active.');
+    } catch (pgErr) {
+      console.warn('PostgreSQL initialization notice:', pgErr.message);
+    }
     return;
   }
   try {
@@ -67,6 +81,9 @@ sequelize.authenticate().then(async () => {
     await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_user_id ON cricket_teams(user_id);');
     await sequelize.query('CREATE INDEX IF NOT EXISTS idx_h2h_challenges_match_id ON h2h_challenges(match_id);');
     await sequelize.query('CREATE INDEX IF NOT EXISTS idx_h2h_challenges_receiver_id ON h2h_challenges(receiver_id);');
+    await sequelize.query('ALTER TABLE match_contests ADD COLUMN bot_spots INTEGER DEFAULT 0;').catch(() => {});
+    await sequelize.query('ALTER TABLE cricket_teams ADD COLUMN phase INTEGER DEFAULT 1;').catch(() => {});
+    await sequelize.query('ALTER TABLE bot_win_history ADD COLUMN phase INTEGER DEFAULT 1;').catch(() => {});
     console.log('⚡ Ultra high-performance SQLite engine & cricket indexes active.');
   } catch (err) {
     console.warn('SQLite PRAGMA tuning notice:', err.message);

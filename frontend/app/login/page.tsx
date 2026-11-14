@@ -5,13 +5,13 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '../lib/auth-context';
 import Link from 'next/link';
 import { apiPost } from '../lib/api';
-import { Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import { ArrowRight, AlertCircle } from 'lucide-react';
 import PrimeLogo from '../components/ui/PrimeLogo';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuth();
-  const [form, setForm] = useState({ email: '', password: '' });
+  const [form, setForm] = useState({ identifier: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -20,7 +20,11 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const data = await apiPost('/auth/login', form);
+      const data = await apiPost('/auth/login', {
+        email: form.identifier,
+        username: form.identifier,
+        password: form.password,
+      });
       login(data.token, data.user);
       router.push(data.user?.role === 'admin' ? '/admin/tournaments' : '/');
     } catch (err: any) {
@@ -53,17 +57,14 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="pd-label">Email or Username</label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-3 w-4 h-4 text-[#94A3B8]" />
-              <input
-                type="text"
-                placeholder="you@domain.com or username"
-                value={form.email}
-                onChange={(e) => setForm({ ...form, email: e.target.value })}
-                required
-                className="pd-input pl-9"
-              />
-            </div>
+            <input
+              type="text"
+              placeholder="Email or Username"
+              value={form.identifier}
+              onChange={(e) => setForm({ ...form, identifier: e.target.value })}
+              required
+              className="pd-input"
+            />
           </div>
 
           <div>
@@ -73,17 +74,14 @@ export default function LoginPage() {
                 Forgot?
               </Link>
             </div>
-            <div className="relative">
-              <Lock className="absolute left-3 top-3 w-4 h-4 text-[#94A3B8]" />
-              <input
-                type="password"
-                placeholder="••••••••"
-                value={form.password}
-                onChange={(e) => setForm({ ...form, password: e.target.value })}
-                required
-                className="pd-input pl-9"
-              />
-            </div>
+            <input
+              type="password"
+              placeholder="••••••••"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              required
+              className="pd-input"
+            />
           </div>
 
           <button

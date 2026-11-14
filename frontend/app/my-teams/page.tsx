@@ -2,11 +2,12 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Shield, ArrowRight, Plus, Pencil, Lock, Trophy } from 'lucide-react';
+import { Shield, ArrowRight, Plus, Pencil, Lock, Trophy, Eye } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import CategoryFilterTabs from '../components/ui/CategoryFilterTabs';
 import CategoryBadge from '../components/ui/CategoryBadge';
+import CricketPitchView from '../components/ui/CricketPitchView';
 
 export default function MyTeamsPage() {
   const { token, isAuthenticated } = useAuth();
@@ -14,6 +15,7 @@ export default function MyTeamsPage() {
   const [lockClockNow, setLockClockNow] = useState(() => Date.now());
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
+  const [previewTeam, setPreviewTeam] = useState<any>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -157,6 +159,16 @@ export default function MyTeamsPage() {
                   </span>
                   {match && (
                     <div className="flex flex-wrap items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setPreviewTeam(team)}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-sm border border-emerald-400 cursor-pointer"
+                        title="View team on cricket stadium pitch"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-emerald-200" />
+                        <span>Pitch View</span>
+                      </button>
+
                       {teamLocked ? (
                         <span className="text-[#64748B] font-black flex items-center gap-1" title="Contest locked — editing closed">
                           <Lock className="w-3.5 h-3.5" />
@@ -192,6 +204,30 @@ export default function MyTeamsPage() {
             );
           })}
         </div>
+      )}
+
+      {/* Dream11-Style Cricket Pitch Ground Preview Modal */}
+      {previewTeam && (
+        <CricketPitchView
+          isOpen={!!previewTeam}
+          onClose={() => setPreviewTeam(null)}
+          teamName={previewTeam.team_name}
+          players={(previewTeam.players || []).map((p: any) => ({
+            id: p.id,
+            name: p.name,
+            team_name: p.team_name,
+            role: p.role,
+            credits: p.credits || 9.0,
+            points: p.points || 0,
+            photo_url: p.photo_url,
+            is_captain: p.id === previewTeam.captain_id || p.id === previewTeam.captain?.id,
+            is_vice_captain: p.id === previewTeam.vice_captain_id || p.id === previewTeam.viceCaptain?.id,
+          }))}
+          captainId={previewTeam.captain_id || previewTeam.captain?.id}
+          viceCaptainId={previewTeam.vice_captain_id || previewTeam.viceCaptain?.id}
+          teamA={previewTeam.match?.team_a}
+          teamB={previewTeam.match?.team_b}
+        />
       )}
     </div>
   );

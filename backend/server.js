@@ -114,8 +114,12 @@ const subRoutes = require('./routes/subscription');
 const rewardsRoutes = require('./routes/rewards');
 const guruRoutes = require('./routes/guru');
 const gamificationRoutes = require('./routes/gamification');
+const botManagerRoutes = require('./routes/bot-manager').router;
 
 // Dual mounting: direct and /api prefixed to guarantee zero 404s
+app.use('/bot-manager', botManagerRoutes);
+app.use('/api/bot-manager', botManagerRoutes);
+
 app.use('/auth', authRoutes);
 app.use('/api/auth', authRoutes);
 
@@ -213,10 +217,15 @@ async function start() {
     setInterval(checkContestLocks, 30000);
     checkContestLocks();
 
+    // Start 10,000 Bot Network 72-Hour Scheduler & Organic Deployment Engine
+    const { botScheduler } = require('./services/botScheduler');
+    botScheduler.startScheduler(30000);
+
     const serverCallback = () => {
       console.log(`🏆 Prime Dreems API running on http://localhost:${config.PORT}`);
       console.log(`🩺 Health check: http://localhost:${config.PORT}/health`);
       console.log(`🏏 Matches endpoint: http://localhost:${config.PORT}/api/matches`);
+      console.log(`🤖 Bot Manager endpoint: http://localhost:${config.PORT}/bot-manager`);
       console.log(`⚡ WebSocket gateway: ws://localhost:${config.PORT}/ws`);
     };
 

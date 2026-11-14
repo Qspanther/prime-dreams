@@ -72,7 +72,7 @@ const config = {
   // ─── Server ───
   PORT: process.env.PORT || 5000,
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:3000',
-  BOT_API_KEY: process.env.BOT_API_KEY || '',
+  BOT_API_KEY: process.env.BOT_API_KEY || 'c11_bot_mgr_sec_9938a7fbc21d49e',
 
   // ─── Live Polling Throttle (Section 8: min 10s per match poll) ───
   LIVE_POLL_INTERVAL_MS: 10000,

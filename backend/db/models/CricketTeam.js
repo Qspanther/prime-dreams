@@ -39,8 +39,19 @@ const CricketTeam = sequelize.define('CricketTeam', {
     type: DataTypes.INTEGER,
     allowNull: true,
   },
+  phase: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    defaultValue: 1,
+  },
 }, {
   tableName: 'cricket_teams',
+  indexes: [
+    { fields: ['match_id'] },
+    { fields: ['user_id', 'match_id'] },
+    { fields: ['contest_id'] },
+    { fields: ['contest_id', 'total_points'] },
+  ],
 });
 
 module.exports = CricketTeam;
