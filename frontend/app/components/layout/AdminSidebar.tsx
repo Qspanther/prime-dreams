@@ -20,7 +20,7 @@ export default function AdminSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden md:flex bg-white/90 backdrop-blur-xl border-r-2 border-[#CBD5E1] fixed left-0 top-0 h-full w-[240px] z-40 flex-col py-6 shadow-[4px_0_20px_rgba(30,58,138,0.06)] text-[#0F172A]">
+    <aside className="hidden md:flex bg-white/95 backdrop-blur-xl border-r-2 border-[#CBD5E1] w-[240px] shrink-0 h-screen sticky top-0 z-40 flex-col py-6 shadow-[4px_0_20px_rgba(30,58,138,0.06)] text-[#0F172A] overflow-y-auto">
       {/* Admin Branding */}
       <div className="px-5 mb-8">
         <PrimeLogo size="sm" />
@@ -57,7 +57,7 @@ export default function AdminSidebar() {
             <span>Switch to Player App</span>
           </div>
         </Link>
-        <p className="px-3 text-[10px] text-[#64748B] tracking-widest text-center font-mono font-bold">PRIME DREEMS • v2.1</p>
+        <p className="px-3 text-[10px] text-[#64748B] tracking-widest text-center font-mono font-bold">PRIME DREAMS • v2.1</p>
       </div>
     </aside>
   );

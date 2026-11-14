@@ -59,7 +59,7 @@ export default function TopBar() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-[#CBD5E1] bg-white/95 backdrop-blur-xl px-3 sm:px-6 py-2.5 sm:py-3.5 flex items-center justify-between gap-2 sm:gap-4 shadow-[0_4px_24px_rgba(30,58,138,0.08)] text-[#0F172A]">
+      <header className="sticky top-0 z-30 h-16 shrink-0 border-b-2 border-[#CBD5E1] bg-white/95 backdrop-blur-xl px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 shadow-[0_4px_20px_rgba(30,58,138,0.06)] text-[#0F172A] select-none">
         <span className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#93C5FD] to-transparent pointer-events-none" />
         {/* Left: Logo & Mobile Toggle */}
         <div className="flex items-center gap-1.5 sm:gap-4 min-w-0 flex-1">
@@ -125,24 +125,39 @@ export default function TopBar() {
             </button>
 
             {showNotif && (
-              <div className="absolute right-0 mt-2 w-80 prime-card-3d p-4 z-50 animate-in fade-in zoom-in-95 border-2 border-[#94A3B8]">
-                <div className="flex items-center justify-between pb-2 border-b border-[#CBD5E1] mb-3">
-                  <span className="font-black text-xs uppercase text-[#1E293B] tracking-wider">Notifications</span>
-                  <span className="text-[10px] text-[#64748B]">{notifications.length} total</span>
-                </div>
-                <div className="max-h-60 overflow-y-auto space-y-2">
-                  {notifications.length === 0 ? (
-                    <p className="text-xs text-center text-[#64748B] py-4">No notifications yet</p>
-                  ) : (
-                    notifications.slice(0, 10).map((n) => (
-                      <div key={n.id} className="p-2.5 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] text-xs text-[#0F172A]">
-                        <p className="font-bold text-[#0F172A] text-[11px]">{n.title}</p>
-                        <p className="text-[10px] text-[#475569] mt-0.5">{n.message}</p>
+              <>
+                {/* Invisible backdrop to dismiss popup when clicking anywhere outside */}
+                <div
+                  className="fixed inset-0 z-40 bg-transparent"
+                  onClick={() => setShowNotif(false)}
+                />
+
+                {/* Floating Notification Popover: Completely outside header border, zero parent resize */}
+                <div
+                  style={{ position: 'absolute' }}
+                  className="!absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white/98 backdrop-blur-2xl rounded-2xl shadow-[0_20px_50px_rgba(15,23,42,0.22),0_0_0_1px_rgba(203,213,225,0.8)] border-2 border-[#CBD5E1] p-4 z-50 animate-in fade-in zoom-in-95 text-[#0F172A]"
+                >
+                  <div className="flex items-center justify-between pb-2 border-b border-[#CBD5E1] mb-3">
+                    <span className="font-black text-xs uppercase text-[#1E293B] tracking-wider">Notifications</span>
+                    <span className="text-[10px] text-[#64748B] font-bold">{notifications.length} total</span>
+                  </div>
+                  <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                    {notifications.length === 0 ? (
+                      <div className="py-6 text-center">
+                        <Bell className="w-8 h-8 text-[#94A3B8] mx-auto mb-2 opacity-50" />
+                        <p className="text-xs text-[#64748B] font-semibold">No notifications yet</p>
                       </div>
-                    ))
-                  )}
+                    ) : (
+                      notifications.slice(0, 10).map((n) => (
+                        <div key={n.id} className="p-2.5 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] text-xs text-[#0F172A] hover:bg-[#F1F5F9] transition">
+                          <p className="font-bold text-[#0F172A] text-[11px]">{n.title}</p>
+                          <p className="text-[10px] text-[#475569] mt-0.5 leading-relaxed">{n.message}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
 

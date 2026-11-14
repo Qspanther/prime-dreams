@@ -18,7 +18,7 @@ export default function Sidebar() {
   ];
 
   return (
-    <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r-2 border-[#CBD5E1] bg-white/85 backdrop-blur-xl p-4 justify-between z-20 min-h-screen shadow-[4px_0_20px_rgba(30,58,138,0.05)] text-[#0F172A]">
+    <aside className="hidden lg:flex flex-col w-64 shrink-0 border-r-2 border-[#CBD5E1] bg-white/95 backdrop-blur-xl p-4 justify-between z-20 h-screen sticky top-0 shadow-[4px_0_20px_rgba(30,58,138,0.05)] text-[#0F172A] overflow-y-auto">
       <div className="space-y-6">
         <Link href="/" className="block px-2 pt-1 group">
           <PrimeLogo size="md" />
@@ -52,8 +52,8 @@ export default function Sidebar() {
       </div>
 
       {/* Footer Branding */}
-      <div className="prime-card-shiny-gold p-4 text-center border-2 border-[#F59E0B]">
-        <p className="text-xs font-black text-[#92400E] tracking-wider">🏏 PRIME DREEMS</p>
+      <div className="prime-card-shiny-gold p-4 text-center border-2 border-[#F59E0B] mt-6">
+        <p className="text-xs font-black text-[#92400E] tracking-wider">🏏 PRIME DREAMS</p>
         <p className="text-[10px] text-[#B45309] mt-0.5 font-bold">Cricket Fantasy Colosseum</p>
       </div>
     </aside>

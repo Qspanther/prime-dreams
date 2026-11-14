@@ -55,21 +55,19 @@ function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="relative min-h-screen bg-[#F0F4F9] text-[#0F172A] overflow-x-hidden font-['Montserrat',sans-serif]">
+    <div className="relative h-screen w-full bg-[#F0F4F9] text-[#0F172A] overflow-hidden font-['Montserrat',sans-serif]">
       {isAuthPage ? (
-        <main className="relative z-10 min-h-screen flex items-center justify-center p-4">
+        <main className="relative z-10 h-screen w-full overflow-y-auto flex items-center justify-center p-4">
           {children}
         </main>
       ) : (
-        <div className="relative z-10 flex min-h-screen">
+        <div className="relative z-10 flex h-screen w-full overflow-hidden">
           {isAdminRoute ? <AdminSidebar /> : <Sidebar />}
-          <div
-            className={`flex-1 flex flex-col min-w-0 pb-20 lg:pb-8 ${
-              isAdminRoute ? 'ml-0 md:ml-[240px]' : ''
-            }`}
-          >
+          <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
             <TopBar />
-            <main className="flex-1 w-full max-w-full overflow-x-hidden">{children}</main>
+            <main className="flex-1 overflow-y-auto overflow-x-hidden pb-24 lg:pb-8">
+              {children}
+            </main>
           </div>
           <MobileBottomNav />
         </div>

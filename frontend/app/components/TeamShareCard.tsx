@@ -73,7 +73,7 @@ function drawShareCard(
   // Branding
   ctx.fillStyle = '#F59E0B';
   ctx.font = '900 76px Arial, sans-serif';
-  ctx.fillText('PRIME DREEMS', CARD_W / 2, 128);
+  ctx.fillText('PRIME DREAMS', CARD_W / 2, 128);
   ctx.fillStyle = '#93C5FD';
   ctx.font = '700 28px Arial, sans-serif';
   ctx.fillText('F A N T A S Y   C R I C K E T', CARD_W / 2, 172);
@@ -241,8 +241,8 @@ export default function TeamShareCard({
       if (typeof navigator.share === 'function' && nav.canShare?.({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: `${teamName} — Prime Dreems`,
-          text: `Check out my team "${teamName}"${matchTitle ? ` for ${matchTitle}` : ''} on Prime Dreems!`,
+          title: `${teamName} — Prime Dreams`,
+          text: `Check out my team "${teamName}"${matchTitle ? ` for ${matchTitle}` : ''} on Prime Dreams!`,
         });
       } else if (downloadPng()) {
         setNotice('Sharing is not supported on this device — the PNG was downloaded instead.');
@@ -282,7 +282,7 @@ export default function TeamShareCard({
           </button>
 
           <div className="text-center space-y-1 pb-3 border-b border-white/15">
-            <p className="text-xl font-black tracking-wide text-[#F59E0B]">PRIME DREEMS</p>
+            <p className="text-xl font-black tracking-wide text-[#F59E0B]">PRIME DREAMS</p>
             <p className="text-[10px] font-black tracking-[0.3em] text-[#93C5FD]">FANTASY CRICKET</p>
           </div>
 

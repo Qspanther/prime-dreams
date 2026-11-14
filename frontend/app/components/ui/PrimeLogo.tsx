@@ -125,7 +125,7 @@ export default function PrimeLogo({
             PRIME
           </span>
           <span className={`font-black tracking-wider bg-gradient-to-r from-[#D97706] via-[#B45309] to-[#92400E] bg-clip-text text-transparent uppercase ${textSizes[size]} font-['Montserrat',sans-serif]`}>
-            DREEMS
+            DREAMS
           </span>
         </div>
         <div className={`${compactOnMobile ? 'hidden md:flex' : 'flex'} items-center gap-1.5 mt-1`}>

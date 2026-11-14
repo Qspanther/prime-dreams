@@ -220,7 +220,7 @@ export default function WalletPage() {
         <div>
           <h1 className="text-xl sm:text-3xl font-black text-[#0F172A] flex items-center gap-2.5">
             <WalletIcon className="w-7 h-7 text-[#DC2626] drop-shadow-[0_0_10px_rgba(37,99,235,0.4)]" />
-            <span>Prime Dreems Wallet</span>
+            <span>Prime Dreams Wallet</span>
           </h1>
           <p className="text-xs sm:text-sm text-[#64748B] font-bold mt-1">Instant UPI deposits and fast INR payouts</p>
         </div>
@@ -351,7 +351,7 @@ export default function WalletPage() {
 
           <div className="p-4 rounded-xl bg-[#F1F5F9] border-2 border-[#CBD5E1] flex flex-col sm:flex-row items-center justify-between gap-3">
             <div>
-              <p className="text-[11px] text-[#64748B] uppercase font-black">Official Prime Dreems UPI ID</p>
+              <p className="text-[11px] text-[#64748B] uppercase font-black">Official Prime Dreams UPI ID</p>
               <p className="text-lg font-mono font-black text-[#D97706]">primedreems@upi</p>
             </div>
             <button

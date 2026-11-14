@@ -67,7 +67,7 @@ export default function SignupPage() {
       <div className="prime-card-3d p-6 sm:p-8 space-y-5 bg-white border-2 border-[#CBD5E1]">
         <div>
           <h2 className="text-xl sm:text-2xl font-black text-[#0F172A]">Create Account</h2>
-          <p className="text-xs text-[#64748B] mt-1">Join Prime Dreems Cricket Fantasy League</p>
+          <p className="text-xs text-[#64748B] mt-1">Join Prime Dreams Cricket Fantasy League</p>
         </div>
 
         {error && (
