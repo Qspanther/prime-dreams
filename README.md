@@ -318,8 +318,30 @@ npm run build
 
 ---
 
-## 🔒 Default Credentials
+## 🔒 Tested Live Login Credentials
 
-- **Admin Account:** `admin@primedreems.com` / `Admin@123`
-- **User Account:** `user@primedreems.com` / `User@123`
-- **Testing Pro User:** `cricket_pro` / `User@123`
+You can log in directly at the live portal [https://prime-dreams.onrender.com/login](https://prime-dreams.onrender.com/login) using either email or username:
+
+### 👑 1. Admin Account (Full Tournament, Match & Bot Management)
+- **Email:** `admin@primedreems.com`
+- **Username:** `admin`
+- **Password:** `Admin@123`
+- **Role:** `admin` (Access to `/admin`, `/admin/tournaments`, and match control deck)
+- **Starting Wallet Balance:** ₹5,00,000 (Bonus: ₹1,00,000, Deposit: ₹3,00,000, Winnings: ₹1,00,000)
+- **Status:** Verified (Zero OTP required on direct login)
+
+### 👤 2. Regular User Account (Team Creation, Wallet & Contests)
+- **Email:** `user@primedreems.com`
+- **Username:** `cricket_user`
+- **Password:** `User@123`
+- **Role:** `user` (Access to Mega, Battlefield, Mini, and Private contests)
+- **Starting Wallet Balance:** ₹50,000 (Bonus: ₹10,000, Deposit: ₹30,000, Winnings: ₹10,000)
+- **Status:** Verified (Zero OTP required on direct login)
+
+### 🏏 3. Testing Pro Player Account (Extra Testing Option)
+- **Email:** `player@primedreems.com`
+- **Username:** `cricket_pro`
+- **Password:** `User@123`
+- **Role:** `user`
+- **Starting Wallet Balance:** ₹1,00,000
+- **Status:** Verified

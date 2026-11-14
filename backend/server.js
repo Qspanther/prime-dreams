@@ -12,6 +12,7 @@ const config = require('./config');
 const sequelize = require('./db/index');
 const { SystemSetting } = require('./db/models'); // Load all models and associations
 const { seedCricketMatches } = require('./db/seedCricket');
+const { seedDefaultUsers } = require('./db/seedDefaultUsers');
 const { startLiveMatchWorker } = require('./services/cricbuzzService');
 const { startIngestionService } = require('./services/ingestion/ingestionWorker');
 const wsGateway = require('./services/websocket/wsGateway');
@@ -215,6 +216,13 @@ async function start() {
       }
     } catch (botSeedErr) {
       console.warn('⚠️ Bot verification notice:', botSeedErr.message);
+    }
+
+    // Ensure default Admin & User accounts exist
+    try {
+      await seedDefaultUsers();
+    } catch (defaultUserErr) {
+      console.warn('⚠️ Default users seed notice:', defaultUserErr.message);
     }
 
     // Seed sample matches only for local SQLite development.
