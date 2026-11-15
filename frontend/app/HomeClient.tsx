@@ -825,13 +825,13 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                   </div>
                 </div>
 
-                <div className="pt-2.5 border-t border-[#E2E8F0] mt-2.5 flex items-center justify-between">
+                <div className="pt-2.5 border-t border-[#E2E8F0] mt-2.5 flex items-center justify-between text-xs">
                   <span className="text-[11px] font-bold text-[#64748B]">
                     {m.contests_count ? `🏆 ${m.contests_count} Contests` : `Score: Live Feed`}
                   </span>
-                  <span className="prime-btn-3d !py-1.5 !px-3 !text-xs group-hover:scale-105">
-                    <span>View Live Score</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                  <span className="text-[11px] font-black text-emerald-600 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                    <span>Match In-Play</span>
+                    <ChevronRight className="w-3.5 h-3.5" />
                   </span>
                 </div>
               </Link>
@@ -867,9 +867,10 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
         ) : (
           <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-x_pan-y] [-webkit-overflow-scrolling:touch]">
             {upcomingMatches.map((m) => (
-              <div
+              <Link
                 key={m.id}
-                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3 flex flex-col justify-between group border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)]"
+                href={`/match/${m.id}`}
+                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3 flex flex-col justify-between group border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)] cursor-pointer"
               >
                 <div>
                   {/* Match Poster Frame */}
@@ -882,7 +883,11 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                       <div className="flex items-center gap-1.5">
                         <button
                           type="button"
-                          onClick={(e) => toggleReminder(e, m.id, `${m.team_a} vs ${m.team_b}`)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleReminder(e, m.id, `${m.team_a} vs ${m.team_b}`);
+                          }}
                           className={`p-1.5 rounded-lg backdrop-blur-md transition cursor-pointer ${
                             reminders[m.id]
                               ? 'bg-amber-400 text-slate-950 shadow-[0_0_8px_rgba(245,158,11,0.8)]'
@@ -935,19 +940,12 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <Link
-                      href={`/team-builder/${m.id}`}
-                      className="prime-btn-dark-3d !py-1.5 !px-2.5 !text-xs font-black"
-                    >
-                      XI
-                    </Link>
-                    <Link href={`/match/${m.id}`} className="prime-btn-3d !py-1.5 !px-3 !text-xs font-black uppercase tracking-wider">
-                      Join
-                    </Link>
-                  </div>
+                  <span className="text-xs font-black text-[#2563EB] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                    <span>Enter Match</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </span>
                 </div>
-              </div>
+              </Link>
             ))}
           </div>
         )}

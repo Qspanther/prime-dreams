@@ -7,7 +7,7 @@ import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Trophy, Swords, Users, Clock, Shield, Radio, Lock,
-  ArrowLeft, ArrowRight, AlertCircle, Zap, Calendar, MapPin, Share2, ShieldCheck, CheckCircle2
+  ArrowLeft, ArrowRight, AlertCircle, Zap, Calendar, MapPin, Share2, ShieldCheck, CheckCircle2, ChevronRight
 } from 'lucide-react';
 import { apiGet, apiPost, resolveImageUrl, getWebSocketUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
@@ -1078,15 +1078,29 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                     <Shield className="w-3.5 h-3.5 text-[#2563EB]" /> Created by you ({myCreatedPrivate.length})
                   </h4>
                   {myCreatedPrivate.map((c: any) => (
-                    <div key={c.id} className="contest-card-3d p-4 flex flex-wrap items-center justify-between gap-3">
+                    <div
+                      key={c.id}
+                      onClick={() => {
+                        if (!isLocked) {
+                          router.push(`/team-builder/${matchId}?contestId=${c.id}`);
+                        }
+                      }}
+                      className={`contest-card-3d p-4 flex flex-wrap items-center justify-between gap-3 group transition-all ${
+                        isLocked ? 'cursor-not-allowed opacity-90' : 'cursor-pointer hover:border-[#2563EB]'
+                      }`}
+                    >
                       <div className="min-w-0">
                         <h5 className="font-black text-sm text-[#0F172A] truncate">{c.title}</h5>
                         <p className="text-xs text-[#64748B] font-bold">₹{c.entry_fee} entry • ₹{Number(c.prize_pool).toLocaleString('en-IN')} pool • {c.filled_spots}/{c.total_spots} joined</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <button
-                          onClick={() => copyInviteCode(c.invite_code)}
-                          className="prime-btn-dark-3d !py-1.5 !px-2.5 !text-[10px] font-mono shrink-0"
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            copyInviteCode(c.invite_code);
+                          }}
+                          className="prime-btn-dark-3d !py-1.5 !px-2.5 !text-[10px] font-mono shrink-0 cursor-pointer"
                           title={c.invite_code}
                         >
                           {copiedCode === c.invite_code ? 'Copied!' : c.invite_code}
@@ -1096,9 +1110,10 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                             Locked
                           </span>
                         ) : (
-                          <Link href={`/team-builder/${matchId}?contestId=${c.id}`} className="prime-btn-3d !py-1.5 !px-3 !text-[10px] shrink-0">
-                            Join
-                          </Link>
+                          <span className="text-xs font-black text-[#2563EB] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                            <span>Enter</span>
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1145,8 +1160,22 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
 
               const firstPrize = Math.round(Number(c.prize_pool || 0) * (c.total_spots <= 2 ? 1 : 0.35));
 
+              const targetUrl = c.type === 'h2h' ? `/team-builder/${matchId}?h2h=1` : `/team-builder/${matchId}?contestId=${c.id}`;
+
               return (
-                <div key={c.id} className="contest-card-3d p-5 flex flex-col justify-between">
+                <div
+                  key={c.id}
+                  onClick={() => {
+                    if (!contestLocked && !contestFull) {
+                      router.push(targetUrl);
+                    }
+                  }}
+                  className={`contest-card-3d p-5 flex flex-col justify-between group transition-all ${
+                    contestLocked || contestFull
+                      ? 'cursor-not-allowed opacity-90'
+                      : 'cursor-pointer hover:border-[#2563EB] hover:shadow-[0_0_24px_rgba(37,99,235,0.18)] hover:-translate-y-0.5'
+                  }`}
+                >
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <CategoryBadge category={match.category} size="xs" />
@@ -1196,40 +1225,42 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                   <div className="mt-5 pt-3 border-t border-[#E2E8F0] space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                       <button
-                        onClick={() => openPrizeBreakup(c)}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openPrizeBreakup(c);
+                        }}
                         className="text-[11px] font-black text-[#2563EB] hover:text-[#1D4ED8] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer py-1.5 border border-blue-100 rounded-lg hover:bg-blue-50"
                       >
                         <Trophy className="w-3.5 h-3.5" /> Prize Breakup
                       </button>
                       <Link
                         href={`/match/${matchId}/leaderboard?contestId=${c.id}`}
+                        onClick={(e) => e.stopPropagation()}
                         className="text-[11px] font-black text-[#D97706] hover:text-[#B45309] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer py-1.5 border border-amber-100 rounded-lg hover:bg-amber-50"
                       >
                         <Users className="w-3.5 h-3.5" /> Teams ({c.filled_spots || 0})
                       </Link>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between text-xs pt-0.5">
                       <span className="text-[10px] text-[#64748B] font-bold flex items-center gap-1">
                         <span>{c.total_spots > 2 ? 'Up to 20 Teams' : 'Single Entry'}</span>
                         <span>•</span>
                         <span>{c.type === 'practice' ? 'Practice' : /rookie/i.test(c.title || '') ? 'Rookie' : 'Flexible'}</span>
                       </span>
-                      {contestLocked || contestFull ? (
-                        <button
-                          type="button"
-                          disabled
-                          className="cursor-not-allowed rounded-xl border border-[#CBD5E1] bg-[#F1F5F9] px-3.5 py-1.5 text-xs font-black uppercase text-[#94A3B8] inline-flex items-center gap-1.5 shadow-none"
-                        >
-                          <Lock className="w-3.5 h-3.5 text-[#94A3B8]" />
-                          <span>{contestLocked ? 'Locked' : 'Contest Full'}</span>
-                        </button>
+                      {contestLocked ? (
+                        <span className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase text-red-600">
+                          <Lock className="w-3 h-3" /> Locked
+                        </span>
+                      ) : contestFull ? (
+                        <span className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase text-slate-500">
+                          Full
+                        </span>
                       ) : (
-                        <Link
-                          href={c.type === 'h2h' ? `/team-builder/${matchId}?h2h=1` : `/team-builder/${matchId}?contestId=${c.id}`}
-                          className="prime-btn-3d !py-2 !px-4 text-xs font-black uppercase tracking-wider"
-                        >
-                          {c.type === 'h2h' ? 'Create team & challenge' : c.type === 'practice' || Number(c.entry_fee) === 0 ? 'Join Free' : `Join Contest ₹${c.entry_fee}`}
-                        </Link>
+                        <span className="text-xs font-black text-[#2563EB] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
+                          <span>Enter Contest</span>
+                          <ChevronRight className="w-4 h-4" />
+                        </span>
                       )}
                     </div>
                   </div>
