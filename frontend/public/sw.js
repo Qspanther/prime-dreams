@@ -1,18 +1,9 @@
-// ─── Creator 11 Progressive Web App Service Worker ───
-// Handles offline caching + Web Push (FCM-style) notifications.
-const CACHE_NAME = 'creator11-v1';
-const PRECACHE_URLS = [
-  '/',
-  '/manifest.json',
-  '/globe.svg',
-];
+// ─── Prime Dreams Progressive Web App Service Worker ───
+// Network-first for navigation, ensure mobile devices always fetch the latest live release.
+const CACHE_NAME = 'prime-dreams-v4';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(PRECACHE_URLS);
-    })
-  );
+  // Activate immediately without waiting for existing tabs to close
   self.skipWaiting();
 });
 
@@ -22,47 +13,80 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((name) => {
           if (name !== CACHE_NAME) {
+            console.log('[SW] Purging old cache:', name);
             return caches.delete(name);
           }
         })
       );
-    })
+    }).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  // Let API requests pass straight through to network with SmartEngine
-  if (event.request.url.includes('/api/') || event.request.method !== 'GET') {
+  const url = new URL(event.request.url);
+
+  // 1. Bypass all non-GET, API, backend proxy, socket, and telemetry requests
+  if (
+    event.request.method !== 'GET' ||
+    url.pathname.startsWith('/api') ||
+    url.pathname.startsWith('/api-backend') ||
+    url.pathname.startsWith('/socket.io')
+  ) {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).catch(() => {
-        // Fallback for document navigation when offline
-        if (event.request.mode === 'navigate') {
-          return caches.match('/');
-        }
-      });
-    })
-  );
+  // 2. NETWORK-FIRST for HTML / page navigation
+  // This guarantees mobile phones and PWAs always see the newest live version
+  if (event.request.mode === 'navigate' || event.request.destination === 'document') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // If offline, serve from cache
+          return caches.match(event.request);
+        })
+    );
+    return;
+  }
+
+  // 3. Stale-While-Revalidate for Next.js static assets (_next/static/)
+  if (url.pathname.startsWith('/_next/static/')) {
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        const fetchPromise = fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put(event.request, responseClone);
+            });
+          }
+          return networkResponse;
+        }).catch(() => cachedResponse);
+
+        return cachedResponse || fetchPromise;
+      })
+    );
+    return;
+  }
 });
 
 // ─── Web Push (FCM-style) — display notification ───
 self.addEventListener('push', (event) => {
-  let data = { title: 'Prime Dreems', message: 'You have a new notification', type: 'system' };
+  let data = { title: 'Prime Dreams', message: 'You have a new notification', type: 'system' };
   try {
     if (event.data) {
       const parsed = event.data.json();
       data = { ...data, ...parsed };
     }
-  } catch (_) {
-    // fall back to defaults if payload is not valid JSON
-  }
+  } catch (_) {}
 
   const options = {
     body: data.message || data.body || '',
@@ -74,7 +98,7 @@ self.addEventListener('push', (event) => {
     vibrate: [100, 50, 100],
   };
 
-  event.waitUntil(self.registration.showNotification(data.title || 'Prime Dreems', options));
+  event.waitUntil(self.registration.showNotification(data.title || 'Prime Dreams', options));
 });
 
 // ─── Notification click → navigate to target ───

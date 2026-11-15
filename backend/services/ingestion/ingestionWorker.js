@@ -384,7 +384,7 @@ async function processLiveIngestionTick() {
 
         // Update HotStore with verified snapshot (Section 2.4)
         hotStore.setSnapshot(match.id, normalized, {
-          source: 'Cricbuzz Ingestion Engine',
+          source: 'Prime Telemetry Engine',
           cross_check_status: verificationResult.status,
           is_degraded: !verificationResult.verified,
         });
@@ -406,7 +406,7 @@ async function processLiveIngestionTick() {
             partnership: normalized.partnership,
             commentary: normalized.commentary,
             status_text: commentaryText,
-            source: 'Cricbuzz',
+            source: 'Prime Telemetry Gateway',
             last_source_sync_at: new Date().toISOString(),
             last_ball_time: new Date().toISOString(),
           },

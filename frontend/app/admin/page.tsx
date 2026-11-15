@@ -239,7 +239,7 @@ export default function AdminDashboardPage() {
           <div className="flex items-center gap-3">
             <span className="w-3.5 h-3.5 rounded-full bg-[#2563EB] shadow-md animate-ping" />
             <h1 className="text-2xl sm:text-3xl font-black text-[#0F172A] tracking-tight flex items-center gap-2.5">
-              <span>Cricbuzz Real-Time Database &amp; Command Deck</span>
+              <span>Prime Real-Time Telemetry &amp; Command Deck</span>
             </h1>
           </div>
           <p className="text-[#64748B] text-xs sm:text-sm font-bold mt-1">
@@ -277,7 +277,7 @@ export default function AdminDashboardPage() {
           }`}
         >
           <Globe className="w-4 h-4 text-[#2563EB]" />
-          <span>🌐 Cricbuzz Live Database Feed ({cbLiveMatches.length} Live • {cbUpcomingMatches.length} Upcoming)</span>
+          <span>🌐 Live Telemetry Database Feed ({cbLiveMatches.length} Live • {cbUpcomingMatches.length} Upcoming)</span>
         </button>
 
         <button
@@ -320,12 +320,12 @@ export default function AdminDashboardPage() {
       {/* ========================================================================= */}
       {activeDeckTab === 'cricbuzz' && (
         <div className="space-y-8">
-          {/* Real-time Cricbuzz Status Banner */}
+          {/* Real-time Telemetry Status Banner */}
           <div className="p-4 rounded-xl bg-white border border-[#CBD5E1] shadow-sm flex flex-wrap items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-3">
               <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse" />
               <span className="font-black text-[#0F172A]">
-                Source: <strong className="text-[#2563EB]">Cricbuzz Live Cricket Network &amp; API Extractor Pipeline</strong>
+                Source: <strong className="text-[#2563EB]">Prime Real-Time Cricket Telemetry Pipeline</strong>
               </span>
             </div>
             <div className="flex items-center gap-4 text-[#64748B] font-bold">
@@ -335,13 +335,13 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* TABLE 1: CRICBUZZ LIVE IN-PLAY MATCHES */}
+          {/* TABLE 1: LIVE IN-PLAY MATCHES */}
           <div className="prime-card-3d bg-white rounded-2xl border-2 border-[#38BDF8] p-4 sm:p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4 border-b border-[#E2E8F0] pb-3">
               <div className="flex items-center gap-3">
                 <span className="w-3 h-3 rounded-full bg-[#EF4444] animate-ping" />
                 <h2 className="text-lg font-black text-[#0F172A] uppercase tracking-wider">
-                  Table 1 — Cricbuzz Live In-Play Matches ({cbLiveMatches.length})
+                  Table 1 — Live In-Play Cricket Telemetry ({cbLiveMatches.length})
                 </h2>
               </div>
               <span className="text-xs text-[#64748B] font-bold">Live telemetry updates every 7s</span>
@@ -390,7 +390,7 @@ export default function AdminDashboardPage() {
                         </td>
                         <td className="p-3">
                           <p className="text-[#0F172A] font-bold line-clamp-1">{m.live_commentary || m.cricbuzz_status || 'Ball in-play'}</p>
-                          <p className="text-[10px] text-emerald-600 font-bold mt-0.5">● Ball verified from Cricbuzz stream</p>
+                          <p className="text-[10px] text-emerald-600 font-bold mt-0.5">● Ball verified from live telemetry stream</p>
                         </td>
                         <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
@@ -423,7 +423,7 @@ export default function AdminDashboardPage() {
                   {cbLiveMatches.length === 0 && (
                     <tr>
                       <td colSpan={5} className="p-8 text-center text-[#64748B]">
-                        No matches currently LIVE on Cricbuzz. Check Upcoming Fixtures below.
+                        No matches currently LIVE in feed. Check Upcoming Fixtures below.
                       </td>
                     </tr>
                   )}
@@ -432,13 +432,13 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* TABLE 2: CRICBUZZ UPCOMING FIXTURES */}
+          {/* TABLE 2: UPCOMING FIXTURES */}
           <div className="prime-card-3d bg-white rounded-2xl border-2 border-[#CBD5E1] p-4 sm:p-6 shadow-sm">
             <div className="flex items-center justify-between mb-4 border-b border-[#E2E8F0] pb-3">
               <div className="flex items-center gap-3">
                 <Calendar className="w-5 h-5 text-[#2563EB]" />
                 <h2 className="text-lg font-black text-[#0F172A] uppercase tracking-wider">
-                  Table 2 — Cricbuzz Upcoming Fixtures ({cbUpcomingMatches.length})
+                  Table 2 — Live Upcoming Fixtures ({cbUpcomingMatches.length})
                 </h2>
               </div>
               <span className="text-xs text-[#64748B] font-bold">Auto-transitions to LIVE when match starts in real life</span>
@@ -544,7 +544,7 @@ export default function AdminDashboardPage() {
               <p className="text-xl font-black text-[#0F172A] mt-2">
                 {dataHealthReport?.source_health?.primary?.status || 'OK'}
               </p>
-              <p className="text-[10px] text-emerald-600 font-bold mt-1">Cricbuzz Live Stream</p>
+              <p className="text-[10px] text-emerald-600 font-bold mt-1">Prime Live Telemetry Stream</p>
             </div>
 
             <div className="p-4 rounded-xl bg-white border-2 border-[#CBD5E1] shadow-xs">
@@ -668,7 +668,7 @@ export default function AdminDashboardPage() {
                   {(dataHealthReport?.database_live_matches || []).length === 0 && (
                     <tr>
                       <td colSpan={6} className="p-6 text-center text-[#64748B]">
-                        No matches currently LIVE in database. Import a live match from the Cricbuzz tab above to monitor.
+                        No matches currently LIVE in database. Import a live match from the Live Telemetry tab above to monitor.
                       </td>
                     </tr>
                   )}

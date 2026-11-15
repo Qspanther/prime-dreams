@@ -371,7 +371,7 @@ function AdminCricketMatchesContent() {
             <span>Cricket Match Operations &amp; Database</span>
           </h1>
           <p className="text-xs text-[#64748B] font-bold mt-0.5">
-            Real-time cricket telemetry, squad verification, fixtures schedule, and Cricbuzz live sync
+            Real-time cricket telemetry, squad verification, fixtures schedule, and official live telemetry sync
           </p>
         </div>
         <button
@@ -729,7 +729,7 @@ function AdminCricketMatchesContent() {
                     <Radio className="w-3.5 h-3.5 text-[#EF4444] animate-pulse" />
                     <span>In-Play Live Stream</span>
                   </h3>
-                  <span className="text-[10px] text-emerald-600 font-mono font-bold">Cricbuzz Active</span>
+                  <span className="text-[10px] text-emerald-600 font-mono font-bold">Live Feed Active</span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -913,7 +913,7 @@ function AdminCricketMatchesContent() {
                       <div className="flex items-center justify-between">
                         <span className="text-[11px] font-black text-[#1E3A8A] flex items-center gap-1.5 uppercase">
                           <Zap className="w-3.5 h-3.5 text-[#2563EB] fill-[#2563EB]" />
-                          ⚡ Auto-Pick Cricbuzz Upcoming Fixture
+                          ⚡ Auto-Pick Live Upcoming Fixture
                         </span>
                         <span className="text-[10px] text-[#2563EB] font-bold">Auto-fills Date, Time, Venue &amp; 30 Players</span>
                       </div>
@@ -1021,7 +1021,7 @@ function AdminCricketMatchesContent() {
                       <span>Image Guidelines &amp; Direct Upload</span>
                     </p>
                     <p>
-                      Aap direct Google Images / Cricbuzz / Web se kisi bhi image ka direct URL paste kar sakte hain, ya fir apne device (computer/phone) se <strong>Upload File</strong> button dabakar directly upload kar sakte hain. Dono tarike fully supported hain!
+                      Aap direct Google Images / Web se kisi bhi image ka direct URL paste kar sakte hain, ya fir apne device (computer/phone) se <strong>Upload File</strong> button dabakar directly upload kar sakte hain. Dono tarike fully supported hain!
                     </p>
                   </div>
 

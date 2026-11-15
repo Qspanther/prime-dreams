@@ -24,9 +24,21 @@ function AppShell({ children }: { children: ReactNode }) {
   const isTeamBuilder = pathname?.startsWith('/team-builder');
 
   // Register Service Worker for offline caching + Web Push (FCM-style) notifications.
+  // Proactively check for SW updates and purge stale PWA caches on mobile devices
   useEffect(() => {
     if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js').then((reg) => {
+        // Force check for sw updates
+        reg.update().catch(() => {});
+      }).catch(() => {});
+
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          window.location.reload();
+        }
+      });
     }
   }, []);
 

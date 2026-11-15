@@ -755,10 +755,6 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                 {liveMatches.length} In-Play · ↔ Swipe
               </span>
             </h3>
-            <span className="text-xs text-emerald-700 font-mono font-black flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-300">
-              <Radio className="w-3.5 h-3.5 animate-pulse text-emerald-600" />
-              10s Live Sync
-            </span>
           </div>
 
           <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-x_pan-y] [-webkit-overflow-scrolling:touch]">

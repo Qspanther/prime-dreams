@@ -427,7 +427,7 @@ setInterval(syncWithCricbuzzLive, 15000);
 function getCricbuzzLiveFeed() {
   return {
     success: true,
-    source: 'Cricbuzz Official Live Stream Extractor',
+    source: 'Prime Real-Time Telemetry Gateway',
     timestamp: new Date().toISOString(),
     last_sync: lastSyncTime,
     liveMatchesCount: cricbuzzLiveFeed.length,
@@ -519,7 +519,7 @@ async function importCricbuzzMatchToDatabase(cricbuzzId) {
   await MatchContest.create({
     match_id: newMatch.id,
     type: 'standard',
-    title: 'Cricbuzz Mega Grand Contest ₹1,00,000',
+    title: 'Mega Grand Contest ₹1,00,000',
     prize_pool: 100000,
     entry_fee: 49,
     total_spots: 2500,
@@ -553,7 +553,7 @@ async function importCricbuzzMatchToDatabase(cricbuzzId) {
   return {
     success: true,
     already_exists: false,
-    message: `Successfully imported "${matchData.title}" from Cricbuzz with 30 squad players, team logos, and 3 active contests!`,
+    message: `Successfully imported "${matchData.title}" into Prime Dreams with 30 squad players, team logos, and 3 active contests!`,
     matchId: newMatch.id
   };
 }
