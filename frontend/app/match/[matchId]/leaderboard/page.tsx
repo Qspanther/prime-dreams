@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useCallback, useEffect, use, useState } from 'react';
+import React, { useCallback, useEffect, use, useState, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
@@ -47,6 +47,10 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
   const [isSearchActive, setIsSearchActive] = useState<boolean>(false);
   const [searchLoading, setSearchLoading] = useState<boolean>(false);
 
+  // Synchronous cache & search interrupt refs
+  const allLoadedTeamsRef = useRef<any[]>([]);
+  const searchInputRef = useRef<string>('');
+
   const [compareOpponent, setCompareOpponent] = useState<any>(null);
 
   const refresh = useCallback(async () => {
@@ -65,8 +69,9 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
       if (!selectedContestId && result?.contest?.id) {
         setSelectedContestId(result.contest.id);
       }
-      if (!isSearchActive) {
+      if (!isSearchActive && searchInputRef.current.trim().length === 0) {
         const teams = result?.contest_leaderboard || [];
+        allLoadedTeamsRef.current = teams;
         setDisplayedTeams(teams);
         setCurrentBatch(1);
         setHasMoreBatches(Boolean(result?.has_more));
@@ -85,23 +90,30 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
     }
   }, [matchId, teamId, selectedContestId, token, isSearchActive]);
 
-  const loadNextBatch = async () => {
-    if (loadingNextBatch || !hasMoreBatches || isSearchActive) return;
+  const loadNextBatch = useCallback(async (nextPage: number) => {
+    if (loadingNextBatch || isSearchActive || searchInputRef.current.trim().length > 0) return;
     setLoadingNextBatch(true);
     try {
-      const nextPage = currentBatch + 1;
       const q = new URLSearchParams();
       if (teamId) q.set('team_id', teamId);
       if (selectedContestId) q.set('contest_id', selectedContestId);
       q.set('page', String(nextPage));
       q.set('limit', '10');
       const result = await apiGet(`/matches/${matchId}/leaderboard?${q.toString()}`, token || undefined);
+
+      // Instant search interrupt: If user typed in search box while batch was downloading, discard batch
+      if (searchInputRef.current.trim().length > 0) {
+        setLoadingNextBatch(false);
+        return;
+      }
+
       const newTeams = result.contest_leaderboard || [];
-      setDisplayedTeams(prev => {
-        const existingIds = new Set(prev.map(t => t.team_id));
-        const filtered = newTeams.filter((t: any) => !existingIds.has(t.team_id));
-        return [...prev, ...filtered];
-      });
+      const existingIds = new Set(allLoadedTeamsRef.current.map((t: any) => t.team_id));
+      const filtered = newTeams.filter((t: any) => !existingIds.has(t.team_id));
+      const updated = [...allLoadedTeamsRef.current, ...filtered];
+      allLoadedTeamsRef.current = updated;
+
+      setDisplayedTeams(updated);
       setCurrentBatch(nextPage);
       setHasMoreBatches(Boolean(result.has_more));
     } catch (err) {
@@ -109,25 +121,56 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
     } finally {
       setLoadingNextBatch(false);
     }
-  };
+  }, [loadingNextBatch, isSearchActive, teamId, selectedContestId, matchId, token]);
 
-  // Priority Search: Instant server-side priority preference for team name or user ID
+  // Continuous Auto-Loop: Automatically fetches 10-team batches in sequence until completion
+  useEffect(() => {
+    if (activeLeaderboardTab !== 'contest_teams') return;
+    if (isSearchActive || participantSearch.trim().length > 0) return;
+    if (loading || loadingNextBatch || !hasMoreBatches) return;
+
+    const nextBatch = currentBatch + 1;
+    const loopTimer = setTimeout(() => {
+      if (searchInputRef.current.trim().length === 0 && !isSearchActive) {
+        void loadNextBatch(nextBatch);
+      }
+    }, 90); // Smooth 90ms cadence between batches for progressive live streaming
+
+    return () => clearTimeout(loopTimer);
+  }, [
+    activeLeaderboardTab,
+    hasMoreBatches,
+    loadingNextBatch,
+    currentBatch,
+    isSearchActive,
+    participantSearch,
+    loading,
+    loadNextBatch,
+  ]);
+
+  // Priority Search: Instant server-side search by team name, username, or user ID
+  // When user types, it halts the auto-loop immediately and displays the searched team
   useEffect(() => {
     const query = participantSearch.trim();
-    if (query.length < 2) {
+    searchInputRef.current = query;
+
+    if (query.length === 0) {
       if (isSearchActive) {
         setIsSearchActive(false);
-        if (data?.contest_leaderboard) {
-          setDisplayedTeams(data.contest_leaderboard);
-          setCurrentBatch(1);
-          setHasMoreBatches(Boolean(data.has_more));
+        // Restore all accumulated teams from the auto-loader
+        setDisplayedTeams(allLoadedTeamsRef.current);
+        // Resume remaining batches if list was not completely finished
+        if (allLoadedTeamsRef.current.length < totalContestTeams) {
+          setHasMoreBatches(true);
         }
       }
       return;
     }
 
+    // Immediately stop the background auto-batch loop
     setIsSearchActive(true);
     setSearchLoading(true);
+
     const timer = setTimeout(async () => {
       try {
         const q = new URLSearchParams();
@@ -135,16 +178,16 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
         q.set('search', query);
         const result = await apiGet(`/matches/${matchId}/leaderboard?${q.toString()}`, token || undefined);
         setDisplayedTeams(result.contest_leaderboard || []);
-        setHasMoreBatches(false);
+        setHasMoreBatches(false); // Halt loop while showing search results
       } catch (err) {
-        console.warn('Search error:', err);
+        console.warn('Priority search error:', err);
       } finally {
         setSearchLoading(false);
       }
-    }, 280);
+    }, 220); // Fast responsive debounce
 
     return () => clearTimeout(timer);
-  }, [participantSearch, matchId, selectedContestId, token, isSearchActive, data]);
+  }, [participantSearch, matchId, selectedContestId, token, isSearchActive, totalContestTeams]);
 
   useEffect(() => {
     let active = true;
@@ -255,7 +298,12 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                   onClick={() => {
                     setSelectedContestId(c.id);
                     setParticipantSearch('');
+                    searchInputRef.current = '';
                     setIsSearchActive(false);
+                    allLoadedTeamsRef.current = [];
+                    setDisplayedTeams([]);
+                    setCurrentBatch(1);
+                    setHasMoreBatches(false);
                   }}
                   className={`px-3.5 py-2 rounded-xl text-xs font-black shrink-0 transition cursor-pointer flex items-center gap-2 border ${
                     isSelected
@@ -344,7 +392,10 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
               {participantSearch && (
                 <button
                   type="button"
-                  onClick={() => setParticipantSearch('')}
+                  onClick={() => {
+                    setParticipantSearch('');
+                    searchInputRef.current = '';
+                  }}
                   className="rounded-full p-1 text-slate-500 hover:bg-slate-100 cursor-pointer"
                   title="Clear search"
                 >
@@ -357,10 +408,13 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                 <span>⚡ Priority Search Active: Showing results for &quot;{participantSearch}&quot;</span>
                 <button
                   type="button"
-                  onClick={() => setParticipantSearch('')}
+                  onClick={() => {
+                    setParticipantSearch('');
+                    searchInputRef.current = '';
+                  }}
                   className="text-slate-500 hover:text-slate-800 underline cursor-pointer"
                 >
-                  Reset &amp; Resume Batch View
+                  Reset &amp; Resume All Teams
                 </button>
               </p>
             )}
@@ -504,33 +558,19 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                 );
               })}
 
-              {/* Batched Progressive Loading Controls */}
-              {!isSearchActive && hasMoreBatches && (
-                <div className="pt-4 text-center">
-                  <button
-                    type="button"
-                    onClick={loadNextBatch}
-                    disabled={loadingNextBatch}
-                    className="prime-btn-3d !py-2.5 !px-6 text-xs font-black uppercase tracking-wider inline-flex items-center gap-2 cursor-pointer shadow-sm hover:scale-[1.02] transition-transform"
-                  >
-                    {loadingNextBatch ? (
-                      <>
-                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Loading Next 10 Teams...</span>
-                      </>
-                    ) : (
-                      <>
-                        <span>Load Next 10 Teams (Batch #{currentBatch + 1})</span>
-                        <span className="text-[10px] opacity-80 font-mono">({displayedTeams.length}/{totalContestTeams})</span>
-                      </>
-                    )}
-                  </button>
+              {/* Continuous Auto-Loop Streaming Indicator (No manual button) */}
+              {loadingNextBatch && !isSearchActive && (
+                <div className="pt-3 pb-1 text-center">
+                  <div className="inline-flex items-center gap-2 py-2 px-4 rounded-xl bg-blue-50 border border-blue-200/80 text-xs font-bold text-blue-700 shadow-xs animate-pulse">
+                    <div className="w-3.5 h-3.5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span>Loading next batch of teams ({displayedTeams.length} of {totalContestTeams || '...'})</span>
+                  </div>
                 </div>
               )}
 
-              {!isSearchActive && !hasMoreBatches && displayedTeams.length > 0 && (
-                <p className="text-[11px] text-slate-400 font-bold text-center pt-2">
-                  ✓ All {displayedTeams.length} contest teams loaded successfully
+              {!isSearchActive && !hasMoreBatches && displayedTeams.length > 0 && !loadingNextBatch && (
+                <p className="text-[11px] text-emerald-600 font-bold text-center pt-2 flex items-center justify-center gap-1.5">
+                  <span>✓ All {displayedTeams.length} contest teams loaded</span>
                 </p>
               )}
             </div>
