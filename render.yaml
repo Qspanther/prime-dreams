@@ -47,9 +47,9 @@ services:
     name: prime-dreems-bot-service
     env: node
     plan: free
-    rootDir: backend/bot-service
+    rootDir: backend
     buildCommand: npm install
-    startCommand: npm start
+    startCommand: node bot-service/server.js
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
