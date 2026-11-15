@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useAuth } from './lib/auth-context';
 import { apiGet, apiPost, resolveImageUrl } from './lib/api';
 import {
@@ -785,7 +786,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                     <div className="col-span-3 flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#EF4444] to-[#B91C1C] border border-white flex items-center justify-center font-black text-[11px] text-white shadow-xs overflow-hidden shrink-0">
                         {resolveImageUrl(m.team_a_logo) && m.team_a_logo !== '/cricket/team_a.png' ? (
-                          <img src={resolveImageUrl(m.team_a_logo)} alt={m.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                          <Image src={resolveImageUrl(m.team_a_logo)} alt={m.team_a} width={32} height={32} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                         ) : (m.team_a_code || m.team_a?.slice(0, 3).toUpperCase())}
                       </div>
                       <span className="text-xs font-black text-[#0F172A] truncate">{m.team_a}</span>
@@ -799,7 +800,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                       <span className="text-xs font-black text-[#0F172A] truncate">{m.team_b}</span>
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-white flex items-center justify-center font-black text-[11px] text-white shadow-xs overflow-hidden shrink-0">
                         {resolveImageUrl(m.team_b_logo) && m.team_b_logo !== '/cricket/team_b.png' ? (
-                          <img src={resolveImageUrl(m.team_b_logo)} alt={m.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                          <Image src={resolveImageUrl(m.team_b_logo)} alt={m.team_b} width={32} height={32} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                         ) : (m.team_b_code || m.team_b?.slice(0, 3).toUpperCase())}
                       </div>
                     </div>
@@ -905,7 +906,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                     <div className="col-span-3 flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#EF4444] to-[#B91C1C] border border-white flex items-center justify-center font-black text-[11px] text-white shadow-xs overflow-hidden shrink-0">
                         {resolveImageUrl(m.team_a_logo) && m.team_a_logo !== '/cricket/team_a.png' ? (
-                          <img src={resolveImageUrl(m.team_a_logo)} alt={m.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                          <Image src={resolveImageUrl(m.team_a_logo)} alt={m.team_a} width={32} height={32} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                         ) : (m.team_a_code || m.team_a?.slice(0, 3).toUpperCase())}
                       </div>
                       <span className="text-xs font-black text-[#0F172A] truncate">{m.team_a}</span>
@@ -919,7 +920,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                       <span className="text-xs font-black text-[#0F172A] truncate">{m.team_b}</span>
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-white flex items-center justify-center font-black text-[11px] text-white shadow-xs overflow-hidden shrink-0">
                         {resolveImageUrl(m.team_b_logo) && m.team_b_logo !== '/cricket/team_b.png' ? (
-                          <img src={resolveImageUrl(m.team_b_logo)} alt={m.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                          <Image src={resolveImageUrl(m.team_b_logo)} alt={m.team_b} width={32} height={32} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                         ) : (m.team_b_code || m.team_b?.slice(0, 3).toUpperCase())}
                       </div>
                     </div>
@@ -992,7 +993,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#EF4444] to-[#B91C1C] border border-white flex items-center justify-center font-black text-[11px] text-white overflow-hidden shrink-0">
                         {resolveImageUrl(m.team_a_logo) ? (
-                          <img src={resolveImageUrl(m.team_a_logo)} alt={m.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                          <Image src={resolveImageUrl(m.team_a_logo)} alt={m.team_a} width={32} height={32} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                         ) : (m.team_a_code || m.team_a?.slice(0, 3).toUpperCase())}
                       </div>
                       <span className="text-xs font-black text-[#0F172A] truncate">{m.team_a}</span>
@@ -1004,7 +1005,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                       <span className="text-xs font-black text-[#0F172A] truncate text-right">{m.team_b}</span>
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-white flex items-center justify-center font-black text-[11px] text-white overflow-hidden shrink-0">
                         {resolveImageUrl(m.team_b_logo) ? (
-                          <img src={resolveImageUrl(m.team_b_logo)} alt={m.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                          <Image src={resolveImageUrl(m.team_b_logo)} alt={m.team_b} width={32} height={32} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                         ) : (m.team_b_code || m.team_b?.slice(0, 3).toUpperCase())}
                       </div>
                     </div>

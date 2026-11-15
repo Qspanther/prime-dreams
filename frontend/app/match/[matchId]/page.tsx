@@ -3,6 +3,7 @@
 import React, { useEffect, useState, use } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Trophy, Swords, Users, Clock, Shield, Radio, Lock,
@@ -408,9 +409,11 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         {/* Match Poster Banner — fixed 3:2 size (full poster, no crop), 50% visibility */}
         {resolveImageUrl(match.match_poster) && (
           <div className="relative aspect-[3/2] w-full max-w-2xl mx-auto rounded-xl overflow-hidden border-2 border-[#CBD5E1] bg-[#F1F5F9] shadow-[0_4px_16px_rgba(37,99,235,0.12)]">
-            <img
+            <Image
               src={resolveImageUrl(match.match_poster)}
               alt="Match Poster"
+              fill
+              unoptimized
               className="w-full h-full object-cover opacity-50"
               onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
             />
@@ -460,7 +463,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border-2 border-[#93C5FD] flex items-center justify-center font-black text-sm text-white shadow-xs shrink-0 overflow-hidden">
                   {resolveImageUrl(match.team_a_logo) ? (
-                    <img src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                    <Image src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} width={40} height={40} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                   ) : (match.team_a_code || match.team_a?.slice(0, 3).toUpperCase())}
                 </div>
                 <div className="min-w-0">
@@ -494,7 +497,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border-2 border-[#FDE68A] flex items-center justify-center font-black text-sm text-white shadow-xs shrink-0 overflow-hidden">
                   {resolveImageUrl(match.team_b_logo) ? (
-                    <img src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                    <Image src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} width={40} height={40} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                   ) : (match.team_b_code || match.team_b?.slice(0, 3).toUpperCase())}
                 </div>
                 <div className="min-w-0">
@@ -523,7 +526,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
             <div className="col-span-2 flex items-center gap-2 sm:gap-4 min-w-0">
               <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border-2 border-[#93C5FD] flex items-center justify-center font-black text-lg text-white shadow-[0_4px_12px_rgba(37,99,235,0.3)] shrink-0 overflow-hidden">
                 {resolveImageUrl(match.team_a_logo) ? (
-                  <img src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                  <Image src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} width={56} height={56} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                 ) : (match.team_a_code || match.team_a?.slice(0, 3).toUpperCase())}
               </div>
               <div className="min-w-0">
@@ -563,7 +566,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               </div>
               <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border-2 border-[#FDE68A] flex items-center justify-center font-black text-lg text-white shadow-[0_4px_12px_rgba(245,158,11,0.3)] shrink-0 overflow-hidden">
                 {resolveImageUrl(match.team_b_logo) ? (
-                  <img src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                  <Image src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} width={56} height={56} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                 ) : (match.team_b_code || match.team_b?.slice(0, 3).toUpperCase())}
               </div>
             </div>

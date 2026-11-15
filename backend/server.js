@@ -14,7 +14,6 @@ const { SystemSetting } = require('./db/models'); // Load all models and associa
 const { seedCricketMatches } = require('./db/seedCricket');
 const { seedDefaultUsers } = require('./db/seedDefaultUsers');
 const { startLiveMatchWorker } = require('./services/cricbuzzService');
-const { startIngestionService } = require('./services/ingestion/ingestionWorker');
 const wsGateway = require('./services/websocket/wsGateway');
 const { checkContestLocks } = require('./services/contestService');
 const { authenticate, isAdmin } = require('./middleware/auth');
@@ -115,12 +114,8 @@ const subRoutes = require('./routes/subscription');
 const rewardsRoutes = require('./routes/rewards');
 const guruRoutes = require('./routes/guru');
 const gamificationRoutes = require('./routes/gamification');
-const botManagerRoutes = require('./routes/bot-manager').router;
 
 // Dual mounting: direct and /api prefixed to guarantee zero 404s
-app.use('/bot-manager', botManagerRoutes);
-app.use('/api/bot-manager', botManagerRoutes);
-
 app.use('/auth', authRoutes);
 app.use('/api/auth', authRoutes);
 
@@ -229,21 +224,6 @@ async function start() {
     console.warn('⚠️ Database sync notice:', dbErr.message);
   }
 
-  // Ensure 10,000 Realistic Indian Bots exist in Database
-  try {
-    const { User } = require('./db/models');
-    const { seedBots } = require('./services/seed-10000-bots');
-    const botCount = await User.count({ where: { is_bot: true } });
-    if (botCount < 10000) {
-      console.log(`🤖 Bot network has ${botCount} bots. Auto-seeding 10,000 realistic Indian bots...`);
-      await seedBots(10000);
-    } else {
-      console.log(`🤖 Verified 10,000 realistic Indian bots with @gmail.com active in Database.`);
-    }
-  } catch (botSeedErr) {
-    console.warn('⚠️ Bot verification notice:', botSeedErr.message);
-  }
-
   // Ensure default Admin & User accounts exist
   try {
     await seedDefaultUsers();
@@ -260,11 +240,17 @@ async function start() {
     }
   }
 
-  // Start Ingestion Service with validation, deduplication, dual-source & hotStore (Section 1 & 2)
-  try {
-    startIngestionService();
-  } catch (ingestErr) {
-    console.warn('⚠️ Ingestion worker notice:', ingestErr.message);
+  // Start Ingestion Worker (Free tier: 30s poll, toggled via ENABLE_INGESTION)
+  if (process.env.ENABLE_INGESTION !== 'false') {
+    try {
+      const { startWorker } = require('./ingestion/worker');
+      const pollInterval = parseInt(process.env.INGESTION_POLL_INTERVAL_MS || '30000', 10);
+      startWorker(pollInterval);
+    } catch (ingestErr) {
+      console.warn('⚠️ Ingestion worker notice:', ingestErr.message);
+    }
+  } else {
+    console.log('⏸️ Ingestion worker disabled via ENABLE_INGESTION=false');
   }
 
   // Start Contest Lock scheduler (§15)
@@ -273,14 +259,6 @@ async function start() {
     checkContestLocks();
   } catch (lockErr) {
     console.warn('⚠️ Contest lock scheduler notice:', lockErr.message);
-  }
-
-  // Start 10,000 Bot Network 72-Hour Scheduler & Organic Deployment Engine
-  try {
-    const { botScheduler } = require('./services/botScheduler');
-    botScheduler.startScheduler(30000);
-  } catch (botSchedErr) {
-    console.warn('⚠️ Bot scheduler notice:', botSchedErr.message);
   }
 }
 

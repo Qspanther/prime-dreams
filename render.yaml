@@ -1,9 +1,12 @@
-# Prime Dreems — Render Blueprint (1-click deploy from Git)
-# Deploy: https://render.com/deploy?repo=<your-git-repo-url>
-# Both services build & start automatically; the frontend proxies API + uploads
-# to the backend via same-origin rewrites (no CORS / public API URL needed).
+# Prime Dreems — Render Blueprint (Multi-Service Free Tier Architecture)
+# Architecture:
+# 1. prime-dreems-frontend: Next.js 15 Standalone App Router (Port 10000)
+# 2. prime-dreems-backend: Express REST API + WebSocket Gateway (Port 5000)
+# 3. prime-dreems-bot-service: Autonomous Bot Network & 72h Deployment Engine (Port 5100)
+# 4. prime-dreems-keep-alive: 14-minute cron pinger to prevent free-tier spin down
+
 services:
-  # ─── BACKEND API SERVICE ───
+  # ─── 1. USER-FACING BACKEND API & WEBSOCKET GATEWAY ───
   - type: web
     name: prime-dreems-backend
     env: node
@@ -18,21 +21,58 @@ services:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000
+        value: "5000"
       - key: JWT_SECRET
-        generateValue: true
-      - key: BOT_API_KEY
         generateValue: true
       - key: FRONTEND_URL
         value: https://prime-dreems-frontend.onrender.com
-      # ─── EXTERNAL CLOUD DATABASE ───
-      # Paste your external Neon / Supabase / Railway Postgres URL in Render Dashboard
+      # Neon PostgreSQL Pooled Connection (Max 5 connections for user traffic)
       - key: DATABASE_URL
         sync: false
-      - key: DB_SSL
+      - key: PG_POOL_MAX
+        value: "5"
+      # Upstash Redis / Render Key-Value Cache (optional, with in-memory fallback)
+      - key: REDIS_URL
+        sync: false
+      # High-Concurrency Guards
+      - key: MAX_WS_CONNECTIONS
+        value: "500"
+      - key: ENABLE_INGESTION
         value: "true"
+      - key: INGESTION_POLL_INTERVAL_MS
+        value: "30000"
 
-  # ─── FRONTEND NEXT.JS WEB APP ───
+  # ─── 2. AUTONOMOUS BOT SERVICE (COMPLETELY ISOLATED) ───
+  - type: web
+    name: prime-dreems-bot-service
+    env: node
+    plan: free
+    rootDir: backend/bot-service
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 20.18.0
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "5100"
+      # Neon PostgreSQL Pooled Connection (Max 3 connections for bot activity)
+      - key: BOT_DATABASE_URL
+        sync: false
+      - key: BOT_PG_POOL_MAX
+        value: "3"
+      - key: BOT_MANAGER_KEY
+        value: c11_bot_mgr_sec_9938a7fbc21d49e
+      - key: BOT_INTERVAL_MS
+        value: "60000"
+      - key: BOT_MAX_ACTIVE
+        value: "1000"
+      - key: BOT_BATCH_PER_TICK
+        value: "5"
+
+  # ─── 3. FRONTEND NEXT.JS WEB APP ───
   - type: web
     name: prime-dreems-frontend
     env: node
@@ -40,18 +80,26 @@ services:
     rootDir: frontend
     buildCommand: npm install --include=dev && npm run build
     startCommand: npm start
+    healthCheckPath: /api/health
     envVars:
       - key: NODE_VERSION
         value: 20.18.0
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 10000
-      # Server-side rewrite target for /api-backend/* and /uploads/*
+        value: "10000"
       - key: BACKEND_URL
         value: https://prime-dreems-backend.onrender.com
-      # Direct Client-side API & Real-Time WebSocket Streaming
       - key: NEXT_PUBLIC_API_URL
         value: https://prime-dreems-backend.onrender.com
       - key: NEXT_PUBLIC_WEBSOCKET_URL
         value: wss://prime-dreems-backend.onrender.com/ws
+
+  # ─── 4. 14-MINUTE KEEP-ALIVE CRON (PREVENTS SPIN DOWN) ───
+  - type: cron
+    name: prime-dreems-keep-alive
+    env: node
+    plan: free
+    schedule: "*/14 * * * *"
+    buildCommand: "echo 'Keep-alive cron ready'"
+    startCommand: "curl -fsS https://prime-dreems-backend.onrender.com/health https://prime-dreems-bot-service.onrender.com/health || true"

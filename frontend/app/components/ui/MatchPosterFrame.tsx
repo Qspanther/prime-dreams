@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { resolveImageUrl } from '../../lib/api';
 import CategoryBadge from './CategoryBadge';
 import { MapPin } from 'lucide-react';
@@ -35,9 +36,11 @@ export default function MatchPosterFrame({
       className={`relative w-full overflow-hidden rounded-2xl border border-[#CBD5E1] bg-gradient-to-br from-[#0F172A] via-[#1E293B] to-[#0A0F1D] shadow-[0_4px_16px_rgba(15,23,42,0.15)] group ${heightClass} ${className}`}
     >
       {/* Background Poster Image */}
-      <img
+      <Image
         src={src}
         alt={title || 'Cricket Match Poster'}
+        fill
+        unoptimized
         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
         onError={() => {
           if (!imgError) setImgError(true);

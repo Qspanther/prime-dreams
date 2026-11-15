@@ -4,6 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Crown, Check, ArrowLeft, AlertCircle, ChevronRight, Eye, Info, MapPin, Lock, Trophy } from 'lucide-react';
 import { apiGet, apiPost, apiPut, resolveImageUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
@@ -527,7 +528,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
               {/* Team A Logo */}
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border border-[#93C5FD] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
                 {resolveImageUrl(match.team_a_logo) ? (
-                  <img src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                  <Image src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} width={40} height={40} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                 ) : (match.team_a_code || match.team_a?.slice(0, 3).toUpperCase())}
               </div>
 
@@ -541,7 +542,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
               {/* Team B Logo */}
               <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-[#FDE68A] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
                 {resolveImageUrl(match.team_b_logo) ? (
-                  <img src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                  <Image src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} width={40} height={40} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                 ) : (match.team_b_code || match.team_b?.slice(0, 3).toUpperCase())}
               </div>
             </div>

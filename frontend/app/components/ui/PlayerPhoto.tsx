@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { resolvePlayerPhoto } from '../../lib/api';
 
 export default function PlayerPhoto({ name, photoUrl, boxClass }: { name: string; photoUrl?: string | null; boxClass: string }) {
@@ -14,10 +15,12 @@ export default function PlayerPhoto({ name, photoUrl, boxClass }: { name: string
   return (
     <div className={`flex items-center justify-center overflow-hidden shrink-0 ${boxClass}`}>
       {src ? (
-        <img
+        <Image
           src={src}
           alt={name}
-          referrerPolicy="no-referrer"
+          width={48}
+          height={48}
+          unoptimized
           className="w-full h-full object-cover"
           onError={() => setStage((s) => s + 1)}
         />

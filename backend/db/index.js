@@ -11,14 +11,15 @@ if (isPostgres) {
     ? false
     : { require: false, rejectUnauthorized: false };
 
+  const poolMax = parseInt(process.env.PG_POOL_MAX || '5', 10);
   sequelize = new Sequelize(process.env.DATABASE_URL, {
     dialect: 'postgres',
     dialectOptions: sslConfig ? { ssl: sslConfig } : {},
     logging: false,
-    pool: { max: 10, min: 2, acquire: 30000, idle: 10000 },
+    pool: { max: poolMax, min: 0, acquire: 30000, idle: 10000 },
     define: { timestamps: true, underscored: true },
   });
-  console.log('🐘 Cloud PostgreSQL engine active via DATABASE_URL');
+  console.log(`🐘 Cloud PostgreSQL engine active via DATABASE_URL (Pool max: ${poolMax}, min: 0 for Neon free autosuspend)`);
 } else {
   sequelize = new Sequelize({
     dialect: config.DB_DIALECT,

@@ -13,6 +13,7 @@ if (!rawBackendUrl) {
 const backendUrl = rawBackendUrl.replace(/\/+$/, '');
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
   turbopack: {
     root: __dirname,
   },

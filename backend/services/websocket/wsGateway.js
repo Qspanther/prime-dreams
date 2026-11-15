@@ -1,51 +1,111 @@
-// 🏏 PRIME DREEMS — REAL-TIME WEBSOCKET GATEWAY & DELTA PUB/SUB
-// Section 3: High-concurrency fan-out, lean 200-byte delta streaming & backpressure handling
+// 🏏 PRIME DREEMS — REAL-TIME WEBSOCKET GATEWAY & REDIS PUB/SUB
+// Section 3: High-concurrency fan-out, 500-conn cap (503 backpressure), 30s heartbeat & dead-socket pruning
 
 const { WebSocketServer, WebSocket } = require('ws');
+const redisPubSub = require('../../ws/redisPubSub');
 
 class WebSocketGateway {
   constructor() {
     this.wss = null;
     this.rooms = new Map(); // matchId -> Set of WebSockets
     this.clientSubscriptions = new Map(); // ws -> Set of matchIds
+    this.heartbeatInterval = null;
     this.stats = {
       active_connections: 0,
       total_messages_sent: 0,
       dropped_slow_messages: 0,
+      rejected_over_capacity: 0,
     };
+
+    // Listen to Redis / Local PubSub events
+    redisPubSub.onDelta(({ matchId, payload }) => {
+      this.broadcastDelta(matchId, payload);
+    });
   }
 
   /**
-   * Attach WebSocket server to Node.js HTTP server
+   * Attach WebSocket server with max connection guard (Free Tier: 500 connections)
    */
   initialize(server) {
+    const maxConnections = parseInt(process.env.MAX_WS_CONNECTIONS || '500', 10);
+
     this.wss = new WebSocketServer({
-      server,
+      noServer: true,
       path: '/ws',
       clientTracking: true,
-      maxPayload: 16 * 1024, // 16KB max incoming payload
+      maxPayload: 16 * 1024, // 16KB max payload
+    });
+
+    // Handle HTTP upgrade with 503 limit check
+    server.on('upgrade', (request, socket, head) => {
+      try {
+        const { pathname } = new URL(request.url, `http://${request.headers.host || 'localhost'}`);
+        if (pathname === '/ws') {
+          if (this.stats.active_connections >= maxConnections) {
+            this.stats.rejected_over_capacity += 1;
+            socket.write('HTTP/1.1 503 Service Unavailable\r\nRetry-After: 30\r\nConnection: close\r\n\r\n');
+            socket.destroy();
+            return;
+          }
+
+          this.wss.handleUpgrade(request, socket, head, (ws) => {
+            this.wss.emit('connection', ws, request);
+          });
+        }
+      } catch (err) {
+        socket.destroy();
+      }
     });
 
     this.wss.on('connection', (ws, req) => {
       this.handleConnection(ws, req);
     });
 
-    console.log('⚡ [WS Gateway] Real-time WebSocket Gateway attached on /ws');
+    // 30s Heartbeat Ping/Pong & 60s Dead-socket Pruning
+    this.startHeartbeat();
+
+    console.log(`⚡ [WS Gateway] Attached on /ws (Cap: ${maxConnections} concurrent clients, 30s heartbeat active)`);
   }
 
-  handleConnection(ws, req) {
+  startHeartbeat() {
+    this.heartbeatInterval = setInterval(() => {
+      if (!this.wss) return;
+      for (const ws of this.wss.clients) {
+        if (ws.isAlive === false) {
+          // Did not reply to previous ping within 30s -> close dead socket
+          ws.terminate();
+          continue;
+        }
+        ws.isAlive = false;
+        try {
+          ws.ping();
+        } catch (_) {
+          ws.terminate();
+        }
+      }
+    }, 30000);
+    this.heartbeatInterval.unref();
+  }
+
+  handleConnection(ws, _req) {
     this.stats.active_connections += 1;
     this.clientSubscriptions.set(ws, new Set());
+    ws.isAlive = true;
 
-    // Send connection greeting with recommended reconnection jitter (Section 3.4)
+    ws.on('pong', () => {
+      ws.isAlive = true;
+    });
+
+    // Send connection greeting with recommended reconnection jitter
     this.sendJson(ws, {
       type: 'CONNECTED',
       server_time: new Date().toISOString(),
-      reconnect_jitter_ms: Math.floor(Math.random() * 3000), // 0-3s jitter
+      reconnect_jitter_ms: Math.floor(Math.random() * 3000),
     });
 
     ws.on('message', (message) => {
       try {
+        ws.isAlive = true;
         const payload = JSON.parse(message.toString());
         this.handleClientMessage(ws, payload);
       } catch (err) {
@@ -57,8 +117,8 @@ class WebSocketGateway {
       this.handleDisconnection(ws);
     });
 
-    ws.on('error', (err) => {
-      console.warn('⚠️ [WS Gateway] Client error:', err.message);
+    ws.on('error', (_err) => {
+      this.handleDisconnection(ws);
     });
   }
 
@@ -66,6 +126,7 @@ class WebSocketGateway {
     const { action, matchId } = payload;
 
     if (action === 'ping') {
+      ws.isAlive = true;
       this.sendJson(ws, { type: 'PONG', timestamp: Date.now() });
       return;
     }
@@ -77,7 +138,7 @@ class WebSocketGateway {
       this.rooms.get(matchId).add(ws);
       this.clientSubscriptions.get(ws).add(matchId);
 
-      // Fetch and send immediate snapshot for fast startup
+      // Fetch snapshot from Cache / HotStore
       const hotStore = require('../ingestion/hotStore');
       const snap = hotStore.getSnapshot(matchId);
       if (snap) {
@@ -121,7 +182,7 @@ class WebSocketGateway {
   }
 
   /**
-   * Broadcast Delta Update to all clients watching this match (Section 3.2)
+   * Broadcast Delta Update to all clients watching this match
    */
   broadcastDelta(matchId, deltaPayload) {
     const room = this.rooms.get(matchId);
@@ -136,8 +197,7 @@ class WebSocketGateway {
 
     for (const ws of room) {
       if (ws.readyState === WebSocket.OPEN) {
-        // Slow Client Backpressure Handling (Section 3.3)
-        // If client's send buffer > 64KB, client is lagging (e.g. 2G network). Drop delta and send RESYNC_REQUIRED.
+        // Slow Client Backpressure Handling: drop delta if buffer > 64KB
         if (ws.bufferedAmount > 64 * 1024) {
           this.stats.dropped_slow_messages += 1;
           this.sendJson(ws, {
@@ -148,8 +208,10 @@ class WebSocketGateway {
           continue;
         }
 
-        ws.send(message);
-        this.stats.total_messages_sent += 1;
+        try {
+          ws.send(message);
+          this.stats.total_messages_sent += 1;
+        } catch (_) {}
       }
     }
   }
@@ -159,8 +221,10 @@ class WebSocketGateway {
    */
   sendJson(ws, obj) {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(obj));
-      this.stats.total_messages_sent += 1;
+      try {
+        ws.send(JSON.stringify(obj));
+        this.stats.total_messages_sent += 1;
+      } catch (_) {}
     }
   }
 
@@ -170,9 +234,9 @@ class WebSocketGateway {
       active_rooms: this.rooms.size,
       total_messages_sent: this.stats.total_messages_sent,
       dropped_slow_messages: this.stats.dropped_slow_messages,
+      rejected_over_capacity: this.stats.rejected_over_capacity,
     };
   }
 }
 
 module.exports = new WebSocketGateway();
-
