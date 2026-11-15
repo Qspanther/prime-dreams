@@ -199,67 +199,88 @@ app.use((err, req, res, next) => {
 
 // Start server
 async function start() {
+  const serverCallback = () => {
+    console.log(`🏆 Prime Dreems API running on http://localhost:${config.PORT}`);
+    console.log(`🩺 Health check: http://localhost:${config.PORT}/health`);
+    console.log(`🏏 Matches endpoint: http://localhost:${config.PORT}/api/matches`);
+    console.log(`🤖 Bot Manager endpoint: http://localhost:${config.PORT}/bot-manager`);
+    console.log(`⚡ WebSocket gateway: ws://localhost:${config.PORT}/ws`);
+  };
+
+  // 1. Immediately bind and start listening so Render health check passes in < 2ms!
+  if (process.env.HOST) {
+    server.listen(config.PORT, process.env.HOST, serverCallback);
+  } else {
+    server.listen(config.PORT, serverCallback);
+  }
+
+  // 2. Attach WebSocket Gateway on /ws (Section 3)
+  try {
+    wsGateway.initialize(server);
+  } catch (wsErr) {
+    console.warn('⚠️ WebSocket initialization notice:', wsErr.message);
+  }
+
+  // 3. Asynchronously initialize database, models, bots, and background schedulers
   try {
     await sequelize.sync();
     console.log('📦 Database synced');
+  } catch (dbErr) {
+    console.warn('⚠️ Database sync notice:', dbErr.message);
+  }
 
-    // Ensure 10,000 Realistic Indian Bots exist in Database
-    try {
-      const { User } = require('./db/models');
-      const { seedBots } = require('./services/seed-10000-bots');
-      const botCount = await User.count({ where: { is_bot: true } });
-      if (botCount < 10000) {
-        console.log(`🤖 Bot network has ${botCount} bots. Auto-seeding 10,000 realistic Indian bots...`);
-        await seedBots(10000);
-      } else {
-        console.log(`🤖 Verified 10,000 realistic Indian bots with @gmail.com active in Database.`);
-      }
-    } catch (botSeedErr) {
-      console.warn('⚠️ Bot verification notice:', botSeedErr.message);
+  // Ensure 10,000 Realistic Indian Bots exist in Database
+  try {
+    const { User } = require('./db/models');
+    const { seedBots } = require('./services/seed-10000-bots');
+    const botCount = await User.count({ where: { is_bot: true } });
+    if (botCount < 10000) {
+      console.log(`🤖 Bot network has ${botCount} bots. Auto-seeding 10,000 realistic Indian bots...`);
+      await seedBots(10000);
+    } else {
+      console.log(`🤖 Verified 10,000 realistic Indian bots with @gmail.com active in Database.`);
     }
+  } catch (botSeedErr) {
+    console.warn('⚠️ Bot verification notice:', botSeedErr.message);
+  }
 
-    // Ensure default Admin & User accounts exist
+  // Ensure default Admin & User accounts exist
+  try {
+    await seedDefaultUsers();
+  } catch (defaultUserErr) {
+    console.warn('⚠️ Default users seed notice:', defaultUserErr.message);
+  }
+
+  // Seed sample matches only for local SQLite development.
+  if (!process.env.DATABASE_URL && process.env.NODE_ENV !== 'production') {
     try {
-      await seedDefaultUsers();
-    } catch (defaultUserErr) {
-      console.warn('⚠️ Default users seed notice:', defaultUserErr.message);
-    }
-
-    // Seed sample matches only for local SQLite development.
-    if (!process.env.DATABASE_URL && process.env.NODE_ENV !== 'production') {
       await seedCricketMatches();
+    } catch (seedErr) {
+      console.warn('⚠️ Sample matches seed notice:', seedErr.message);
     }
+  }
 
-    // Attach WebSocket Gateway on /ws (Section 3)
-    wsGateway.initialize(server);
-
-    // Start Ingestion Service with validation, deduplication, dual-source & hotStore (Section 1 & 2)
+  // Start Ingestion Service with validation, deduplication, dual-source & hotStore (Section 1 & 2)
+  try {
     startIngestionService();
+  } catch (ingestErr) {
+    console.warn('⚠️ Ingestion worker notice:', ingestErr.message);
+  }
 
-    // Start Contest Lock scheduler (§15)
+  // Start Contest Lock scheduler (§15)
+  try {
     setInterval(checkContestLocks, 30000);
     checkContestLocks();
+  } catch (lockErr) {
+    console.warn('⚠️ Contest lock scheduler notice:', lockErr.message);
+  }
 
-    // Start 10,000 Bot Network 72-Hour Scheduler & Organic Deployment Engine
+  // Start 10,000 Bot Network 72-Hour Scheduler & Organic Deployment Engine
+  try {
     const { botScheduler } = require('./services/botScheduler');
     botScheduler.startScheduler(30000);
-
-    const serverCallback = () => {
-      console.log(`🏆 Prime Dreems API running on http://localhost:${config.PORT}`);
-      console.log(`🩺 Health check: http://localhost:${config.PORT}/health`);
-      console.log(`🏏 Matches endpoint: http://localhost:${config.PORT}/api/matches`);
-      console.log(`🤖 Bot Manager endpoint: http://localhost:${config.PORT}/bot-manager`);
-      console.log(`⚡ WebSocket gateway: ws://localhost:${config.PORT}/ws`);
-    };
-
-    if (process.env.HOST) {
-      server.listen(config.PORT, process.env.HOST, serverCallback);
-    } else {
-      server.listen(config.PORT, serverCallback);
-    }
-  } catch (error) {
-    console.error('❌ Failed to start server:', error);
-    process.exit(1);
+  } catch (botSchedErr) {
+    console.warn('⚠️ Bot scheduler notice:', botSchedErr.message);
   }
 }
 

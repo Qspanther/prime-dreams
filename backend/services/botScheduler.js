@@ -31,6 +31,7 @@ async function getCachedBots() {
     where: { is_bot: true },
     attributes: ['id', 'email', 'name', 'username'],
     order: [['created_at', 'ASC']],
+    limit: 1500,
     raw: true
   });
   cachedBots = bots;
@@ -645,8 +646,13 @@ class BotScheduler {
   startScheduler(intervalMs = 30000) {
     if (this.intervalId) return;
     console.log(`⏱️ [Bot Scheduler] 72-Hour Autonomous Engine active (Poll interval: ${intervalMs / 1000}s)`);
-    this.tick();
-    this.intervalId = setInterval(() => this.tick(), intervalMs);
+    // Delay first tick by 5s so server boot is non-blocking and lightweight
+    setTimeout(() => {
+      this.tick().catch(err => console.warn('⚠️ [Bot Scheduler] Initial tick notice:', err.message));
+    }, 5000);
+    this.intervalId = setInterval(() => {
+      this.tick().catch(err => console.warn('⚠️ [Bot Scheduler] Interval tick notice:', err.message));
+    }, intervalMs);
   }
 
   /**
