@@ -72,6 +72,10 @@ const MatchContest = sequelize.define('MatchContest', {
     type: DataTypes.UUID,
     allowNull: true,
   },
+  prize_breakup: {
+    type: DataTypes.TEXT, // JSON string for custom rank prize breakdown
+    allowNull: true,
+  },
   status: {
     type: DataTypes.ENUM('open', 'locked', 'live', 'completed', 'cancelled'),
     defaultValue: 'open',

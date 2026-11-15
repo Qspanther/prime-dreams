@@ -94,6 +94,11 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /* ⚡ Mobile Performance Boost: Eliminate 300ms touch delay */
+  button, a, input, select, textarea, [role="button"] {
+    touch-action: manipulation;
+  }
+
   body {
     background-color: #EEF3F9 !important;
     background-image:

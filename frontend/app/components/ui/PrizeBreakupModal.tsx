@@ -21,6 +21,14 @@ interface PrizeBreakupModalProps {
     total_spots: number;
     filled_spots?: number;
     type?: string;
+    prize_breakup?: any;
+  } | null;
+  breakupData?: {
+    breakup?: any[];
+    winners?: any[];
+    total_spots?: number;
+    filled_spots?: number;
+    prize_pool?: number;
   } | null;
 }
 
@@ -28,6 +36,7 @@ export default function PrizeBreakupModal({
   isOpen,
   onClose,
   contest,
+  breakupData,
 }: PrizeBreakupModalProps) {
   if (!isOpen || !contest) return null;
 
@@ -35,8 +44,31 @@ export default function PrizeBreakupModal({
   const spots = Number(contest.total_spots) || 100;
   const entryFee = Number(contest.entry_fee) || 0;
 
-  // Generate realistic tiered payout distribution matching standard fantasy rules
+  // Generate realistic tiered payout distribution matching standard fantasy rules or custom table
   const generateTiers = (): PrizeBreakupTier[] => {
+    // 1. Check custom breakup from breakupData API response
+    const customBreakup = breakupData?.breakup || (
+      typeof contest.prize_breakup === 'string'
+        ? (() => { try { return JSON.parse(contest.prize_breakup); } catch { return null; } })()
+        : contest.prize_breakup
+    );
+
+    if (Array.isArray(customBreakup) && customBreakup.length > 0) {
+      return customBreakup.map((c: any) => {
+        const rFrom = Number(c.rank_from) || 1;
+        const rTo = Number(c.rank_to) || rFrom;
+        const count = Math.max(1, (rTo - rFrom) + 1);
+        const rankRange = rFrom === rTo ? `#${rFrom}` : `#${rFrom} - #${rTo}`;
+        const prize = Number(c.prize) || 0;
+        return {
+          rank_range: rankRange,
+          prize_per_winner: prize,
+          total_winners: count,
+          total_tier_prize: prize * count,
+        };
+      });
+    }
+
     if (pool <= 0 || spots <= 2) {
       if (spots === 2) {
         return [
@@ -185,9 +217,40 @@ export default function PrizeBreakupModal({
             ))}
           </div>
 
-          <p className="text-[10px] text-[#64748B] font-semibold text-center mt-2">
-            In case of ties for any rank, the prize amount is split equally among tied participants.
-          </p>
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-950 flex items-start gap-2.5">
+            <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+            <p className="text-[11px] leading-relaxed">
+              <strong>Fair Tie Distribution:</strong> Agar 1st position ya kisi bhi rank par multiple players same points par aate hain (jaise 5 players at Rank 1), to un sabhi players me us position ka pura prize <strong>barabar (equally)</strong> baanta jata hai.
+            </p>
+          </div>
+
+          {breakupData?.winners && breakupData.winners.length > 0 && (
+            <div className="space-y-1.5 pt-2 border-t border-[#E2E8F0]">
+              <div className="flex items-center justify-between text-[11px] font-black uppercase text-[#1E3A8A]">
+                <span>Top Teams & Calculated Payout</span>
+                <span>Prize</span>
+              </div>
+              <div className="max-h-36 overflow-y-auto space-y-1">
+                {breakupData.winners.slice(0, 15).map((w: any, wIdx: number) => (
+                  <div key={w.team_id || wIdx} className="flex items-center justify-between p-2 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] text-xs">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono font-bold text-[#475569]">#{w.rank}</span>
+                      <span className="font-bold text-[#0F172A] truncate max-w-[120px]">{w.team_name}</span>
+                      {w.is_tied && (
+                        <span className="text-[9px] bg-amber-100 text-amber-900 border border-amber-300 font-bold px-1.5 py-0.5 rounded-full">
+                          🤝 Tied ({w.tie_count} equal split)
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono text-[#64748B]">{w.points} pts</span>
+                      <span className="font-mono font-bold text-emerald-700">₹{w.prize}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}

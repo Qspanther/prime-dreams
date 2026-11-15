@@ -72,6 +72,83 @@ function AdminCricketMatchesContent() {
     { type: 'h2h', title: 'H2H Custom Duel', prize_pool: 0, entry_fee: 0, total_spots: 2, bot_spots: 0 },
   ]);
 
+  // 🏆 Custom Prize Table Modal State (Position-by-position configuration)
+  const [prizeModalContestIdx, setPrizeModalContestIdx] = useState<number | null>(null);
+  const [prizeModalRows, setPrizeModalRows] = useState<Array<{ rank_from: number; rank_to: number; prize: number }>>([]);
+
+  const handleOpenPrizeModal = (idx: number) => {
+    setPrizeModalContestIdx(idx);
+    const target = contests[idx];
+    if (target && target.prize_breakup) {
+      const parsed = typeof target.prize_breakup === 'string'
+        ? (() => { try { return JSON.parse(target.prize_breakup); } catch { return []; } })()
+        : target.prize_breakup;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const filtered = parsed
+          .filter((r: any) => !(Number(r.rank_from) === 1 && Number(r.rank_to) === 1))
+          .map((r: any) => ({
+            rank_from: Number(r.rank_from) || 2,
+            rank_to: Number(r.rank_to) || Number(r.rank_from) || 2,
+            prize: Number(r.prize) || 0
+          }));
+        setPrizeModalRows(filtered.length > 0 ? filtered : [{ rank_from: 2, rank_to: 2, prize: Math.round((target.prize_pool || 0) * 0.25) }]);
+        return;
+      }
+    }
+    const pool = Number(target?.prize_pool) || 0;
+    setPrizeModalRows([
+      { rank_from: 2, rank_to: 2, prize: Math.round(pool * 0.25) },
+      { rank_from: 3, rank_to: 5, prize: Math.round(pool * 0.05) },
+    ]);
+  };
+
+  const handleAddPrizeRow = () => {
+    setPrizeModalRows(prev => {
+      const last = prev[prev.length - 1];
+      const nextRank = last ? last.rank_to + 1 : 2;
+      return [...prev, { rank_from: nextRank, rank_to: nextRank, prize: 50 }];
+    });
+  };
+
+  const handleUpdatePrizeRow = (index: number, field: string, value: number) => {
+    setPrizeModalRows(prev => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      if (field === 'rank_from' && copy[index].rank_to < value) {
+        copy[index].rank_to = value;
+      }
+      return copy;
+    });
+  };
+
+  const handleDeletePrizeRow = (index: number) => {
+    setPrizeModalRows(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSavePrizeModal = () => {
+    if (prizeModalContestIdx === null) return;
+    const target = contests[prizeModalContestIdx];
+    const rank1Prize = Number(target?.prize_pool) || 0;
+
+    const fullBreakup = [
+      { rank_from: 1, rank_to: 1, prize: rank1Prize },
+      ...prizeModalRows.map(r => ({
+        rank_from: Number(r.rank_from),
+        rank_to: Number(r.rank_to),
+        prize: Number(r.prize)
+      }))
+    ];
+
+    setContests(prev => prev.map((c, i) => i === prizeModalContestIdx ? { ...c, prize_breakup: fullBreakup } : c));
+    setPrizeModalContestIdx(null);
+  };
+
+  const handleClearPrizeModal = () => {
+    if (prizeModalContestIdx === null) return;
+    setContests(prev => prev.map((c, i) => i === prizeModalContestIdx ? { ...c, prize_breakup: null } : c));
+    setPrizeModalContestIdx(null);
+  };
+
   const handleSelectCricbuzzFixture = (cbMatch: any) => {
     if (!cbMatch) return;
     setEditingMatchId(null);
@@ -255,7 +332,11 @@ function AdminCricketMatchesContent() {
         title: c.title,
         prize_pool: c.prize_pool,
         entry_fee: c.entry_fee,
-        total_spots: c.total_spots
+        total_spots: c.total_spots,
+        bot_spots: c.bot_spots,
+        prize_breakup: typeof c.prize_breakup === 'string'
+          ? (() => { try { return JSON.parse(c.prize_breakup); } catch { return null; } })()
+          : (c.prize_breakup || null),
       })));
     } else {
       setContests([
@@ -1473,6 +1554,29 @@ function AdminCricketMatchesContent() {
                           </div>
                         </div>
 
+                        {/* 🏆 Custom Prize Table Configuration */}
+                        {c.type !== 'h2h' && (
+                          <div className="pt-2.5 border-t border-[#E2E8F0] flex items-center justify-between gap-2">
+                            <div className="text-[11px] text-[#475569]">
+                              <span className="font-bold text-[#0F172A]">Prize Table: </span>
+                              {c.prize_breakup && Array.isArray(c.prize_breakup) && c.prize_breakup.length > 0 ? (
+                                <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded font-bold inline-flex items-center gap-1">
+                                  ✓ Custom Table ({c.prize_breakup.length} Positions configured)
+                                </span>
+                              ) : (
+                                <span className="text-[#64748B] italic">Auto Ladder (Default)</span>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenPrizeModal(idx)}
+                              className="px-3 py-1.5 bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
+                            >
+                              <span>🏆 Set Prize Table</span>
+                            </button>
+                          </div>
+                        )}
+
                         {c.type === 'h2h' && (
                           <p className="text-[10px] text-[#2563EB] font-bold bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg px-2.5 py-1.5">
                             H2H duel: 2 spots. Entry fee challenge banate waqt user set karta hai (85% winner split).
@@ -1556,6 +1660,174 @@ function AdminCricketMatchesContent() {
                     : (editingMatchId ? 'Update Match & Contests' : 'Verify & Publish')}
                 </button>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🏆 CUSTOM PRIZE BREAKUP MODAL (Admin Position-by-Position Prize Config) */}
+      {prizeModalContestIdx !== null && contests[prizeModalContestIdx] && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="relative w-full max-w-lg bg-white rounded-2xl overflow-hidden shadow-2xl border-2 border-[#1E3A8A] flex flex-col max-h-[90vh]">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#0F172A] via-[#1E3A8A] to-[#0F172A] p-4 text-white flex items-center justify-between">
+              <div>
+                <h3 className="font-black text-base flex items-center gap-2">
+                  <span>🏆 Custom Prize Table Configuration</span>
+                </h3>
+                <p className="text-xs text-blue-200 font-bold">
+                  {contests[prizeModalContestIdx].title} (Total Spots: {contests[prizeModalContestIdx].total_spots})
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPrizeModalContestIdx(null)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Tie Rule Notice */}
+            <div className="p-3 bg-amber-50 border-b border-amber-200 text-amber-950 flex items-start gap-2 text-xs">
+              <span className="text-base shrink-0">🤝</span>
+              <p className="text-[11px] leading-relaxed">
+                <strong>Automatic Tie-Sharing Rule:</strong> Agar 1st position ya kisi bhi rank par multiple players same points par aate hain (jaise 5 players at Rank 1), to us position ka pura prize amount un sabhi players me <strong>barabar (equally)</strong> baanta jayega.
+              </p>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 flex-1 overflow-y-auto space-y-4">
+              {/* Position #1 (Always fixed from Contest Card Prize Pool) */}
+              <div className="p-3 rounded-xl bg-[#FEF3C7] border border-[#FDE68A] space-y-1">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-amber-600 font-black text-sm">🥇</span>
+                    <span className="font-black text-xs text-[#92400E] uppercase">1st Position (Rank #1)</span>
+                  </div>
+                  <span className="text-[10px] font-bold bg-amber-200 text-[#78350F] px-2 py-0.5 rounded-full">
+                    Fixed from Contest Card Prize
+                  </span>
+                </div>
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-xs text-[#78350F]">First Position Prize:</span>
+                  <span className="font-mono font-black text-base text-[#92400E]">
+                    ₹{(Number(contests[prizeModalContestIdx].prize_pool) || 0).toLocaleString('en-IN')}
+                  </span>
+                </div>
+                <p className="text-[10px] text-[#A16207]">
+                  💡 Rank 1 ka prize contest card ke prize pool se hi set hota hai. Agar Rank 1 par multiple players tie karenge to ye prize unme equally share hoga.
+                </p>
+              </div>
+
+              {/* Position #2 onwards (User Defined Rows) */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-black text-xs text-[#0F172A] uppercase flex items-center gap-1.5">
+                    <span>Rank 2 Onwards Custom Rows</span>
+                    <span className="text-[10px] font-normal text-[#64748B]">({prizeModalRows.length} rows)</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={handleAddPrizeRow}
+                    className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition flex items-center gap-1 cursor-pointer shadow-xs"
+                  >
+                    <span>+ Add Position</span>
+                  </button>
+                </div>
+
+                {prizeModalRows.length === 0 ? (
+                  <div className="p-4 text-center border-2 border-dashed border-[#CBD5E1] rounded-xl text-xs text-[#64748B]">
+                    Koi rank row add nahi hai. "+ Add Position" click karke Rank 2 se aage ke prizes set karein.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {prizeModalRows.map((row, rIdx) => (
+                      <div key={rIdx} className="flex items-center gap-2 p-2.5 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1]">
+                        <div className="flex-1 grid grid-cols-3 gap-2">
+                          <div>
+                            <label className="text-[9px] font-black uppercase text-[#64748B] block">From Rank</label>
+                            <input
+                              type="number"
+                              min={2}
+                              value={row.rank_from}
+                              onChange={(e) => handleUpdatePrizeRow(rIdx, 'rank_from', parseInt(e.target.value, 10) || 2)}
+                              className="pd-input text-xs font-mono font-bold !py-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black uppercase text-[#64748B] block">To Rank</label>
+                            <input
+                              type="number"
+                              min={row.rank_from}
+                              value={row.rank_to}
+                              onChange={(e) => handleUpdatePrizeRow(rIdx, 'rank_to', parseInt(e.target.value, 10) || row.rank_from)}
+                              className="pd-input text-xs font-mono font-bold !py-1"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black uppercase text-[#64748B] block">Prize / Player (₹)</label>
+                            <input
+                              type="number"
+                              min={0}
+                              value={row.prize}
+                              onChange={(e) => handleUpdatePrizeRow(rIdx, 'prize', parseFloat(e.target.value) || 0)}
+                              className="pd-input text-xs font-mono font-bold !py-1"
+                            />
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePrizeRow(rIdx)}
+                          className="w-8 h-8 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 flex items-center justify-center transition cursor-pointer self-end shrink-0 font-bold"
+                          title="Remove position row"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Total Summary */}
+              <div className="p-3 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] flex items-center justify-between text-xs">
+                <span className="font-bold text-[#1E3A8A]">Total Custom Prize Distribution:</span>
+                <span className="font-mono font-black text-sm text-[#1D4ED8]">
+                  ₹{(
+                    (Number(contests[prizeModalContestIdx].prize_pool) || 0) +
+                    prizeModalRows.reduce((acc, r) => acc + (Number(r.prize) || 0) * Math.max(1, (r.rank_to - r.rank_from) + 1), 0)
+                  ).toLocaleString('en-IN')}
+                </span>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="p-3 bg-[#F8FAFC] border-t border-[#E2E8F0] flex items-center justify-between gap-2">
+              <button
+                type="button"
+                onClick={handleClearPrizeModal}
+                className="px-3 py-1.5 text-xs text-[#DC2626] hover:bg-red-50 font-bold rounded-lg transition cursor-pointer"
+              >
+                Reset to Standard Ladder
+              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPrizeModalContestIdx(null)}
+                  className="px-3 py-1.5 text-xs text-[#64748B] hover:bg-[#F1F5F9] font-bold rounded-lg transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSavePrizeModal}
+                  className="px-4 py-1.5 bg-[#1E3A8A] hover:bg-[#1D4ED8] text-white text-xs font-black rounded-lg transition cursor-pointer shadow-sm"
+                >
+                  Save Prize Table
+                </button>
+              </div>
             </div>
           </div>
         </div>

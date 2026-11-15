@@ -1,21 +1,42 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { Shield, ArrowRight, Plus, Pencil, Lock, Trophy, Eye } from 'lucide-react';
+import { Shield, ArrowRight, Plus, Pencil, Lock, Trophy, Eye, Copy, Check, Share2, Swords, Clock } from 'lucide-react';
 import { apiGet } from '../lib/api';
 import { useAuth } from '../lib/auth-context';
 import CategoryFilterTabs from '../components/ui/CategoryFilterTabs';
 import CategoryBadge from '../components/ui/CategoryBadge';
-import CricketPitchView from '../components/ui/CricketPitchView';
+
+const CricketPitchView = dynamic(() => import('../components/ui/CricketPitchView'), { ssr: false });
 
 export default function MyTeamsPage() {
-  const { token, isAuthenticated } = useAuth();
+  const { token, user, isAuthenticated } = useAuth();
   const [teams, setTeams] = useState<any[]>([]);
   const [lockClockNow, setLockClockNow] = useState(() => Date.now());
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [loading, setLoading] = useState(true);
   const [previewTeam, setPreviewTeam] = useState<any>(null);
+  const [copiedTeamId, setCopiedTeamId] = useState<string | null>(null);
+
+  const copyFieldLink = (team: any) => {
+    if (!team.contest?.invite_code || !team.match?.id) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const shareUrl = `${origin}/match/${team.match.id}?joinCode=${team.contest.invite_code}`;
+    navigator.clipboard.writeText(shareUrl).then(() => {
+      setCopiedTeamId(team.id);
+      setTimeout(() => setCopiedTeamId(null), 2500);
+    }).catch(() => {});
+  };
+
+  const shareFieldWhatsApp = (team: any) => {
+    if (!team.contest?.invite_code || !team.match?.id) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const shareUrl = `${origin}/match/${team.match.id}?joinCode=${team.contest.invite_code}`;
+    const text = `🏏 Join my cricket ground "${team.contest.title}" on Prime Dreems!\n💰 Entry Fee: ₹${team.contest.entry_fee}\n🏆 Dynamic Prize Pool (60%): ₹${team.contest.prize_pool}\n🔑 Code: ${team.contest.invite_code}\n👉 Join here: ${shareUrl}`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+  };
 
   useEffect(() => {
     if (!token) return;
@@ -150,6 +171,100 @@ export default function MyTeamsPage() {
                       </span>
                     </div>
                   </div>
+
+                  {/* H2H Challenge Status Box */}
+                  {(contest?.type === 'h2h' || contest?.challenge) && (
+                    <div className="mt-3 p-3 rounded-xl border-2 bg-white flex flex-col gap-2 shadow-sm border-[#CBD5E1]">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black uppercase text-[#1E293B] flex items-center gap-1.5">
+                          <Swords className="w-4 h-4 text-[#2563EB]" />
+                          <span>H2H Duel</span>
+                        </span>
+                        {contest.challenge?.receiver_team_id ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-[#ECFDF5] text-[#059669] border border-[#6EE7B7] shadow-sm">
+                            <Check className="w-3.5 h-3.5" />
+                            <span>ACCEPTED</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-[#FFFBEB] text-[#D97706] border border-[#FDE68A] shadow-sm">
+                            <Clock className="w-3.5 h-3.5 animate-spin" />
+                            <span>PENDING</span>
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[11px] text-[#475569] font-medium leading-relaxed">
+                        {contest.challenge?.receiver_team_id
+                          ? `Opponent @${contest.challenge.receiver_username || 'Opponent'} has accepted & registered their team. Duel is on!`
+                          : `Request sent to @${contest.challenge?.receiver_username || 'Opponent'}. Waiting for opponent to accept & register team.`}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Private Playground / Field Box with 60% Dynamic Prize Pool & Direct Share Link */}
+                  {(contest?.is_private || contest?.type === 'private') && (
+                    <div className="mt-3 p-3 rounded-xl border-2 border-[#93C5FD] bg-[#EFF6FF] flex flex-col gap-2.5 shadow-sm">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-xs font-black text-[#1E3A8A] flex items-center gap-1.5 truncate">
+                          <span>🏟️</span>
+                          <span className="truncate">{contest.title || 'Private Field'}</span>
+                        </span>
+                        <span className="text-[10px] font-black bg-white px-2 py-0.5 rounded-md border border-[#BFDBFE] text-[#1D4ED8] shrink-0">
+                          ₹{contest.entry_fee} Entry
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 text-center p-2 rounded-lg bg-white/90 border border-[#BFDBFE]">
+                        <div>
+                          <span className="text-[10px] font-bold text-[#64748B] block">Prize Pool (60%)</span>
+                          <span className="text-xs font-black font-mono text-[#D97706]">
+                            ₹{contest.prize_pool || Math.round((Number(contest.filled_spots) || 1) * (Number(contest.entry_fee) || 0) * 0.6)}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-[#64748B] block">Players Joined</span>
+                          <span className="text-xs font-black font-mono text-[#1E293B]">
+                            {contest.filled_spots || 1}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Shareable Link & Code */}
+                      <div className="flex items-center gap-1.5 pt-0.5">
+                        <div className="flex-1 bg-white border border-[#CBD5E1] rounded-lg px-2 py-1 flex items-center justify-between min-w-0">
+                          <span className="text-[10px] font-bold text-[#64748B] uppercase shrink-0">Code:</span>
+                          <span className="text-[11px] font-mono font-black text-[#0F172A] tracking-wider truncate ml-1">
+                            {contest.invite_code || '---'}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => copyFieldLink(team)}
+                          className="bg-[#2563EB] hover:bg-[#1D4ED8] text-white px-2.5 py-1 rounded-lg text-[11px] font-black flex items-center gap-1 shadow-sm transition shrink-0 cursor-pointer"
+                          title="Copy field link to invite friends"
+                        >
+                          {copiedTeamId === team.id ? (
+                            <>
+                              <Check className="w-3 h-3 text-green-300" />
+                              <span>Copied!</span>
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="w-3 h-3" />
+                              <span>Copy Link</span>
+                            </>
+                          )}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => shareFieldWhatsApp(team)}
+                          className="bg-[#25D366] hover:bg-[#20BD5A] text-white p-1.5 rounded-lg shadow-sm transition shrink-0 cursor-pointer"
+                          title="Share on WhatsApp"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Contest & Rank Footer */}

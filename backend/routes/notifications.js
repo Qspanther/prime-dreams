@@ -39,6 +39,7 @@ router.get('/', authenticate, async (req, res) => {
       const isRead = readByArray.includes(actualUserId);
       nObj.isRead = isRead;
       nObj.is_read = isRead;
+      if (!nObj.link) { nObj.link = '/my-teams'; }
       delete nObj.read_by; // don't send large arrays to frontend
       return nObj;
     });

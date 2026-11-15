@@ -72,8 +72,8 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Static uploads directory
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Static uploads directory with 7-day client cache for mobile speed
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), { maxAge: '7d', immutable: true }));
 app.get('/uploads/:filename', async (req, res) => {
   const filename = String(req.params.filename || '');
   if (!/^[a-z0-9_-]+\.(?:jpe?g|png|webp|gif)$/i.test(filename)) {

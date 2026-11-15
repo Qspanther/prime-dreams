@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
+import dynamic from 'next/dynamic';
 import { useAuth } from '../../lib/auth-context';
 import { apiGet } from '../../lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -25,7 +26,7 @@ import {
   ShieldCheck
 } from 'lucide-react';
 import Link from 'next/link';
-import ScorecardModal from '../../components/ScorecardModal';
+const ScorecardModal = dynamic(() => import('../../components/ScorecardModal'), { ssr: false });
 import { TableRowSkeleton, CreatorSkeleton, StatsSkeleton } from '../../components/ui/Skeleton';
 
 interface LeaderboardEntry {

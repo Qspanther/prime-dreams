@@ -2,15 +2,17 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { 
   Bell, LogOut, Menu, X, Home, Users, Wallet, Settings, Radio, Shield, Coins 
 } from 'lucide-react';
-import { apiGet } from '../../lib/api';
+import { apiGet, apiPut } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import PrimeLogo from '../ui/PrimeLogo';
 import LiveMatchSwitcher from '../ui/LiveMatchSwitcher';
 
 export default function TopBar() {
+  const router = useRouter();
   const { user, token, logout } = useAuth();
   const [balance, setBalance] = useState<number>(0);
   const [notifications, setNotifications] = useState<any[]>([]);
@@ -138,8 +140,27 @@ export default function TopBar() {
                   className="!absolute top-full right-0 mt-3 w-80 sm:w-96 bg-white/98 backdrop-blur-2xl rounded-2xl shadow-[0_20px_50px_rgba(15,23,42,0.22),0_0_0_1px_rgba(203,213,225,0.8)] border-2 border-[#CBD5E1] p-4 z-50 animate-in fade-in zoom-in-95 text-[#0F172A]"
                 >
                   <div className="flex items-center justify-between pb-2 border-b border-[#CBD5E1] mb-3">
-                    <span className="font-black text-xs uppercase text-[#1E293B] tracking-wider">Notifications</span>
-                    <span className="text-[10px] text-[#64748B] font-bold">{notifications.length} total</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-black text-xs uppercase text-[#1E293B] tracking-wider">Notifications</span>
+                      {unreadCount > 0 && (
+                        <span className="bg-[#EFF6FF] text-[#2563EB] border border-[#BFDBFE] text-[10px] font-black px-1.5 py-0.5 rounded-full">
+                          {unreadCount} new
+                        </span>
+                      )}
+                    </div>
+                    {unreadCount > 0 ? (
+                      <button
+                        onClick={() => {
+                          setNotifications((prev) => prev.map((item) => ({ ...item, is_read: true, isRead: true })));
+                          if (token) apiPut('/notifications/read-all', {}, token).catch(() => {});
+                        }}
+                        className="text-[10px] text-[#2563EB] hover:underline font-black cursor-pointer"
+                      >
+                        Mark all read
+                      </button>
+                    ) : (
+                      <span className="text-[10px] text-[#64748B] font-bold">{notifications.length} total</span>
+                    )}
                   </div>
                   <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
                     {notifications.length === 0 ? (
@@ -148,12 +169,52 @@ export default function TopBar() {
                         <p className="text-xs text-[#64748B] font-semibold">No notifications yet</p>
                       </div>
                     ) : (
-                      notifications.slice(0, 10).map((n) => (
-                        <div key={n.id} className="p-2.5 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] text-xs text-[#0F172A] hover:bg-[#F1F5F9] transition">
-                          <p className="font-bold text-[#0F172A] text-[11px]">{n.title}</p>
-                          <p className="text-[10px] text-[#475569] mt-0.5 leading-relaxed">{n.message}</p>
-                        </div>
-                      ))
+                      notifications.slice(0, 15).map((n) => {
+                        const isUnread = !n.is_read && !n.isRead;
+                        return (
+                          <div
+                            key={n.id}
+                            onClick={() => {
+                              // Immediately mark as read in local state
+                              setNotifications((prev) =>
+                                prev.map((item) => (item.id === n.id ? { ...item, is_read: true, isRead: true } : item))
+                              );
+                              if (token && isUnread) {
+                                apiPut(`/notifications/${n.id}/read`, {}, token).catch(() => {});
+                              }
+                              setShowNotif(false);
+                              const targetLink = n.link || '/my-teams';
+                              router.push(targetLink);
+                            }}
+                            className={`p-2.5 rounded-xl border text-xs text-[#0F172A] cursor-pointer transition flex items-start gap-2.5 ${
+                              isUnread
+                                ? 'bg-[#EFF6FF] border-[#93C5FD] hover:bg-[#DBEAFE]'
+                                : 'bg-[#F8FAFC] border-[#CBD5E1] hover:bg-[#F1F5F9]'
+                            }`}
+                          >
+                            <div className="shrink-0 mt-1">
+                              {isUnread ? (
+                                <span className="w-2 h-2 rounded-full bg-[#2563EB] block shadow-[0_0_6px_#2563EB]" />
+                              ) : (
+                                <span className="w-2 h-2 rounded-full bg-[#94A3B8] block opacity-40" />
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-1">
+                                <p className={`text-[11px] truncate ${isUnread ? 'font-black text-[#1E3A8A]' : 'font-bold text-[#0F172A]'}`}>
+                                  {n.title}
+                                </p>
+                                {isUnread && (
+                                  <span className="text-[9px] font-black uppercase text-[#2563EB] bg-[#DBEAFE] px-1 rounded shrink-0">
+                                    New
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-[#475569] mt-0.5 leading-relaxed">{n.message}</p>
+                            </div>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>

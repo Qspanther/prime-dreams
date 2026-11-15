@@ -1,6 +1,6 @@
 // ─── Prime Dreams Progressive Web App Service Worker ───
 // Network-first for navigation, ensure mobile devices always fetch the latest live release.
-const CACHE_NAME = 'prime-dreams-v4';
+const CACHE_NAME = 'prime-dreams-v5';
 
 self.addEventListener('install', (event) => {
   // Activate immediately without waiting for existing tabs to close
@@ -57,11 +57,18 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 3. Stale-While-Revalidate for Next.js static assets (_next/static/)
-  if (url.pathname.startsWith('/_next/static/')) {
+  // 3. CACHE-FIRST for Immutable Next.js static assets and media (Instant 0ms mobile loads)
+  if (
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname.startsWith('/cricket/') ||
+    url.pathname.match(/\.(?:woff2?|ttf|otf|eot|ico|png|jpg|jpeg|webp|svg|css)$/i)
+  ) {
     event.respondWith(
       caches.match(event.request).then((cachedResponse) => {
-        const fetchPromise = fetch(event.request).then((networkResponse) => {
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        return fetch(event.request).then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const responseClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
@@ -70,8 +77,6 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         }).catch(() => cachedResponse);
-
-        return cachedResponse || fetchPromise;
       })
     );
     return;

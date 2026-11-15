@@ -160,6 +160,7 @@ async function createH2HChallenge({ matchId, senderId, senderUsername, receiverI
       filled_spots: 1,
       status: 'open',
       is_active: true,
+      is_private: true,
     }, { transaction: t });
     const challenge = await H2HChallenge.create({
       match_id: matchId,
@@ -182,6 +183,7 @@ async function createH2HChallenge({ matchId, senderId, senderUsername, receiverI
       type: 'h2h_challenge',
       title: `H2H challenge from @${senderUsername}`,
       message: `@${senderUsername} challenged you to a ₹${numAmount} match. Accept to create your team, or decline to reject the challenge.`,
+      link: '/my-teams',
     }, { transaction: t });
 
     await t.commit();
@@ -217,7 +219,8 @@ async function acceptH2HChallenge({ challengeId, receiverId }) {
       user_id: challenge.sender_id,
       type: 'h2h_challenge',
       title: `H2H challenge accepted by @${challenge.receiver_username}`,
-      message: `@${challenge.receiver_username} accepted your ₹${challenge.amount} challenge. Their team entry fee will be charged when they create their team.`,
+      message: `@${challenge.receiver_username} accepted your ₹${challenge.amount} challenge. Waiting for their team registration.`,
+      link: '/my-teams',
     }, { transaction: t });
     await t.commit();
     return { challenge, contest };
@@ -267,6 +270,7 @@ async function rejectH2HChallenge({ challengeId, userId }) {
         type: 'h2h_challenge_rejected',
         title: `H2H challenge declined by @${challenge.receiver_username}`,
         message: `@${challenge.receiver_username} declined your ₹${challenge.amount} challenge. ₹${challenge.amount} has been refunded to your wallet.`,
+        link: '/my-teams',
       }, { transaction: t });
     }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, use } from 'react';
+import dynamic from 'next/dynamic';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Crown, Check, ArrowLeft, AlertCircle, ChevronRight, Eye, Info, MapPin, Lock, Trophy } from 'lucide-react';
@@ -8,8 +9,9 @@ import { apiGet, apiPost, apiPut, resolveImageUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import CategoryBadge from '../../components/ui/CategoryBadge';
 import PlayerPhoto from '../../components/ui/PlayerPhoto';
-import CricketPitchView from '../../components/ui/CricketPitchView';
-import PlayerDetailModal from '../../components/ui/PlayerDetailModal';
+
+const CricketPitchView = dynamic(() => import('../../components/ui/CricketPitchView'), { ssr: false });
+const PlayerDetailModal = dynamic(() => import('../../components/ui/PlayerDetailModal'), { ssr: false });
 
 interface Player {
   id: string;
@@ -66,6 +68,19 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const [detailPlayer, setDetailPlayer] = useState<Player | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [selectedContestId, setSelectedContestId] = useState<string>(contestId || '');
+  const [loadedContest, setLoadedContest] = useState<any>(null);
+
+  useEffect(() => {
+    if (!contestId) return;
+    apiGet(`/contests/${contestId}`)
+      .then((res) => {
+        if (res?.contest) {
+          setLoadedContest(res.contest);
+          setSelectedContestId(res.contest.id);
+        }
+      })
+      .catch(() => {});
+  }, [contestId]);
 
   useEffect(() => {
     if (!token) return;
@@ -245,7 +260,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
 
   const creditsLeft = Math.round((TOTAL_CREDITS - totalCreditsUsed) * 10) / 10;
 
-  const activeContest = (match?.contests || []).find((c: any) => c.id === selectedContestId);
+  const activeContest = loadedContest || (match?.contests || []).find((c: any) => c.id === selectedContestId);
   const entryFee = (!editingTeamId && !h2hFlow && activeContest) ? (Number(activeContest.entry_fee) || 0) : 0;
   const isLowBalance = !editingTeamId && !h2hFlow && entryFee > 0 && walletBalance !== null && walletBalance < entryFee;
 
@@ -464,6 +479,27 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
               ? 'Contest is locked. Your saved team can no longer be edited.'
               : 'Edit mode: your saved team is loaded. Update it as many times as you like until the contest locks.'}
           </span>
+        </div>
+      )}
+
+      {/* Private Ground Contest Banner */}
+      {activeContest?.is_private && (
+        <div className="rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 p-4 flex flex-wrap items-center justify-between gap-3 text-blue-950 shadow-sm">
+          <div className="flex items-center gap-3">
+            <span className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xl shrink-0 shadow-md">🏟️</span>
+            <div>
+              <span className="text-[10px] font-black uppercase text-blue-700 tracking-wider block">Entering Private Ground</span>
+              <h3 className="font-black text-base text-blue-950">{activeContest.title}</h3>
+              <p className="text-xs text-blue-700 font-medium">
+                Dynamic 60% Prize Pool • Current Pool: ₹{activeContest.prize_pool || Math.round((Number(activeContest.filled_spots) || 1) * (Number(activeContest.entry_fee) || 0) * 0.6)}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-mono font-black text-sm text-blue-800 bg-white px-3 py-1.5 rounded-xl border border-blue-200 shadow-sm">
+              ₹{activeContest.entry_fee} Entry Fee
+            </span>
+          </div>
         </div>
       )}
 

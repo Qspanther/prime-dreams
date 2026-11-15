@@ -1094,6 +1094,11 @@ router.post('/cricket/matches/verify-and-create', async (req, res) => {
           }
         }
 
+        let prizeBreakupStr = null;
+        if (c.prize_breakup) {
+          prizeBreakupStr = typeof c.prize_breakup === 'string' ? c.prize_breakup : JSON.stringify(c.prize_breakup);
+        }
+
         await MatchContest.create({
           match_id: newMatch.id,
           type: c.type || 'standard',
@@ -1106,6 +1111,7 @@ router.post('/cricket/matches/verify-and-create', async (req, res) => {
           battlefield_number: 1,
           bot_spots: botSpots,
           is_private: isPrivate,
+          prize_breakup: prizeBreakupStr,
           is_active: true,
           status: 'open',
         });
@@ -1230,6 +1236,11 @@ router.put('/cricket/matches/:id', async (req, res) => {
             }
           }
 
+          let prizeBreakupStr = null;
+          if (c.prize_breakup) {
+            prizeBreakupStr = typeof c.prize_breakup === 'string' ? c.prize_breakup : JSON.stringify(c.prize_breakup);
+          }
+
           await MatchContest.create({
             match_id: match.id,
             type: c.type || 'standard',
@@ -1242,6 +1253,7 @@ router.put('/cricket/matches/:id', async (req, res) => {
             battlefield_number: 1,
             bot_spots: botSpots,
             is_private: isPrivate,
+            prize_breakup: prizeBreakupStr,
             is_active: true,
             status: 'open',
           });

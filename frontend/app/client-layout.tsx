@@ -1,14 +1,16 @@
 'use client';
 
 import React, { ReactNode, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname, useRouter } from 'next/navigation';
 import { AuthProvider, useAuth } from './lib/auth-context';
 import Sidebar from './components/layout/Sidebar';
 import AdminSidebar from './components/layout/AdminSidebar';
 import TopBar from './components/layout/TopBar';
 import MobileBottomNav from './components/layout/MobileBottomNav';
-import H2HChallengePopup from './components/ui/H2HChallengePopup';
 import NetworkStatus from './components/ui/NetworkStatus';
+
+const H2HChallengePopup = dynamic(() => import('./components/ui/H2HChallengePopup'), { ssr: false });
 
 const publicPaths = ['/', '/login', '/signup', '/verify-otp', '/forgot-password'];
 const authOnlyPaths = ['/login', '/signup', '/verify-otp', '/forgot-password'];

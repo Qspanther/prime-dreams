@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState, use } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Trophy, Swords, Users, Clock, Shield, Radio, Lock,
   ArrowLeft, ArrowRight, AlertCircle, Zap, Calendar, MapPin, Share2, ShieldCheck, CheckCircle2
@@ -11,7 +12,8 @@ import { apiGet, apiPost, resolveImageUrl, getWebSocketUrl } from '../../lib/api
 import { useAuth } from '../../lib/auth-context';
 import CategoryBadge from '../../components/ui/CategoryBadge';
 import PlayerPhoto from '../../components/ui/PlayerPhoto';
-import PrizeBreakupModal from '../../components/ui/PrizeBreakupModal';
+
+const PrizeBreakupModal = dynamic(() => import('../../components/ui/PrizeBreakupModal'), { ssr: false });
 
 interface MatchDetailProps {
   params: Promise<{ matchId: string }>;
@@ -19,6 +21,8 @@ interface MatchDetailProps {
 
 export default function MatchDetailPage({ params }: MatchDetailProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const queryJoinCode = searchParams?.get('joinCode') || searchParams?.get('code') || '';
   const { matchId } = use(params);
   const { user, token } = useAuth();
 
@@ -102,11 +106,29 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
   const [joinCodeError, setJoinCodeError] = useState<string | null>(null);
   const [joinResolving, setJoinResolving] = useState(false);
   const [showCreatePrivate, setShowCreatePrivate] = useState(false);
-  const [createForm, setCreateForm] = useState({ title: '', entry_fee: '49', total_spots: '4' });
+  const [createForm, setCreateForm] = useState({ title: '', entry_fee: '100' });
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createResult, setCreateResult] = useState<any>(null);
   const [createError, setCreateError] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  // Auto-load private contest if joinCode was passed in URL query param
+  useEffect(() => {
+    if (queryJoinCode) {
+      setSelectedContestTab('private');
+      setJoinCode(queryJoinCode.toUpperCase());
+      if (token) {
+        setJoinResolving(true);
+        apiGet(`/contests/private/${encodeURIComponent(queryJoinCode.toUpperCase())}`, token)
+          .then((res) => {
+            if (res?.success) setJoinResult(res);
+            else if (res?.error) setJoinCodeError(res.error);
+          })
+          .catch((err) => setJoinCodeError(err?.message || 'Invalid code'))
+          .finally(() => setJoinResolving(false));
+      }
+    }
+  }, [queryJoinCode, token]);
 
   const fetchPrivateContests = async () => {
     if (!token) return;
@@ -152,14 +174,14 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
     setCreateError(null);
     setCreateResult(null);
     try {
+      const fee = Math.max(0, parseFloat(createForm.entry_fee) || 0);
       const res = await apiPost(`/matches/${matchId}/private-contests`, {
-        title: createForm.title,
-        entry_fee: parseFloat(createForm.entry_fee) || 0,
-        total_spots: parseInt(createForm.total_spots, 10) || 2,
+        title: createForm.title.trim() || 'My Cricket Ground',
+        entry_fee: fee,
       }, token!);
       if (res?.success) {
         setCreateResult(res.contest);
-        setCreateForm({ title: '', entry_fee: '49', total_spots: '4' });
+        setCreateForm({ title: '', entry_fee: '100' });
         fetchPrivateContests();
       } else {
         setCreateError(res?.error || 'Contest create nahi hua');
@@ -179,9 +201,20 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
     } catch (err) { /* clipboard unavailable */ }
   };
 
+  const copyFieldDirectLink = async (code: string) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const shareUrl = `${origin}/match/${matchId}?joinCode=${code}`;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopiedCode(`link-${code}`);
+      setTimeout(() => setCopiedCode(null), 2500);
+    } catch (err) { /* clipboard unavailable */ }
+  };
+
   const shareViaWhatsApp = (code: string, title?: string, fee?: number | string) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const text = `🏏 Join my private contest "${title || 'Battle'}" on Prime Dreems!\n💰 Entry Fee: ₹${fee || 0}\n🔑 Contest Code: ${code}\n👉 Join here: ${origin}/match/${matchId}`;
+    const shareUrl = `${origin}/match/${matchId}?joinCode=${code}`;
+    const text = `🏏 Join my private cricket playground "${title || 'Cricket Field'}" on Prime Dreems!\n💰 Entry Fee: ₹${fee || 0}\n🏆 Dynamic Prize Pool: 60% of all player fees\n🔑 Code: ${code}\n👉 Join & Build XI: ${shareUrl}`;
     if (typeof window !== 'undefined') {
       window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
     }
@@ -941,57 +974,49 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                 )}
               </div>
 
-              {/* Create Private Contest */}
+              {/* Create Private Contest (Custom Field / Playground) */}
               <div className="prime-card-3d p-5 space-y-4">
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <Users className="w-4 h-4 text-[#D97706] shrink-0" />
-                    <h3 className="font-black text-sm uppercase text-[#0F172A]">Create Private Contest</h3>
+                    <h3 className="font-black text-sm uppercase text-[#0F172A]">Create Private Playground / Field</h3>
                   </div>
                   <button
                     onClick={() => setShowCreatePrivate(!showCreatePrivate)}
                     disabled={isLocked}
                     className="prime-btn-dark-3d !py-1.5 !px-3 !text-xs shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isLocked ? '🔒 Contests Locked' : showCreatePrivate ? 'Close' : '+ Create'}
+                    {isLocked ? '🔒 Contests Locked' : showCreatePrivate ? 'Close' : '+ Generate Field'}
                   </button>
                 </div>
 
                 {showCreatePrivate && (
                   <div className="space-y-3 rounded-xl bg-[#FFF7E6] border-2 border-[#FDE68A] p-4">
                     <div>
-                      <label className="pd-label">Contest Name</label>
+                      <label className="pd-label">Playground / Ground Name</label>
                       <input
                         value={createForm.title}
                         onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
-                        placeholder="Dosto ke sath jung"
+                        placeholder="e.g. Wankhede Friends Arena"
                         maxLength={40}
                         className="pd-input"
                       />
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="pd-label">Entry Fee (₹)</label>
-                        <input
-                          type="number" min="0" step="1"
-                          value={createForm.entry_fee}
-                          onChange={(e) => setCreateForm({ ...createForm, entry_fee: e.target.value })}
-                          className="pd-input pd-num"
-                        />
-                      </div>
-                      <div>
-                        <label className="pd-label">Total Spots</label>
-                        <input
-                          type="number" min="2" max="100" step="1"
-                          value={createForm.total_spots}
-                          onChange={(e) => setCreateForm({ ...createForm, total_spots: e.target.value })}
-                          className="pd-input pd-num"
-                        />
-                      </div>
+                    <div>
+                      <label className="pd-label">Entry Fee (₹)</label>
+                      <input
+                        type="number" min="0" step="1"
+                        value={createForm.entry_fee}
+                        onChange={(e) => setCreateForm({ ...createForm, entry_fee: e.target.value })}
+                        className="pd-input pd-num"
+                      />
                     </div>
-                    <p className="text-[11px] text-[#92400E] font-bold">
-                      Prize Pool auto-calculate hoga: spots × fee − 10% platform fee = <span className="pd-num font-black">₹{Math.round((parseFloat(createForm.entry_fee) || 0) * (parseInt(createForm.total_spots, 10) || 2) * 0.9)}</span>
-                    </p>
+                    <div className="p-3 rounded-lg bg-amber-100/70 border border-amber-300 text-xs text-[#92400E] space-y-1">
+                      <p className="font-black">Dynamic 60% Prize Pool Rule:</p>
+                      <p className="leading-relaxed">
+                        Is playground me aane wale sabhi users ki total fees ka <strong>60% dynamic prize pool</strong> banega. Jaise hi naye users aayenge (e.g. 2 users @ ₹{createForm.entry_fee || 100} = ₹{Math.round((Number(createForm.entry_fee) || 100) * 2 * 0.6)}, 3 users = ₹{Math.round((Number(createForm.entry_fee) || 100) * 3 * 0.6)}), prize pool turant badhta jayega! Spots unlimited dynamic rahenge.
+                      </p>
+                    </div>
                     {createError && (
                       <div className="pd-error"><AlertCircle className="w-4 h-4 shrink-0" /><span>{createError}</span></div>
                     )}
@@ -1000,7 +1025,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                       disabled={createSubmitting || !token}
                       className="prime-btn-gold-3d w-full !py-2.5 !text-xs"
                     >
-                      {createSubmitting ? 'Creating...' : 'Create Private Contest'}
+                      {createSubmitting ? 'Generating Field...' : '🏟️ Generate Field & Get Share Link'}
                     </button>
                   </div>
                 )}
@@ -1009,19 +1034,20 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                   <div className="rounded-xl bg-[#ECFDF5] border-2 border-[#6EE7B7] p-4 space-y-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <h4 className="font-black text-sm text-[#065F46] truncate">{createResult.title}</h4>
-                        <p className="text-xs text-[#047857] font-bold">Contest ban gaya! Code dost ko share karo:</p>
+                        <span className="text-[10px] font-black uppercase text-[#047857] block">Ground Generated!</span>
+                        <h4 className="font-black text-sm text-[#065F46] truncate">🏟️ {createResult.title}</h4>
+                        <p className="text-xs text-[#047857] font-bold mt-0.5">Entry Fee: ₹{createResult.entry_fee} • 60% Dynamic Pool</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="pd-num flex-1 text-center font-mono font-black text-lg tracking-[0.3em] text-[#065F46] bg-white rounded-xl border-2 border-[#6EE7B7] px-3 py-2 select-all">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="pd-num flex-1 min-w-[120px] text-center font-mono font-black text-base tracking-[0.2em] text-[#065F46] bg-white rounded-xl border-2 border-[#6EE7B7] px-3 py-2 select-all">
                         {createResult.invite_code}
                       </span>
                       <button
-                        onClick={() => copyInviteCode(createResult.invite_code)}
+                        onClick={() => copyFieldDirectLink(createResult.invite_code)}
                         className="prime-btn-3d !py-2 !px-3 !text-xs shrink-0"
                       >
-                        {copiedCode === createResult.invite_code ? 'Copied!' : 'Copy'}
+                        {copiedCode === `link-${createResult.invite_code}` ? 'Link Copied!' : 'Copy Link'}
                       </button>
                       <button
                         onClick={() => shareViaWhatsApp(createResult.invite_code, createResult.title, createResult.entry_fee)}
@@ -1036,7 +1062,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                       href={`/team-builder/${matchId}?contestId=${createResult.id}`}
                       className="prime-btn-gold-3d w-full !py-2.5 !text-xs"
                     >
-                      Join with your Team ₹{createResult.entry_fee}
+                      Build Your XI & Enter Field ₹{createResult.entry_fee} →
                     </Link>
                   </div>
                 )}
@@ -1310,6 +1336,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         isOpen={!!breakupContest}
         onClose={() => { setBreakupContest(null); setBreakupData(null); }}
         contest={breakupContest}
+        breakupData={breakupData}
       />
 
     </div>

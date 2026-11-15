@@ -25,6 +25,11 @@ const Notification = sequelize.define('Notification', {
     type: DataTypes.STRING,
     defaultValue: 'system',
   },
+  link: {
+    // Optional navigation URL when clicked (e.g. /my-teams, /match/...)
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   read_by: {
     // For global notifications, store an array of user IDs who have read it.
     // We'll store it as a JSON array string.

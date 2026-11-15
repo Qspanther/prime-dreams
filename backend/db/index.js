@@ -57,6 +57,8 @@ sequelize.authenticate().then(async () => {
       await sequelize.query('ALTER TABLE match_contests ADD COLUMN IF NOT EXISTS bot_spots INTEGER DEFAULT 0;').catch(() => {});
       await sequelize.query('ALTER TABLE cricket_teams ADD COLUMN IF NOT EXISTS phase INTEGER DEFAULT 1;').catch(() => {});
       await sequelize.query('ALTER TABLE bot_win_history ADD COLUMN IF NOT EXISTS phase INTEGER DEFAULT 1;').catch(() => {});
+      await sequelize.query('ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link VARCHAR(255);').catch(() => {});
+      await sequelize.query('ALTER TABLE match_contests ADD COLUMN IF NOT EXISTS prize_breakup TEXT;').catch(() => {});
       console.log('🐘 Cloud PostgreSQL schema verified & indexes active.');
     } catch (pgErr) {
       console.warn('PostgreSQL initialization notice:', pgErr.message);
@@ -84,6 +86,8 @@ sequelize.authenticate().then(async () => {
     await sequelize.query('ALTER TABLE match_contests ADD COLUMN bot_spots INTEGER DEFAULT 0;').catch(() => {});
     await sequelize.query('ALTER TABLE cricket_teams ADD COLUMN phase INTEGER DEFAULT 1;').catch(() => {});
     await sequelize.query('ALTER TABLE bot_win_history ADD COLUMN phase INTEGER DEFAULT 1;').catch(() => {});
+    await sequelize.query('ALTER TABLE notifications ADD COLUMN link TEXT;').catch(() => {});
+    await sequelize.query('ALTER TABLE match_contests ADD COLUMN prize_breakup TEXT;').catch(() => {});
     console.log('⚡ Ultra high-performance SQLite engine & cricket indexes active.');
   } catch (err) {
     console.warn('SQLite PRAGMA tuning notice:', err.message);

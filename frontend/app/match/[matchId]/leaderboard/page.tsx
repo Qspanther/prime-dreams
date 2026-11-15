@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useCallback, useEffect, use, useState } from 'react';
+import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Radio, RefreshCw, Search, Trophy, X, Swords, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { apiGet, getWebSocketUrl } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
-import CompareTeamModal from '../../../components/ui/CompareTeamModal';
+
+const CompareTeamModal = dynamic(() => import('../../../components/ui/CompareTeamModal'), { ssr: false });
 
 type LeaderboardData = {
   match?: { title: string; status: string; team_a: string; team_b: string; score_summary?: any; last_updated?: string | null };

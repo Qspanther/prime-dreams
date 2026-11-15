@@ -176,6 +176,7 @@ async function ensureMatchSquad(match) {
  * Returns match list with category filtering (Section 5.4)
  */
 router.get('/matches', async (req, res) => {
+  res.set('Cache-Control', 'public, max-age=5, stale-while-revalidate=15');
   try {
     const { category, status } = req.query;
     const where = {};
@@ -190,7 +191,7 @@ router.get('/matches', async (req, res) => {
     const matches = await CricketMatch.findAll({
       where,
       include: [
-        { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false }, required: false },
+        { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false, h2h_challenge_id: null }, required: false },
       ],
       order: [['start_time', 'ASC']],
     });
@@ -592,11 +593,12 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
  * Single match detail with 30-player pool (15 Team A + 15 Team B)
  */
 router.get('/matches/:id', async (req, res) => {
+  res.set('Cache-Control', 'public, max-age=3, stale-while-revalidate=10');
   try {
     let match = await CricketMatch.findByPk(req.params.id, {
       include: [
         { model: CricketPlayer, as: 'players' },
-        { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false }, required: false },
+        { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false, h2h_challenge_id: null }, required: false },
       ],
     });
 
@@ -606,7 +608,7 @@ router.get('/matches/:id', async (req, res) => {
         where: { cricbuzz_id: req.params.id },
         include: [
           { model: CricketPlayer, as: 'players' },
-          { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false }, required: false },
+          { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false, h2h_challenge_id: null }, required: false },
         ],
       });
     }
@@ -617,18 +619,18 @@ router.get('/matches/:id', async (req, res) => {
         where: { status: 'live' },
         include: [
           { model: CricketPlayer, as: 'players' },
-          { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false }, required: false },
+          { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false, h2h_challenge_id: null }, required: false },
         ],
       }) || await CricketMatch.findOne({
         where: { status: 'upcoming' },
         include: [
           { model: CricketPlayer, as: 'players' },
-          { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false }, required: false },
+          { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false, h2h_challenge_id: null }, required: false },
         ],
       }) || await CricketMatch.findOne({
         include: [
           { model: CricketPlayer, as: 'players' },
-          { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false }, required: false },
+          { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false, h2h_challenge_id: null }, required: false },
         ],
       });
     }
@@ -659,7 +661,7 @@ router.get('/matches/:id', async (req, res) => {
           match_id: match.id,
           status: isLocked ? 'locked' : 'open',
         })));
-        contests = await MatchContest.findAll({ where: { match_id: match.id, is_active: true, is_private: false } });
+        contests = await MatchContest.findAll({ where: { match_id: match.id, is_active: true, is_private: false, h2h_challenge_id: null } });
       } catch (err) { /* seeding is best-effort */ }
     } else {
       // ─── Practice (free) contest: ensure one exists ───
@@ -677,7 +679,7 @@ router.get('/matches/:id', async (req, res) => {
             is_private: false,
             status: 'open',
           });
-          contests = await MatchContest.findAll({ where: { match_id: match.id, is_active: true, is_private: false } });
+          contests = await MatchContest.findAll({ where: { match_id: match.id, is_active: true, is_private: false, h2h_challenge_id: null } });
         } catch (err) { /* seeding is best-effort */ }
       }
 
@@ -696,7 +698,7 @@ router.get('/matches/:id', async (req, res) => {
             is_private: false,
             status: 'open',
           });
-          contests = await MatchContest.findAll({ where: { match_id: match.id, is_active: true, is_private: false } });
+          contests = await MatchContest.findAll({ where: { match_id: match.id, is_active: true, is_private: false, h2h_challenge_id: null } });
         } catch (err) { /* seeding is best-effort */ }
       }
     }
@@ -921,8 +923,17 @@ router.get('/matches/:id/win-probability', authenticate, async (req, res) => {
         winProbability = Math.min(99, Math.max(1, Math.round(raw)));
       }
 
+      let customBreakup = null;
+      try {
+        if (contest?.prize_breakup) {
+          customBreakup = typeof contest.prize_breakup === 'string'
+            ? JSON.parse(contest.prize_breakup)
+            : contest.prize_breakup;
+        }
+      } catch (_) {}
+
       const breakup = contest
-        ? buildPrizeBreakup(parseFloat(contest.prize_pool) || 0, parseInt(contest.total_spots, 10) || 0)
+        ? buildPrizeBreakup(parseFloat(contest.prize_pool) || 0, parseInt(contest.total_spots, 10) || 0, customBreakup)
         : [];
       const bucket = breakup.find((b) => rank >= b.rank_from && rank <= b.rank_to);
 
@@ -1095,16 +1106,56 @@ router.post('/matches/:id/teams', authenticate, async (req, res) => {
 
     if (contest) {
       const filledSpots = (Number(contest.filled_spots) || 0) + 1;
-      const isFull = filledSpots >= Number(contest.total_spots);
+      const isPrivate = contest.is_private || contest.type === 'private';
+      let prizePool = contest.prize_pool;
+      let totalSpots = contest.total_spots;
+
+      if (isPrivate) {
+        // Dynamic Prize Pool: 60% of total entry fees collected from all joined users
+        const fee = Number(contest.entry_fee) || 0;
+        prizePool = Math.round((filledSpots * fee * 0.60) * 100) / 100;
+        // Expand spots dynamically so spots never run out
+        totalSpots = Math.max(Number(contest.total_spots) || 1000, filledSpots + 50);
+
+        if (contest.creator_id && contest.creator_id !== req.user.id) {
+          await Notification.create({
+            user_id: contest.creator_id,
+            type: 'private_contest_joined',
+            title: `🏟️ Player Joined Your Field: "${contest.title}"`,
+            message: `@${req.user.username || 'A player'} joined your field! Dynamic prize pool is now ₹${prizePool}.`,
+            link: '/my-teams',
+          }, { transaction }).catch(() => {});
+        }
+      }
+
+      const isFull = !isPrivate && filledSpots >= Number(contest.total_spots);
       await contest.update({
         filled_spots: filledSpots,
+        prize_pool: prizePool,
+        total_spots: totalSpots,
         ...(isFull ? { status: 'locked' } : {}),
       }, { transaction });
+
       if (contest.type === 'h2h') {
-        await H2HChallenge.update(
-          { receiver_team_id: newTeam.id },
-          { where: { contest_id: contest.id, receiver_id: req.user.id, status: 'accepted' }, transaction }
-        );
+        const challenge = await H2HChallenge.findOne({
+          where: { contest_id: contest.id, receiver_id: req.user.id },
+          transaction,
+          lock: transaction.LOCK.UPDATE,
+        });
+        if (challenge) {
+          await challenge.update(
+            { receiver_team_id: newTeam.id, status: 'accepted' },
+            { transaction }
+          );
+
+          await Notification.create({
+            user_id: challenge.sender_id,
+            type: 'h2h_accepted',
+            title: `⚔️ H2H Challenge Accepted by @${req.user.username || 'Opponent'}!`,
+            message: `@${req.user.username || 'Opponent'} has accepted your ₹${contest.entry_fee} challenge and registered their team!`,
+            link: '/my-teams',
+          }, { transaction }).catch(() => {});
+        }
       }
       if (contest.type === 'multi_battlefield' && isFull) filledContest = contest;
     }
@@ -1412,7 +1463,13 @@ router.get('/my-teams', authenticate, async (req, res) => {
       where: { user_id: req.user.id },
       include: [
         { model: CricketMatch, as: 'match' },
-        { model: MatchContest, as: 'contest' },
+        {
+          model: MatchContest,
+          as: 'contest',
+          include: [
+            { model: H2HChallenge, as: 'challenge' },
+          ],
+        },
         { model: CricketPlayer, as: 'captain' },
         { model: CricketPlayer, as: 'viceCaptain' },
         { model: CricketPlayer, as: 'players' },
@@ -1596,7 +1653,7 @@ function generateInviteCode() {
   return code;
 }
 
-// POST /matches/:matchId/private-contests — create a private contest
+// POST /matches/:matchId/private-contests — create a private contest (playground field)
 router.post('/matches/:matchId/private-contests', authenticate, async (req, res) => {
   try {
     const match = await CricketMatch.findByPk(req.params.matchId);
@@ -1607,12 +1664,10 @@ router.post('/matches/:matchId/private-contests', authenticate, async (req, res)
       return res.status(400).json({ error: 'Contest creation is locked. Match starts shortly!' });
     }
 
-    const { title, entry_fee, total_spots } = req.body;
+    const { title, ground_name, entry_fee } = req.body;
     const fee = Math.max(0, parseFloat(entry_fee) || 0);
-    const spots = Math.min(100, Math.max(2, parseInt(total_spots, 10) || 2));
-    const name = (title || '').trim() || 'Private Contest';
-
-    const prizePool = Math.round(fee * spots * 0.9 * 100) / 100;
+    const name = (ground_name || title || '').trim() || 'My Cricket Ground';
+    const spots = 1000; // Open/dynamic capacity — no spot limitation
 
     let inviteCode = generateInviteCode();
     for (let i = 0; i < 5; i++) {
@@ -1625,7 +1680,7 @@ router.post('/matches/:matchId/private-contests', authenticate, async (req, res)
       match_id: match.id,
       type: 'private',
       title: name,
-      prize_pool: prizePool,
+      prize_pool: 0,
       entry_fee: fee,
       total_spots: spots,
       filled_spots: 0,
@@ -1636,6 +1691,116 @@ router.post('/matches/:matchId/private-contests', authenticate, async (req, res)
       status: 'open',
     });
 
+    res.json({ success: true, contest });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /matches/:matchId/create-field-and-team — generate private playground & register creator team atomically
+router.post('/matches/:matchId/create-field-and-team', authenticate, async (req, res) => {
+  let transaction;
+  try {
+    transaction = await sequelize.transaction();
+    const match = await CricketMatch.findByPk(req.params.matchId, { transaction });
+    if (!match) {
+      await transaction.rollback();
+      return res.status(404).json({ error: 'Match not found' });
+    }
+
+    const now = new Date();
+    if (isMatchLocked(match, now)) {
+      await transaction.rollback();
+      return res.status(400).json({ error: 'Contest creation is locked. Match starts shortly!' });
+    }
+
+    const myTeamCount = await CricketTeam.count({ where: { user_id: req.user.id, match_id: match.id }, transaction });
+    if (myTeamCount >= 6) {
+      await transaction.rollback();
+      return res.status(400).json({ error: 'Maximum 6 teams allowed per match.' });
+    }
+
+    const { ground_name, title, entry_fee, team_name, player_ids, captain_id, vice_captain_id } = req.body;
+    const fee = Math.max(0, parseFloat(entry_fee) || 0);
+    const name = (ground_name || title || '').trim() || 'My Cricket Ground';
+
+    const validation = await validateCricketSelection(match, player_ids, captain_id, vice_captain_id, transaction);
+    if (validation.error) {
+      await transaction.rollback();
+      return res.status(400).json({ error: validation.error });
+    }
+
+    if (fee > 0) {
+      await chargeWalletEntry(req.user.id, fee, `Entry fee for your private field "${name}"`, transaction);
+    }
+
+    let inviteCode = generateInviteCode();
+    for (let i = 0; i < 5; i++) {
+      const clash = await MatchContest.findOne({ where: { invite_code: inviteCode, is_private: true }, transaction });
+      if (!clash) break;
+      inviteCode = generateInviteCode();
+    }
+
+    // 60% rule: 1 user joined = 1 * fee * 0.60
+    const initialPrizePool = Math.round(fee * 0.60 * 100) / 100;
+    const contest = await MatchContest.create({
+      match_id: match.id,
+      type: 'private',
+      title: name,
+      prize_pool: initialPrizePool,
+      entry_fee: fee,
+      total_spots: 1000,
+      filled_spots: 1,
+      is_active: true,
+      is_private: true,
+      invite_code: inviteCode,
+      creator_id: req.user.id,
+      status: 'open',
+    }, { transaction });
+
+    const newTeam = await CricketTeam.create({
+      user_id: req.user.id,
+      match_id: match.id,
+      contest_id: contest.id,
+      team_name: team_name || `${name} XI`,
+      captain_id,
+      vice_captain_id,
+      total_points: 0,
+    }, { transaction });
+
+    await TeamPlayer.bulkCreate(validation.players.map(p => ({
+      team_id: newTeam.id,
+      player_id: p.id,
+      is_captain: p.id === captain_id,
+      is_vice_captain: p.id === vice_captain_id,
+      points_earned: 0,
+    })), { transaction });
+
+    await transaction.commit();
+
+    res.json({
+      success: true,
+      message: `Field "${name}" generated successfully with your XI!`,
+      contest,
+      team: newTeam,
+      invite_code: inviteCode,
+    });
+  } catch (err) {
+    if (transaction && !transaction.finished) await transaction.rollback();
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/contests/:id — fetch single contest details (public or private) with match
+router.get('/contests/:id', optionalAuthenticate, async (req, res) => {
+  try {
+    const contest = await MatchContest.findByPk(req.params.id, {
+      include: [
+        { model: CricketMatch, as: 'match' },
+        { model: H2HChallenge, as: 'challenge' },
+      ],
+    });
+    if (!contest) return res.status(404).json({ error: 'Contest not found' });
     res.json({ success: true, contest });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -1682,7 +1847,7 @@ router.get('/contests/private/:code', authenticate, async (req, res) => {
     if (!match) return res.status(404).json({ error: 'Match for this contest not found' });
 
     if (contest.status !== 'open') return res.status(400).json({ error: `Contest is ${contest.status}` });
-    if (contest.filled_spots >= contest.total_spots) return res.status(400).json({ error: 'Contest is full' });
+    if (!contest.is_private && contest.filled_spots >= contest.total_spots) return res.status(400).json({ error: 'Contest is full' });
 
     const now = new Date();
     if (isMatchLocked(match, now)) {
@@ -1719,7 +1884,22 @@ router.get('/contests/private/:code', authenticate, async (req, res) => {
  * 31-60 = 12%, 61-100 = 8%, ranks beyond 100 share the 15% remainder.
  * Small contests: 1 -> winner 100%; 2 -> 90/10; <=10 -> top 3 get 50/30/20.
  */
-function buildPrizeBreakup(prizePool, totalSpots) {
+function buildPrizeBreakup(prizePool, totalSpots, customBreakup = null) {
+  if (customBreakup) {
+    let parsed = customBreakup;
+    if (typeof parsed === 'string') {
+      try { parsed = JSON.parse(parsed); } catch (_) { parsed = null; }
+    }
+    if (Array.isArray(parsed) && parsed.length > 0) {
+      return parsed.map((item) => ({
+        rank_from: Number(item.rank_from || item.rank || 1),
+        rank_to: Number(item.rank_to || item.rank || item.rank_from || 1),
+        prize: Math.floor((Number(item.prize || item.amount || 0)) * 100) / 100,
+        percentage: Number(item.percentage || 0),
+      }));
+    }
+  }
+
   const pool = Math.max(0, parseFloat(prizePool) || 0);
   const spots = Math.max(0, parseInt(totalSpots, 10) || 0);
   if (pool <= 0 || spots <= 0) return [];
@@ -1770,8 +1950,64 @@ function buildPrizeBreakup(prizePool, totalSpots) {
 }
 
 /**
+ * Compute ranks and distribute prizes with equal sharing on ties.
+ * If 5 players tie at Rank 1, the prizes for ranks 1..5 are summed and divided equally among all 5 players.
+ */
+function computeWinnersWithTies(topTeams, breakup) {
+  if (!topTeams || topTeams.length === 0) return [];
+  const results = [];
+  let currentRank = 1;
+  let i = 0;
+
+  const getRankPrize = (r) => {
+    const bucket = breakup.find((b) => r >= b.rank_from && r <= b.rank_to);
+    return bucket ? Number(bucket.prize) || 0 : 0;
+  };
+
+  while (i < topTeams.length) {
+    const currentPoints = Number(topTeams[i].total_points) || 0;
+    let tieCount = 0;
+    while (i + tieCount < topTeams.length && (Number(topTeams[i + tieCount].total_points) || 0) === currentPoints) {
+      tieCount++;
+    }
+
+    const startRank = currentRank;
+    const endRank = currentRank + tieCount - 1;
+
+    let totalRankPrize = 0;
+    for (let r = startRank; r <= endRank; r++) {
+      totalRankPrize += getRankPrize(r);
+    }
+
+    // Divide prize equally among tied players
+    const prizePerTeam = tieCount > 0
+      ? Math.floor((totalRankPrize / tieCount) * 100) / 100
+      : 0;
+
+    for (let j = 0; j < tieCount; j++) {
+      const team = topTeams[i + j];
+      results.push({
+        rank: startRank,
+        is_tied: tieCount > 1,
+        tie_count: tieCount,
+        team_id: team.id,
+        team_name: team.team_name,
+        user_name: team.user?.name || 'Player',
+        points: team.total_points,
+        prize: prizePerTeam,
+      });
+    }
+
+    currentRank += tieCount;
+    i += tieCount;
+  }
+
+  return results;
+}
+
+/**
  * GET /api/contests/:id/prize-breakup
- * Public: deterministic prize breakup + current top-20 winners for a contest.
+ * Public: deterministic or custom prize breakup + current winners for a contest with equal tie-sharing.
  */
 router.get('/contests/:id/prize-breakup', async (req, res) => {
   try {
@@ -1780,26 +2016,25 @@ router.get('/contests/:id/prize-breakup', async (req, res) => {
 
     const prizePool = parseFloat(contest.prize_pool) || 0;
     const totalSpots = parseInt(contest.total_spots, 10) || 0;
-    const breakup = buildPrizeBreakup(prizePool, totalSpots);
+    let customBreakup = null;
+    try {
+      if (contest.prize_breakup) {
+        customBreakup = typeof contest.prize_breakup === 'string'
+          ? JSON.parse(contest.prize_breakup)
+          : contest.prize_breakup;
+      }
+    } catch (_) {}
+
+    const breakup = buildPrizeBreakup(prizePool, totalSpots, customBreakup);
 
     const topTeams = await CricketTeam.findAll({
       where: { contest_id: contest.id },
       order: [['total_points', 'DESC']],
       include: [{ model: User, as: 'user', attributes: ['id', 'name'] }],
-      limit: 20,
+      limit: 100,
     });
 
-    const winners = topTeams.map((team, idx) => {
-      const rank = idx + 1;
-      const bucket = breakup.find((b) => rank >= b.rank_from && rank <= b.rank_to);
-      return {
-        rank,
-        team_name: team.team_name,
-        user_name: team.user?.name || 'Player',
-        points: team.total_points,
-        prize: bucket ? bucket.prize : 0,
-      };
-    });
+    const winners = computeWinnersWithTies(topTeams, breakup);
 
     res.json({
       success: true,
@@ -1810,6 +2045,7 @@ router.get('/contests/:id/prize-breakup', async (req, res) => {
         total_spots: totalSpots,
         filled_spots: contest.filled_spots,
         entry_fee: contest.entry_fee,
+        prize_breakup: customBreakup,
       },
       total_prize: prizePool,
       breakup,
