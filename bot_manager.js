@@ -23,7 +23,7 @@ const https = require('https');
 
 // Configuration
 const CONFIG = {
-  API_BASE_URL: process.env.PRIME_DREEMS_API_URL || process.env.CREATOR11_API_URL || 'http://localhost:5000',
+  API_BASE_URL: process.env.BOT_SERVICE_URL || process.env.PRIME_DREEMS_API_URL || process.env.CREATOR11_API_URL || 'http://localhost:5100',
   BOT_API_KEY: process.env.BOT_API_KEY || 'c11_bot_mgr_sec_9938a7fbc21d49e',
   TOTAL_BOTS: 10000,
   DAEMON_POLL_INTERVAL_MS: 30 * 1000, // 30 seconds

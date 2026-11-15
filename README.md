@@ -243,43 +243,33 @@ Prime Dreems is structured as an enterprise-grade 3-tier distributed system:
 ## 🔑 9. Live Cloud Credentials & Platform API Keys
 
 > [!IMPORTANT]
-> The active production infrastructure for Prime Dreems is deployed across **Neon PostgreSQL** and **Render Cloud**. Save these credentials for future reference or CI/CD automation.
+> The active production infrastructure for Prime Dreems is deployed across **Neon PostgreSQL** and **Render Cloud**. All connection secrets, API keys, and platform credentials must be managed strictly via environment variables (`.env`) and Render Dashboard environment variables. Never commit raw keys to git.
 
-### 🐘 1. Neon Cloud Database Credentials
+### 🐘 1. Neon Cloud Database (Free Tier)
 - **Platform:** [Neon Serverless PostgreSQL](https://console.neon.tech)
-- **Neon API Key:**
+- **Configuration:** Set `DATABASE_URL` in `.env` or Render environment settings using your pooled connection string:
   ```text
-  napi_t52a4ufhryl01f2dmkv5lupt8c5zuw2d0nme4m6evp3oq44waqalx8qgem1wsn00
+  postgresql://<username>:<password>@<ep-hostname>.aws.neon.tech/neondb?sslmode=require&pgbouncer=true
   ```
-- **Project Name:** `prime-dreems-db`
-- **Project ID:** `green-king-11132071`
-- **Region:** `aws-us-east-1`
-- **Live Database Connection URI:**
-  ```text
-  postgresql://neondb_owner:npg_LBfph3bq5Dad@ep-lucky-river-bce9e3a8.c-16.us-east-1.aws.neon.tech/neondb?sslmode=require
-  ```
-- **Seeded Data:** Fully migrated schema, live cricket fixtures, contests, and 10,000 realistic Indian bots (`@gmail.com`, ₹1,00,000 wallet).
+- **Connection Pool:** Capped at `PG_POOL_MAX=5` on user backend and `BOT_PG_POOL_MAX=3` on bot service to strictly respect Neon's connection limit.
+- **Seeded Data:** Fully migrated schema, live cricket fixtures, contests, and autonomous bots.
 
-### 🚀 2. Render Cloud Platform Credentials
+### 🚀 2. Render Cloud Platform (Free Tier Multi-Service Blueprint)
 - **Platform:** [Render Dashboard](https://dashboard.render.com)
-- **Account:** `qspanther@gmail.com` (`My Workspace`)
-- **Render API Key:**
-  ```text
-  rnd_hBKXOM27KGyA7eKKrdV7CzYXhPta
-  ```
 - **Live Services:**
-  - **Backend API Service (`srv-dbpmlr3l550s73dqb4q0`):**
+  - **Backend API Service:**
     - Live URL: [https://prime-dreems-backend.onrender.com](https://prime-dreems-backend.onrender.com)
     - Health Check: [https://prime-dreems-backend.onrender.com/health](https://prime-dreems-backend.onrender.com/health)
-    - Root Dir: `backend` | Build: `npm ci` | Start: `npm start`
-    - Bot Network Status: [https://prime-dreems-backend.onrender.com/bot-manager/status](https://prime-dreems-backend.onrender.com/bot-manager/status)
-  - **Frontend Web Service (`srv-dbo89095efls73d4qesg`):**
+    - Root Dir: `backend` | Build: `npm install` | Start: `npm start`
+  - **Frontend Web Service:**
     - Live URL: [https://prime-dreams.onrender.com](https://prime-dreams.onrender.com)
+    - Health Check: [https://prime-dreams.onrender.com/api/health](https://prime-dreams.onrender.com/api/health)
     - Root Dir: `frontend` | Build: `npm install --include=dev && npm run build` | Start: `npm start`
-- **Internal Bot Manager Security Key:**
-  ```text
-  c11_bot_mgr_sec_9938a7fbc21d49e
-  ```
+  - **Isolated Bot Service:**
+    - Root Dir: `backend/bot-service` | Build: `npm install` | Start: `npm start`
+    - Health Check: `/health` (Port 5100)
+- **Secrets Management:**
+  - Render API Key, Neon URL, and Bot API keys are configured via Render Environment Variables and local `.env` files (ignored in `.gitignore`).
 
 ---
 

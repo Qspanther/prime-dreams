@@ -1,149 +1,179 @@
-# 🚀 PRIME DREEMS — DISTRIBUTED DEPLOYMENT GUIDE (RENDER + EXTERNAL CLOUD DATABASE)
+# 🚀 Prime Dreems — Production Deployment Guide
+## Render Free Tier + Neon Free PostgreSQL + Upstash Redis
 
-This guide explains how to deploy Prime Dreems as a distributed 3-tier production architecture:
-1. **Frontend:** Render Web Service (Next.js 15, Turbopack, React 19)
-2. **Backend:** Render Web Service (Node.js, Express, WebSocket Gateway, 10,000 Bots Engine)
-3. **Database:** Independent External Cloud Database (Neon.tech / Supabase / Railway / AWS RDS)
+This guide walks you through deploying the complete Prime Dreems platform on the **Render Free Tier (512MB RAM, 0.1 CPU)** with **Neon Free Serverless PostgreSQL** and **Upstash Redis Free Tier** with zero breaking changes and full connection isolation.
+
+---
+
+## 🏗️ Platform Architecture
 
 ```
-┌─────────────────────────────────┐        ┌─────────────────────────────────┐
-│        RENDER FRONTEND          │        │         RENDER BACKEND          │
-│   (Next.js 15 Web Service)      │◄──────►│    (Node.js API & WebSockets)   │
-│  prime-dreems-frontend.onrender │        │  prime-dreems-backend.onrender  │
-└─────────────────────────────────┘        └─────────────────────────────────┘
-                                                           ▲
-                                                           │ (DATABASE_URL SSL)
-                                                           ▼
-                                           ┌─────────────────────────────────┐
-                                           │     EXTERNAL CLOUD DATABASE     │
-                                           │  (Neon.tech / Supabase / RDS)   │
-                                           │    PostgreSQL (100% Isolated)   │
-                                           └─────────────────────────────────┘
+                                  ┌─────────────────────────────┐
+                                  │      Render Free Tier       │
+                                  │    Keep-Alive Cron (*/14)   │
+                                  └──────────────┬──────────────┘
+                                                 │
+                                                 ▼
+┌──────────────────────────────┐  WebSocket /ws  ┌──────────────────────────────┐
+│     prime-dreems-frontend    │ ──────────────▶ │     prime-dreems-backend     │
+│   Next.js 15 Standalone      │                 │  Express REST API + WS Gate  │
+│      Port 10000 (Free)       │ ──────────────▶ │       Port 5000 (Free)       │
+└──────────────────────────────┘    REST /api    └──────────────┬───────────────┘
+                                                                │
+                                         Pool Max: 5            │ Redis Cache (5s-30s TTL)
+                                         (Zero Contention)      ▼
+                                                 ┌──────────────────────────────┐
+                                                 │    Upstash Redis Free / KV   │
+                                                 │     (In-Memory Fallback)     │
+                                                 └──────────────┬───────────────┘
+                                                                │
+┌──────────────────────────────┐                 Pool Max: 3    │
+│   prime-dreems-bot-service   │ ───────────────────────────────┼──────────────┐
+│  Autonomous Bot Network &    │      (Zero Contention)         │              │
+│ 72h Deployment Engine (Free) │                                ▼              ▼
+│          Port 5100           │                 ┌─────────────────────────────┐
+└──────────────────────────────┘                 │     Neon Free PostgreSQL    │
+                                                 │   Pooled Connection String  │
+                                                 │ (Pooler Max: 8 < 100 limit) │
+                                                 └─────────────────────────────┘
 ```
 
 ---
 
-## 🗄️ PART 1: Set Up External Cloud Database (Free & Instant)
+## 🗄️ Step 1: Set Up Neon Free PostgreSQL
 
-You can choose any external database provider. **Neon.tech** or **Supabase** are recommended:
+1. Sign up at [Neon.tech](https://neon.tech) (Free tier provides 0.5 GB storage, autosuspend, and 100 pooled connections).
+2. Create a project: `prime-dreems-db`.
+3. In the project dashboard:
+   - Select **Connection Details** ➔ Choose **Pooled connection**.
+   - Copy the connection string. It will look like:
+     ```text
+     postgresql://<username>:<password>@<ep-hostname>-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require&pgbouncer=true
+     ```
+4. Save this as `DATABASE_URL` (and `BOT_DATABASE_URL`).
 
-### Option A: Neon.tech (Recommended — 30 seconds setup)
-1. Go to [neon.tech](https://neon.tech) and sign up (free tier has generous storage and zero maintenance).
-2. Click **Create Project** ➔ Name: `prime-dreems-db`.
-3. In the project dashboard, copy your **Connection String**:
+> [!NOTE]
+> Neon automatically suspends after 5 minutes of inactivity to preserve compute hours.
+> Both backend and bot service use `min: 0` connections and `idleTimeoutMillis: 10000` so idle clients disconnect cleanly, allowing Neon to suspend and wake up on demand.
+
+---
+
+## ⚡ Step 2: Set Up Upstash Redis (Optional Cache Layer)
+
+1. Sign up at [Upstash](https://upstash.com) (Free tier includes 10,000 commands/day).
+2. Click **Create Database** ➔ Choose primary region close to your Render services.
+3. In database details, copy the `REDIS_URL`:
+   ```text
+   redis://default:<token>@<hostname>.upstash.io:6379
    ```
-   postgresql://neondb_owner:npg_xxxxxx@ep-xxxxxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require
-   ```
-4. Save this string — this is your `DATABASE_URL`.
+4. Save this as `REDIS_URL`.
 
-### Option B: Supabase
-1. Go to [supabase.com](https://supabase.com) ➔ Create new project.
-2. In Project Settings ➔ **Database** ➔ Connection Pooling ➔ Copy **URI**:
-   ```
-   postgresql://postgres.xxxxxx:your_password@aws-0-xxxxxx.pooler.supabase.com:6543/postgres
-   ```
-
-*(Note: If you do not provide `DATABASE_URL`, the backend automatically falls back to local SQLite `primedreems.sqlite` for local testing).*
+> [!TIP]
+> If `REDIS_URL` is omitted or left empty, Prime Dreems automatically falls back to an ultra-fast in-process `Map` cache with TTL expiration. No external Redis setup is strictly required for dev or demo!
 
 ---
 
-## ⚙️ PART 2: Deploy Backend Web Service on Render
+## 🚀 Step 3: Deploy via Render Blueprint (1-Click Deployment)
 
-1. Log in to your [Render Dashboard](https://dashboard.render.com).
-2. Click **New +** ➔ Select **Web Service**.
-3. Connect your Git repository (`Prime dreems`).
-4. Configure the Backend service:
-   - **Name:** `prime-dreems-backend`
-   - **Region:** Any (e.g., Singapore / Oregon / Frankfurt)
-   - **Branch:** `main`
-   - **Root Directory:** `backend`
-   - **Runtime:** `Node`
-   - **Build Command:** `npm install`
-   - **Start Command:** `npm start`
-   - **Plan:** Free (or Starter)
-5. Under **Environment Variables**, add:
-   | Key | Value | Notes |
-   |---|---|---|
-   | `NODE_VERSION` | `20.18.0` | Node.js runtime |
-   | `NODE_ENV` | `production` | Production mode |
-   | `PORT` | `10000` | Render port |
-   | `DATABASE_URL` | `postgresql://...` | **Your External Neon / Supabase Connection String** |
-   | `DB_SSL` | `true` | Required for Cloud PostgreSQL |
-   | `JWT_SECRET` | *(Generate a 32+ character random string)* | Auth tokens |
-   | `BOT_API_KEY` | `c11_bot_mgr_sec_9938a7fbc21d49e` | Internal Bot Key |
-   | `FRONTEND_URL` | `https://prime-dreems-frontend.onrender.com` | Your Frontend URL |
+The repository includes a production-ready `render.yaml` blueprint that deploys all 3 web services and the keep-alive cron job automatically:
 
-6. Click **Create Web Service**.
-7. Once deployed, note down your Backend URL:  
-   `https://prime-dreems-backend.onrender.com`
+1. Log in to [Render Dashboard](https://dashboard.render.com).
+2. Click **New +** ➔ **Blueprint**.
+3. Connect your repository: `https://github.com/Qspanther/prime-dreams` (branch: `feat/scale-free-tier` or `main`).
+4. Fill in the requested secret environment variables:
+   - `DATABASE_URL`: Your pooled Neon connection string.
+   - `BOT_DATABASE_URL`: Same pooled Neon connection string.
+   - `REDIS_URL`: Upstash Redis connection string (or leave blank for in-memory cache).
+5. Click **Apply**.
 
 ---
 
-## 🎨 PART 3: Deploy Frontend Web Service on Render
+## 🛠️ Step 4: Manual Service Configuration (If Deploying Services Individually)
 
-1. In Render Dashboard, click **New +** ➔ Select **Web Service**.
-2. Connect the same Git repository (`Prime dreems`).
-3. Configure the Frontend service:
-   - **Name:** `prime-dreems-frontend`
-   - **Root Directory:** `frontend`
-   - **Runtime:** `Node`
-   - **Build Command:** `npm install --include=dev && npm run build`
-   - **Start Command:** `npm start`
-   - **Plan:** Free (or Starter)
-4. Under **Environment Variables**, add:
-   | Key | Value | Notes |
-   |---|---|---|
-   | `NODE_VERSION` | `20.18.0` | Node.js runtime |
-   | `NODE_ENV` | `production` | Production mode |
-   | `PORT` | `10000` | Render port |
-   | `BACKEND_URL` | `https://prime-dreems-backend.onrender.com` | Target for Next.js rewrites |
-   | `NEXT_PUBLIC_API_URL` | `https://prime-dreems-backend.onrender.com` | Direct Client-side API |
-   | `NEXT_PUBLIC_WEBSOCKET_URL` | `wss://prime-dreems-backend.onrender.com/ws` | Live Ball-by-Ball streaming |
+If you prefer to configure each service manually in the Render dashboard:
 
-5. Click **Create Web Service**.
-6. Once deployed, your web application will be live at:  
-   `https://prime-dreems-frontend.onrender.com`
-
----
-
-## ⚡ Option 4: 1-Click Blueprint Deploy (render.yaml)
-
-Alternatively, you can deploy both services in 1-click using Render Blueprints:
-1. In Render Dashboard, click **Blueprints** ➔ **New Blueprint Instance**.
-2. Connect your repository.
-3. Render reads [render.yaml](file:///C:/Users/abbu/Documents/Prime%20dreems/render.yaml) and automatically creates:
-   - `prime-dreems-backend`
-   - `prime-dreems-frontend`
-4. Enter your `DATABASE_URL` in the prompt, and click **Apply**.
-
----
-
-## 🔍 Verification & Health Check
-
-After deployment:
-- **Frontend App:** [https://prime-dreams.onrender.com](https://prime-dreams.onrender.com)
-- **Backend Health Check:** [https://prime-dreems-backend.onrender.com/health](https://prime-dreems-backend.onrender.com/health) (returns `{ status: "ok", platform: "Prime Dreems" }`).
-- **Matches Endpoint:** `https://prime-dreems-backend.onrender.com/api/matches`.
-- **Bot Network Status:** `https://prime-dreems-backend.onrender.com/bot-manager/status`.
-- **WebSocket Gateway:** `wss://prime-dreems-backend.onrender.com/ws`.
-
----
-
-## 🔑 Active Production Credentials & API Keys
-
-### 🐘 Neon Cloud Database
-- **Neon API Key:** `napi_t52a4ufhryl01f2dmkv5lupt8c5zuw2d0nme4m6evp3oq44waqalx8qgem1wsn00`
-- **Project Name:** `prime-dreems-db`
-- **Project ID:** `green-king-11132071`
-- **Region:** `aws-us-east-1`
-- **Connection URI:**
-  ```text
-  postgresql://neondb_owner:npg_LBfph3bq5Dad@ep-lucky-river-bce9e3a8.c-16.us-east-1.aws.neon.tech/neondb?sslmode=require
+### Service 1: `prime-dreems-backend` (User API & WebSocket)
+- **Type**: Web Service | **Runtime**: Node
+- **Root Directory**: `backend`
+- **Build Command**: `npm install`
+- **Start Command**: `npm start`
+- **Health Check Path**: `/health`
+- **Environment Variables**:
+  ```ini
+  NODE_ENV=production
+  PORT=5000
+  DATABASE_URL=postgresql://<user>:<pass>@<neon-pooler-host>/neondb?sslmode=require&pgbouncer=true
+  PG_POOL_MAX=5
+  REDIS_URL=redis://default:<token>@<upstash-host>:6379
+  MAX_WS_CONNECTIONS=500
+  ENABLE_INGESTION=true
+  INGESTION_POLL_INTERVAL_MS=30000
+  JWT_SECRET=<your-random-32-char-secret>
+  FRONTEND_URL=https://prime-dreams.onrender.com
   ```
 
-### 🚀 Render Cloud Platform
-- **Render API Key:** `rnd_hBKXOM27KGyA7eKKrdV7CzYXhPta`
-- **Account:** `qspanther@gmail.com`
-- **Backend Service:** `srv-dbpmlr3l550s73dqb4q0` ([https://prime-dreems-backend.onrender.com](https://prime-dreems-backend.onrender.com))
-- **Frontend Service:** `srv-dbo89095efls73d4qesg` ([https://prime-dreams.onrender.com](https://prime-dreams.onrender.com))
-- **Internal Bot Key:** `c11_bot_mgr_sec_9938a7fbc21d49e`
+### Service 2: `prime-dreems-bot-service` (Isolated Bot Network)
+- **Type**: Web Service | **Runtime**: Node
+- **Root Directory**: `backend/bot-service`
+- **Build Command**: `npm install`
+- **Start Command**: `npm start`
+- **Health Check Path**: `/health`
+- **Environment Variables**:
+  ```ini
+  NODE_ENV=production
+  PORT=5100
+  BOT_DATABASE_URL=postgresql://<user>:<pass>@<neon-pooler-host>/neondb?sslmode=require&pgbouncer=true
+  BOT_PG_POOL_MAX=3
+  BOT_MANAGER_KEY=c11_bot_mgr_sec_9938a7fbc21d49e
+  BOT_INTERVAL_MS=60000
+  BOT_MAX_ACTIVE=1000
+  BOT_BATCH_PER_TICK=5
+  ```
+
+### Service 3: `prime-dreems-frontend` (Next.js 15 Standalone)
+- **Type**: Web Service | **Runtime**: Node
+- **Root Directory**: `frontend`
+- **Build Command**: `npm install --include=dev && npm run build`
+- **Start Command**: `npm start`
+- **Health Check Path**: `/api/health`
+- **Environment Variables**:
+  ```ini
+  NODE_ENV=production
+  PORT=10000
+  BACKEND_URL=https://prime-dreems-backend.onrender.com
+  NEXT_PUBLIC_API_URL=https://prime-dreems-backend.onrender.com
+  NEXT_PUBLIC_WEBSOCKET_URL=wss://prime-dreems-backend.onrender.com/ws
+  ```
+
+### Cron Job: Keep-Alive Pinger (Prevents 15-Minute Free Spin-Down)
+- **Type**: Cron Job
+- **Schedule**: `*/14 * * * *` (Every 14 minutes)
+- **Command**:
+  ```bash
+  curl -fsS https://prime-dreems-backend.onrender.com/health https://prime-dreems-bot-service.onrender.com/health || true
+  ```
+*(Alternatively, configure a free monitor on [cron-job.org](https://cron-job.org) or UptimeRobot to ping `/health` every 10 minutes).*
+
+---
+
+## 🔍 Step 5: Verification & Health Checks
+
+Once deployed, verify that each layer is operational:
+
+| Component | Target URL | Expected Response |
+|-----------|------------|-------------------|
+| **Frontend Web App** | `https://prime-dreams.onrender.com` | HTTP 200 (Home Screen) |
+| **Frontend Health Route** | `https://prime-dreams.onrender.com/api/health` | `{"status":"ok","backend_status":{...}}` |
+| **Backend Health** | `https://prime-dreems-backend.onrender.com/health` | `{"status":"ok","platform":"Prime Dreems"}` |
+| **Bot Service Health** | `https://<bot-service>.onrender.com/health` | `{"status":"ok","service":"prime-dreems-bot-service"}` |
+| **Live WebSocket** | `wss://prime-dreems-backend.onrender.com/ws` | Protocol Upgrade HTTP 101 |
+
+---
+
+## 🔒 Neon Connection Budget Summary
+
+| Service | Pool Max | Minimum | Purpose |
+|---------|----------|---------|---------|
+| **User Backend** | `5` | `0` | Live user actions (browsing, joining contests, wallet) |
+| **Bot Service** | `3` | `0` | Autonomous 72-hour bot team deployments |
+| **Total Connections** | **8** | `0` | **Well within Neon Free limit of 100 connections!** |
