@@ -1102,7 +1102,7 @@ function AdminCricketMatchesContent() {
                       <span>Image Guidelines &amp; Direct Upload</span>
                     </p>
                     <p>
-                      Aap direct Google Images / Web se kisi bhi image ka direct URL paste kar sakte hain, ya fir apne device (computer/phone) se <strong>Upload File</strong> button dabakar directly upload kar sakte hain. Dono tarike fully supported hain!
+                      You can paste a direct web image URL, or click <strong>Upload File</strong> to upload directly from your device (computer/phone). Both methods are fully supported.
                     </p>
                   </div>
 
@@ -1324,7 +1324,7 @@ function AdminCricketMatchesContent() {
                     <div>
                       <span className="font-black text-[#1E3A8A] uppercase block">Contests Configuration & Bot Quotas</span>
                       <span className="text-[11px] text-[#64748B]">
-                        Mega, Battlefield, Mini, Practice, Private & H2H contests configure karein aur unke Bot spots set karein.
+                        Configure Mega, Battlefield, Mini, Practice, Private & H2H contests and assign autonomous bot quotas.
                       </span>
                     </div>
                     <button
@@ -1511,7 +1511,7 @@ function AdminCricketMatchesContent() {
                           <div className="sm:col-span-2 p-3 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] space-y-1.5">
                             <div className="flex items-center justify-between">
                               <label className="text-[11px] font-black uppercase text-[#1D4ED8] flex items-center gap-1.5">
-                                <span>🤖 Bots Ki Teams (Bot Spots)</span>
+                                <span>🤖 Bot Teams Allocation (Bot Spots)</span>
                                 <span className="text-[9px] font-bold bg-[#DBEAFE] px-2 py-0.5 rounded-full text-[#1E40AF]">Autonomous Allocation</span>
                               </label>
                               {(c.type === 'h2h' || c.type === 'private') ? (
@@ -1536,7 +1536,7 @@ function AdminCricketMatchesContent() {
                                   c.type === 'mega' ? '10000' :
                                   c.type === 'multi_battlefield' ? '7' :
                                   c.total_spots === 100 ? '25' :
-                                  'e.g. 500 (Bots 500 teams banayenge)'
+                                  'e.g. 500 (Allocates 500 bot teams)'
                                 }
                                 onChange={(e) => {
                                   const val = parseInt(e.target.value, 10) || 0;
@@ -1548,8 +1548,8 @@ function AdminCricketMatchesContent() {
 
                             <p className="text-[10px] text-[#64748B]">
                               {c.type === 'h2h' || c.type === 'private'
-                                ? '⚠️ Rules Guard: Head-to-Head aur Private contests me bots 100% block rehte hain.'
-                                : '💡 Is contest me bots kitni teams banayenge (e.g. 500 likhne par bots 500 teams banayenge). Default rules: 25 spots me 7 bots, 100 spots me 25 bots, Mega me 10,000 teams.'}
+                                ? '⚠️ Rules Guard: Bots are strictly disabled for Head-to-Head and Private contests.'
+                                : '💡 Number of bot teams to deploy (e.g., entering 500 deploys 500 bot teams). Default rules: 7 bots for 25 spots, 25 bots for 100 spots, 10,000 for Mega.'}
                             </p>
                           </div>
                         </div>
@@ -1579,7 +1579,7 @@ function AdminCricketMatchesContent() {
 
                         {c.type === 'h2h' && (
                           <p className="text-[10px] text-[#2563EB] font-bold bg-[#EFF6FF] border border-[#BFDBFE] rounded-lg px-2.5 py-1.5">
-                            H2H duel: 2 spots. Entry fee challenge banate waqt user set karta hai (85% winner split).
+                            H2H duel: 2 spots. Entry fee is set by the challenger during duel creation (85% winner split).
                           </p>
                         )}
                       </div>
@@ -1692,7 +1692,7 @@ function AdminCricketMatchesContent() {
             <div className="p-3 bg-amber-50 border-b border-amber-200 text-amber-950 flex items-start gap-2 text-xs">
               <span className="text-base shrink-0">🤝</span>
               <p className="text-[11px] leading-relaxed">
-                <strong>Automatic Tie-Sharing Rule:</strong> Agar 1st position ya kisi bhi rank par multiple players same points par aate hain (jaise 5 players at Rank 1), to us position ka pura prize amount un sabhi players me <strong>barabar (equally)</strong> baanta jayega.
+                <strong>Automatic Tie-Sharing Rule:</strong> If multiple players finish with identical points at Rank 1 or any position (e.g., 5 players at Rank 1), the allocated prize is split <strong>equally</strong> among them.
               </p>
             </div>
 
@@ -1716,7 +1716,7 @@ function AdminCricketMatchesContent() {
                   </span>
                 </div>
                 <p className="text-[10px] text-[#A16207]">
-                  💡 Rank 1 ka prize contest card ke prize pool se hi set hota hai. Agar Rank 1 par multiple players tie karenge to ye prize unme equally share hoga.
+                  💡 Rank 1 prize is linked directly to the contest prize pool. If multiple players tie at Rank 1, this prize is distributed equally.
                 </p>
               </div>
 
@@ -1738,7 +1738,7 @@ function AdminCricketMatchesContent() {
 
                 {prizeModalRows.length === 0 ? (
                   <div className="p-4 text-center border-2 border-dashed border-[#CBD5E1] rounded-xl text-xs text-[#64748B]">
-                    Koi rank row add nahi hai. "+ Add Position" click karke Rank 2 se aage ke prizes set karein.
+                    No rank rows added yet. Click "+ Add Position" to define prizes from Rank 2 onwards.
                   </div>
                 ) : (
                   <div className="space-y-2">

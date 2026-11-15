@@ -743,7 +743,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
       )}
 
       {/* ======================================================== */}
-      {/* 1. 🔴 LIVE MATCHES (SABSE PEHLE) */}
+      {/* 1. 🔴 LIVE MATCHES */}
       {/* ======================================================== */}
       {liveMatches.length > 0 && (
         <div className="space-y-4 pt-2">

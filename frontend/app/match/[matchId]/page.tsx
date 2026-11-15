@@ -163,7 +163,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         setJoinCodeError(res?.error || 'Invalid code');
       }
     } catch (err: any) {
-      setJoinCodeError(err?.message || 'Code resolve nahi hua');
+      setJoinCodeError(err?.message || 'Could not resolve invite code');
     } finally {
       setJoinResolving(false);
     }
@@ -184,10 +184,10 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         setCreateForm({ title: '', entry_fee: '100' });
         fetchPrivateContests();
       } else {
-        setCreateError(res?.error || 'Contest create nahi hua');
+        setCreateError(res?.error || 'Failed to create private contest');
       }
     } catch (err: any) {
-      setCreateError(err?.message || 'Contest create nahi hua');
+      setCreateError(err?.message || 'Failed to create private contest');
     } finally {
       setCreateSubmitting(false);
     }
@@ -353,7 +353,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         <div>
           <p className="text-xl font-black text-[#0F172A] mb-1">Match Expired or Moved</p>
           <p className="text-xs text-[#64748B] font-medium leading-relaxed">
-            Ye match complete ho chuka hai ya iska ID update ho gaya hai. Live Cricket Arena par jaakar active matches explore karein.
+            This match has concluded or has been updated. Please visit the Live Cricket Arena to explore active matches.
           </p>
         </div>
         <div className="pt-2">
@@ -587,7 +587,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
       </div>
 
       {/* ================================================================= */}
-      {/* 🔴 LIVE MATCH TELEMETRY DECK (Kaun khel rha h, kaun bowler h, har ball ka status) */}
+      {/* 🔴 LIVE MATCH TELEMETRY DECK (Active batsmen, bowler, ball-by-ball status) */}
       {/* ================================================================= */}
       {isLive && (
         <div className="prime-card-3d p-5 space-y-4 border-2 border-[#38BDF8] bg-white/95">
@@ -603,7 +603,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
 
           {/* Batsmen on Crease & Active Bowler */}
           <div className="grid sm:grid-cols-2 gap-4">
-            {/* Batting Crease: Kaun khel rha h */}
+            {/* Batting Crease */}
             <div className="p-4 rounded-xl bg-white border-2 border-[#93C5FD] shadow-sm space-y-3">
               <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-2">
                 <span className="text-xs font-black text-[#1E3A8A] uppercase">Batting Crease</span>
@@ -651,7 +651,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               </div>
             </div>
 
-            {/* Current Bowler: Kaun bowling kar rha h */}
+            {/* Current Bowler */}
             <div className="p-4 rounded-xl bg-white border-2 border-[#FCA5A5] shadow-sm space-y-3">
               <div className="flex justify-between items-center border-b border-[#E2E8F0] pb-2">
                 <span className="text-xs font-black text-[#DC2626] uppercase">Active Bowler</span>
@@ -711,7 +711,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
             </div>
           </div>
 
-          {/* Live Commentary Feed: Kya hua h iss ball pe */}
+          {/* Live Commentary Feed */}
           <div className="p-4 rounded-xl bg-white border border-[#CBD5E1] space-y-2">
             <h4 className="text-xs font-black text-[#1E3A8A] uppercase flex items-center gap-1.5">
               <span>Ball-by-Ball Live Commentary</span>
@@ -851,10 +851,10 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                     </div>
                     <p className="text-[11px] text-[#64748B] font-bold truncate">{t.contest_title}</p>
                     {t.is_winning ? (
-                      <p className="mt-1 font-black text-sm text-[#16A34A]">🎉 Aap jeet rahe ho ₹{Number(t.projected_winnings || 0).toLocaleString('en-IN')}</p>
+                      <p className="mt-1 font-black text-sm text-[#16A34A]">🎉 Currently winning ₹{Number(t.projected_winnings || 0).toLocaleString('en-IN')}</p>
                     ) : (
                       <p className="mt-1 text-xs font-bold text-[#475569]">
-                        {t.win_probability != null ? `Win probability: ${t.win_probability}%` : (t.note || 'Match live nahi hai')}
+                        {t.win_probability != null ? `Win probability: ${t.win_probability}%` : (t.note || 'Match is not live')}
                         {t.projected_winnings > 0 && <span className="text-[#D97706]"> • Target ₹{Number(t.projected_winnings).toLocaleString('en-IN')}</span>}
                       </p>
                     )}
@@ -877,7 +877,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                   <Shield className="w-4 h-4 text-[#D97706]" />
                   <h3 className="font-black text-sm uppercase text-[#0F172A]">Guru Expert Teams</h3>
                 </div>
-                <p className="text-xs text-[#64748B] font-bold">Experts ki banayi teams copy karo aur apna XI fatafat banao.</p>
+                <p className="text-xs text-[#64748B] font-bold">Copy expert-curated lineups and deploy your winning XI instantly.</p>
               </div>
               {guruError && (
                 <div className="pd-error"><AlertCircle className="w-4 h-4 shrink-0" /><span>{guruError}</span></div>
@@ -885,7 +885,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               {!guruLoaded ? (
                 <p className="text-xs text-[#64748B] font-bold text-center py-6">Loading expert teams...</p>
               ) : guruTeams.length === 0 ? (
-                <p className="text-xs text-[#64748B] font-bold text-center py-6">Is match ke liye abhi koi expert team nahi hai.</p>
+                <p className="text-xs text-[#64748B] font-bold text-center py-6">No expert teams available for this match yet.</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {guruTeams.map((g) => (
@@ -920,7 +920,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               {(isLive || match.is_locked) && (
                 <div className="rounded-xl bg-[#FEF2F2] border-2 border-[#FCA5A5] p-4 flex items-center gap-3 text-xs font-black text-[#991B1B]">
                   <Lock className="w-5 h-5 shrink-0 text-[#DC2626]" />
-                  <span>🔒 Match in-play / locked hone ke baad private contests create ya join nahi kiye ja sakte (Official Fairplay Rules).</span>
+                  <span>🔒 Private contests cannot be created or joined after match lock / in-play (Official Fair Play Rules).</span>
                 </div>
               )}
 
@@ -930,7 +930,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                   <Swords className="w-4 h-4 text-[#2563EB]" />
                   <h3 className="font-black text-sm uppercase text-[#0F172A]">Join Private Contest</h3>
                 </div>
-                <p className="text-xs text-[#64748B] font-bold">Dost se invite code lo aur yahan paste karo.</p>
+                <p className="text-xs text-[#64748B] font-bold">Get an invite code from a friend and enter it below.</p>
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     value={joinCode}
@@ -1014,7 +1014,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                     <div className="p-3 rounded-lg bg-amber-100/70 border border-amber-300 text-xs text-[#92400E] space-y-1">
                       <p className="font-black">Dynamic 60% Prize Pool Rule:</p>
                       <p className="leading-relaxed">
-                        Is playground me aane wale sabhi users ki total fees ka <strong>60% dynamic prize pool</strong> banega. Jaise hi naye users aayenge (e.g. 2 users @ ₹{createForm.entry_fee || 100} = ₹{Math.round((Number(createForm.entry_fee) || 100) * 2 * 0.6)}, 3 users = ₹{Math.round((Number(createForm.entry_fee) || 100) * 3 * 0.6)}), prize pool turant badhta jayega! Spots unlimited dynamic rahenge.
+                        60% of all entry fees collected in this contest forms the dynamic prize pool. As new participants join (e.g. 2 entries @ ₹{createForm.entry_fee || 100} = ₹{Math.round((Number(createForm.entry_fee) || 100) * 2 * 0.6)}, 3 entries = ₹{Math.round((Number(createForm.entry_fee) || 100) * 3 * 0.6)}), the prize pool scales up in real time with unlimited dynamic spots.
                       </p>
                     </div>
                     {createError && (
@@ -1125,7 +1125,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
 
               {privateLoaded && myCreatedPrivate.length === 0 && joinedPrivate.length === 0 && !joinResult && (
                 <div className="text-center py-6 text-xs text-[#64748B] font-bold">
-                  Abhi koi private contest nahi — code se join karo ya apna banao! 🔒
+                  No private contests yet — join with an invite code or create your own! 🔒
                 </div>
               )}
             </div>

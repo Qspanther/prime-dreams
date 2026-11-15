@@ -241,7 +241,7 @@ export default function WalletPage() {
             <div>
               <h3 className="font-black text-sm text-amber-950">Add Cash to Join Contest</h3>
               <p className="text-xs text-amber-800 font-bold mt-0.5">
-                {paramMessage || `Contest join karne ke liye aapke wallet me kam se kam ₹${paramAmount || 49} hona chahiye.`}
+                {paramMessage || `A minimum wallet balance of ₹${paramAmount || 49} is required to enter this contest.`}
               </p>
             </div>
           </div>

@@ -220,7 +220,7 @@ export default function PrizeBreakupModal({
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-950 flex items-start gap-2.5">
             <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
             <p className="text-[11px] leading-relaxed">
-              <strong>Fair Tie Distribution:</strong> Agar 1st position ya kisi bhi rank par multiple players same points par aate hain (jaise 5 players at Rank 1), to un sabhi players me us position ka pura prize <strong>barabar (equally)</strong> baanta jata hai.
+              <strong>Fair Tie Distribution:</strong> If multiple players finish with identical points at any rank (e.g., 5 players at Rank 1), the combined prize for those positions is distributed <strong>equally</strong> among all tied players.
             </p>
           </div>
 

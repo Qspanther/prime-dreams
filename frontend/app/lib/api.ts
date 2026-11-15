@@ -62,7 +62,7 @@ export async function api(endpoint: string, options: FetchOptions = {}) {
       await new Promise(r => setTimeout(r, 600));
       return api(endpoint, { ...options, retries: retries - 1 });
     }
-    throw new Error('Network error: server se sampark nahi ho pa raha.');
+    throw new Error('Network error: Unable to connect to server. Please try again.');
   }
 
   const text = await res.text();

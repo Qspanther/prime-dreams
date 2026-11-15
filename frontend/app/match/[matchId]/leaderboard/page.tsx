@@ -16,6 +16,10 @@ type LeaderboardData = {
   contest?: { id: string; title: string; status: string; entry_fee?: number; prize_pool?: number; type?: string } | null;
   contests?: Array<{ id: string; title: string; status: string; entry_fee?: number; prize_pool?: number; type?: string }>;
   contest_leaderboard?: any[];
+  total_contest_teams?: number;
+  batch_page?: number;
+  batch_limit?: number;
+  has_more?: boolean;
   contest_lineups_hidden?: boolean;
   my_team?: { team_id: string; team_name: string; rank: number | null; total_points: number; players?: any[] } | null;
 };
@@ -32,9 +36,17 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+
+  // Progressive 10-team Batched Loading & Priority Search States
+  const [displayedTeams, setDisplayedTeams] = useState<any[]>([]);
+  const [currentBatch, setCurrentBatch] = useState<number>(1);
+  const [totalContestTeams, setTotalContestTeams] = useState<number>(0);
+  const [hasMoreBatches, setHasMoreBatches] = useState<boolean>(false);
+  const [loadingNextBatch, setLoadingNextBatch] = useState<boolean>(false);
   const [participantSearch, setParticipantSearch] = useState('');
-  const [participantSearchResults, setParticipantSearchResults] = useState<any[] | null>(null);
-  const [participantSearchLoading, setParticipantSearchLoading] = useState(false);
+  const [isSearchActive, setIsSearchActive] = useState<boolean>(false);
+  const [searchLoading, setSearchLoading] = useState<boolean>(false);
+
   const [compareOpponent, setCompareOpponent] = useState<any>(null);
 
   const refresh = useCallback(async () => {
@@ -42,6 +54,8 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
       const q = new URLSearchParams();
       if (teamId) q.set('team_id', teamId);
       if (selectedContestId) q.set('contest_id', selectedContestId);
+      q.set('page', '1');
+      q.set('limit', '10');
       const queryStr = q.toString() ? `?${q.toString()}` : '';
       const result = await apiGet(`/matches/${matchId}/leaderboard${queryStr}`, token || undefined);
       if (result?.match?.id && result.match.id !== matchId && typeof window !== 'undefined') {
@@ -51,18 +65,86 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
       if (!selectedContestId && result?.contest?.id) {
         setSelectedContestId(result.contest.id);
       }
+      if (!isSearchActive) {
+        const teams = result?.contest_leaderboard || [];
+        setDisplayedTeams(teams);
+        setCurrentBatch(1);
+        setHasMoreBatches(Boolean(result?.has_more));
+        setTotalContestTeams(Number(result?.total_contest_teams) || teams.length);
+      }
       setError('');
       setUpdatedAt(new Date());
     } catch (err: any) {
       console.warn('Leaderboard refresh warning:', err?.message);
       setData(prev => {
-        if (!prev) setError('Live leaderboard sync ho raha hai. Thodi der me auto-refresh hoga.');
+        if (!prev) setError('Live leaderboard is synchronizing. Auto-refreshing shortly.');
         return prev;
       });
     } finally {
       setLoading(false);
     }
-  }, [matchId, teamId, selectedContestId, token]);
+  }, [matchId, teamId, selectedContestId, token, isSearchActive]);
+
+  const loadNextBatch = async () => {
+    if (loadingNextBatch || !hasMoreBatches || isSearchActive) return;
+    setLoadingNextBatch(true);
+    try {
+      const nextPage = currentBatch + 1;
+      const q = new URLSearchParams();
+      if (teamId) q.set('team_id', teamId);
+      if (selectedContestId) q.set('contest_id', selectedContestId);
+      q.set('page', String(nextPage));
+      q.set('limit', '10');
+      const result = await apiGet(`/matches/${matchId}/leaderboard?${q.toString()}`, token || undefined);
+      const newTeams = result.contest_leaderboard || [];
+      setDisplayedTeams(prev => {
+        const existingIds = new Set(prev.map(t => t.team_id));
+        const filtered = newTeams.filter((t: any) => !existingIds.has(t.team_id));
+        return [...prev, ...filtered];
+      });
+      setCurrentBatch(nextPage);
+      setHasMoreBatches(Boolean(result.has_more));
+    } catch (err) {
+      console.warn('Failed to load next team batch:', err);
+    } finally {
+      setLoadingNextBatch(false);
+    }
+  };
+
+  // Priority Search: Instant server-side priority preference for team name or user ID
+  useEffect(() => {
+    const query = participantSearch.trim();
+    if (query.length < 2) {
+      if (isSearchActive) {
+        setIsSearchActive(false);
+        if (data?.contest_leaderboard) {
+          setDisplayedTeams(data.contest_leaderboard);
+          setCurrentBatch(1);
+          setHasMoreBatches(Boolean(data.has_more));
+        }
+      }
+      return;
+    }
+
+    setIsSearchActive(true);
+    setSearchLoading(true);
+    const timer = setTimeout(async () => {
+      try {
+        const q = new URLSearchParams();
+        if (selectedContestId) q.set('contest_id', selectedContestId);
+        q.set('search', query);
+        const result = await apiGet(`/matches/${matchId}/leaderboard?${q.toString()}`, token || undefined);
+        setDisplayedTeams(result.contest_leaderboard || []);
+        setHasMoreBatches(false);
+      } catch (err) {
+        console.warn('Search error:', err);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 280);
+
+    return () => clearTimeout(timer);
+  }, [participantSearch, matchId, selectedContestId, token, isSearchActive, data]);
 
   useEffect(() => {
     let active = true;
@@ -88,13 +170,13 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
             if ((message.type === 'BALL_DELTA' || message.type === 'MATCH_SNAPSHOT' || message.type === 'RESYNC_REQUIRED') && message.match_id === matchId) {
               scheduleRefresh();
             }
-          } catch { /* Ignore malformed telemetry and keep the REST fallback active. */ }
+          } catch { /* keep REST fallback active */ }
         };
         socket.onclose = () => {
           if (!stopped) reconnectTimer = setTimeout(connect, 2000);
         };
         socket.onerror = () => socket?.close();
-      } catch { /* REST refresh remains available when WebSocket is unavailable. */ }
+      } catch { /* REST refresh remains available */ }
     };
     connect();
     const fallbackPoll = setInterval(() => { void safeRefresh(); }, 12000);
@@ -109,54 +191,14 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
     };
   }, [matchId, refresh]);
 
-  useEffect(() => {
-    const query = participantSearch.trim();
-    if (!teamId || query.length < 2 || !token) {
-      setParticipantSearchResults(null);
-      setParticipantSearchLoading(false);
-      return;
-    }
-
-    let active = true;
-    setParticipantSearchLoading(true);
-    setParticipantSearchResults(null);
-    const timer = setTimeout(async () => {
-      try {
-        const result = await apiGet(`/users/search?q=${encodeURIComponent(query)}`, token);
-        if (active) setParticipantSearchResults(result.users || []);
-      } catch {
-        if (active) setParticipantSearchResults([]);
-      } finally {
-        if (active) setParticipantSearchLoading(false);
-      }
-    }, 250);
-
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [participantSearch, teamId, token]);
-
   const match = data?.match;
-  const matchTitle = match?.title || [match?.team_a, match?.team_b].filter(Boolean).join(' vs ') || 'Match leaderboard';
+  const matchTitle = match?.title || [match?.team_a, match?.team_b].filter(Boolean).join(' vs ') || 'Match Leaderboard';
   const activeMyTeam = data?.my_team || null;
-  const myTeamPlayers = activeMyTeam?.players || [];
-  const allContestTeams = data?.contest_leaderboard || [];
-  const visibleContestTeams = participantSearch.trim().length >= 2
-    ? allContestTeams.filter(team => {
-        const q = participantSearch.toLowerCase();
-        return (
-          team.username?.toLowerCase().includes(q) ||
-          team.team_name?.toLowerCase().includes(q) ||
-          participantSearchResults?.some(user => user.id === team.user_id)
-        );
-      })
-    : allContestTeams;
 
   return (
     <main className="max-w-6xl mx-auto px-3 sm:px-6 py-6 space-y-5 text-[#0F172A]">
-      <Link href={`/match/${matchId}`} className="inline-flex items-center gap-2 text-sm font-bold text-[#475569] hover:text-[#2563EB]">
-        <ArrowLeft className="w-4 h-4" /> Match par wapas
+      <Link href={`/match/${matchId}`} className="inline-flex items-center gap-2 text-sm font-bold text-[#475569] hover:text-[#2563EB] transition-colors">
+        <ArrowLeft className="w-4 h-4" /> Back to Match
       </Link>
 
       <header className="prime-card-3d p-5 sm:p-7 space-y-4">
@@ -164,14 +206,18 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
           <div>
             <div className="flex items-center gap-2 text-xs font-black uppercase tracking-wider text-[#D97706]">
               {match?.status === 'live' ? <Radio className="w-4 h-4 animate-pulse" /> : <Trophy className="w-4 h-4" />}
-              {match?.status === 'live' ? 'Live · ball-by-ball updates' : (match?.status || 'Leaderboard')}
+              {match?.status === 'live' ? 'Live · Ball-by-ball updates' : (match?.status || 'Leaderboard')}
             </div>
             <h1 className="mt-2 text-xl sm:text-3xl font-black">{matchTitle}</h1>
-            {match?.score_summary && <p className="mt-1 text-sm font-bold text-[#475569]">{[match.score_summary.team_a, match.score_summary.team_b].filter(Boolean).map((score: any) => `${score.runs ?? 0}/${score.wickets ?? 0} (${score.overs ?? 0} ov)`).join(' · ')}</p>}
+            {match?.score_summary && (
+              <p className="mt-1 text-sm font-bold text-[#475569]">
+                {[match.score_summary.team_a, match.score_summary.team_b].filter(Boolean).map((score: any) => `${score.runs ?? 0}/${score.wickets ?? 0} (${score.overs ?? 0} ov)`).join(' · ')}
+              </p>
+            )}
           </div>
           <div className="flex items-center gap-2 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-bold text-[#64748B]">
             <RefreshCw className="w-3.5 h-3.5" />
-            {updatedAt ? `Updated ${updatedAt.toLocaleTimeString()}` : 'Connecting live feed'}
+            {updatedAt ? `Updated ${updatedAt.toLocaleTimeString()}` : 'Connecting live feed...'}
           </div>
         </div>
         {error && (
@@ -187,14 +233,6 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
         )}
       </header>
 
-      {data?.my_team && (
-        <section className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="prime-card-3d p-4"><p className="text-xs font-bold text-[#64748B]">Your contest rank</p><p className="mt-1 text-2xl font-black text-[#2563EB]">{data.my_team.rank ? `#${data.my_team.rank}` : '—'}</p></div>
-          <div className="prime-card-3d p-4"><p className="text-xs font-bold text-[#64748B]">Your team points</p><p className="mt-1 text-2xl font-black text-[#D97706]">{Number(data.my_team.total_points || 0).toFixed(1)}</p></div>
-          <div className="prime-card-3d p-4 col-span-2 sm:col-span-1"><p className="text-xs font-bold text-[#64748B]">Contest</p><p className="mt-1 truncate text-base font-black">{data.contest?.title || 'Not entered in a contest'}</p></div>
-        </section>
-      )}
-
       {/* Contest Selector Tabs */}
       {(data?.contests || []).length > 0 && (
         <section className="prime-card-3d p-4 space-y-3 bg-gradient-to-r from-blue-50/70 via-amber-50/40 to-slate-50 border-2 border-blue-200/80">
@@ -208,7 +246,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
             {data?.contests?.map((c: any) => {
               const isSelected = selectedContestId === c.id || (!selectedContestId && data?.contest?.id === c.id);
               return (
@@ -217,6 +255,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                   onClick={() => {
                     setSelectedContestId(c.id);
                     setParticipantSearch('');
+                    setIsSearchActive(false);
                   }}
                   className={`px-3.5 py-2 rounded-xl text-xs font-black shrink-0 transition cursor-pointer flex items-center gap-2 border ${
                     isSelected
@@ -235,12 +274,12 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
         </section>
       )}
 
-      {/* Your Team Quick Stats (if user has entered this contest) */}
+      {/* Your Team Quick Summary */}
       {data?.my_team && (
         <section className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="prime-card-3d p-4"><p className="text-xs font-bold text-[#64748B]">Your contest rank</p><p className="mt-1 text-2xl font-black text-[#2563EB]">{data.my_team.rank ? `#${data.my_team.rank}` : '—'}</p></div>
-          <div className="prime-card-3d p-4"><p className="text-xs font-bold text-[#64748B]">Your team points</p><p className="mt-1 text-2xl font-black text-[#D97706]">{Number(data.my_team.total_points || 0).toFixed(1)}</p></div>
-          <div className="prime-card-3d p-4 col-span-2 sm:col-span-1"><p className="text-xs font-bold text-[#64748B]">Contest</p><p className="mt-1 truncate text-base font-black">{data.contest?.title || 'Contest'}</p></div>
+          <div className="prime-card-3d p-4"><p className="text-xs font-bold text-[#64748B]">Your Contest Rank</p><p className="mt-1 text-2xl font-black text-[#2563EB]">{data.my_team.rank ? `#${data.my_team.rank}` : '—'}</p></div>
+          <div className="prime-card-3d p-4"><p className="text-xs font-bold text-[#64748B]">Your Fantasy Points</p><p className="mt-1 text-2xl font-black text-[#D97706]">{Number(data.my_team.total_points || 0).toFixed(1)}</p></div>
+          <div className="prime-card-3d p-4 col-span-2 sm:col-span-1"><p className="text-xs font-bold text-[#64748B]">Current Contest</p><p className="mt-1 truncate text-base font-black">{data.contest?.title || 'Contest'}</p></div>
         </section>
       )}
 
@@ -255,7 +294,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
           }`}
         >
           <Trophy className="w-4 h-4 text-[#D97706]" />
-          <span>All Contest Teams ({allContestTeams.length})</span>
+          <span>All Contest Teams ({totalContestTeams || displayedTeams.length})</span>
         </button>
 
         <button
@@ -271,7 +310,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
         </button>
       </div>
 
-      {/* TAB 1: ALL CONTEST TEAMS */}
+      {/* TAB 1: ALL CONTEST TEAMS (Batched in sets of 10 with priority search) */}
       {activeLeaderboardTab === 'contest_teams' && (
         <section className="prime-card-3d overflow-hidden space-y-4 p-4 sm:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3 border-b border-[#E2E8F0] pb-4">
@@ -281,35 +320,65 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                 {data?.contest?.title || 'Contest'} — All User Teams
               </h2>
               <p className="mt-1 text-xs text-[#64748B]">
-                Is contest mein create ki gayi sabhi users ki teams, players, captain aur points. Kisi bhi team par tap karke uske 11 players dekhein ya apni team se compare karein.
+                All user teams, players, captains and points in this contest. Tap any team to inspect its 11 players or compare with your lineup.
               </p>
             </div>
-            <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
-              {visibleContestTeams.length} teams
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-700">
+                {isSearchActive ? `${displayedTeams.length} Matches Found` : `Showing ${displayedTeams.length} of ${totalContestTeams || displayedTeams.length} Teams`}
+              </span>
+            </div>
           </div>
 
-          <label className="flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2 shadow-xs">
-            <Search className="h-4 w-4 shrink-0 text-blue-600" />
-            <input
-              type="search"
-              value={participantSearch}
-              onChange={event => setParticipantSearch(event.target.value)}
-              placeholder="Username ya team name se search karein..."
-              className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
-            />
-            {participantSearch && (
-              <button type="button" onClick={() => setParticipantSearch('')} className="rounded-full p-1 text-slate-500 hover:bg-slate-100">
-                <X className="h-4 w-4" />
-              </button>
+          {/* Priority Search Input */}
+          <div className="space-y-1.5">
+            <label className="flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2 shadow-xs">
+              <Search className="h-4 w-4 shrink-0 text-blue-600" />
+              <input
+                type="search"
+                value={participantSearch}
+                onChange={event => setParticipantSearch(event.target.value)}
+                placeholder="Search by team name, username, or user ID..."
+                className="min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none placeholder:text-slate-400"
+              />
+              {participantSearch && (
+                <button
+                  type="button"
+                  onClick={() => setParticipantSearch('')}
+                  className="rounded-full p-1 text-slate-500 hover:bg-slate-100 cursor-pointer"
+                  title="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </label>
+            {isSearchActive && (
+              <p className="text-[11px] text-blue-600 font-bold px-1 flex items-center justify-between">
+                <span>⚡ Priority Search Active: Showing results for &quot;{participantSearch}&quot;</span>
+                <button
+                  type="button"
+                  onClick={() => setParticipantSearch('')}
+                  className="text-slate-500 hover:text-slate-800 underline cursor-pointer"
+                >
+                  Reset &amp; Resume Batch View
+                </button>
+              </p>
             )}
-          </label>
+          </div>
 
-          {loading && !data ? (
-            <p className="p-8 text-center text-sm font-bold text-[#64748B]">Contest teams load ho rahi hain…</p>
-          ) : visibleContestTeams.length > 0 ? (
+          {loading && displayedTeams.length === 0 ? (
+            <div className="p-12 text-center text-sm font-bold text-[#64748B] space-y-2">
+              <div className="w-8 h-8 border-3 border-[#2563EB] border-t-transparent rounded-full animate-spin mx-auto" />
+              <p>Loading initial batch of teams...</p>
+            </div>
+          ) : searchLoading ? (
+            <div className="p-8 text-center text-sm font-bold text-[#64748B] space-y-2">
+              <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+              <p>Searching teams with priority preference...</p>
+            </div>
+          ) : displayedTeams.length > 0 ? (
             <div className="space-y-3">
-              {visibleContestTeams.map((team: any, tIdx: number) => {
+              {displayedTeams.map((team: any) => {
                 const isMyTeam = team.is_my_team || (data?.my_team && data.my_team.team_id === team.team_id);
                 return (
                   <details
@@ -368,7 +437,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                               if (activeMyTeam) {
                                 setCompareOpponent(team);
                               } else {
-                                alert('Aapki team se compare karne ke liye pehle is match me apni team create karein.');
+                                alert('Please create your team in this match first to compare lineups.');
                               }
                             }}
                             className="prime-btn-dark-3d !py-1.5 !px-3 text-xs font-black flex items-center gap-1.5 cursor-pointer hover:border-[#2563EB]"
@@ -434,19 +503,49 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                   </details>
                 );
               })}
+
+              {/* Batched Progressive Loading Controls */}
+              {!isSearchActive && hasMoreBatches && (
+                <div className="pt-4 text-center">
+                  <button
+                    type="button"
+                    onClick={loadNextBatch}
+                    disabled={loadingNextBatch}
+                    className="prime-btn-3d !py-2.5 !px-6 text-xs font-black uppercase tracking-wider inline-flex items-center gap-2 cursor-pointer shadow-sm hover:scale-[1.02] transition-transform"
+                  >
+                    {loadingNextBatch ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Loading Next 10 Teams...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Load Next 10 Teams (Batch #{currentBatch + 1})</span>
+                        <span className="text-[10px] opacity-80 font-mono">({displayedTeams.length}/{totalContestTeams})</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+
+              {!isSearchActive && !hasMoreBatches && displayedTeams.length > 0 && (
+                <p className="text-[11px] text-slate-400 font-bold text-center pt-2">
+                  ✓ All {displayedTeams.length} contest teams loaded successfully
+                </p>
+              )}
             </div>
           ) : (
             <div className="text-center py-10 space-y-3">
               <p className="text-sm font-bold text-[#64748B]">
                 {participantSearch.trim().length >= 2
-                  ? 'Is search query se koi team nahi mili.'
-                  : 'Is contest mein abhi tak koi team create nahi hui hai.'}
+                  ? 'No teams found matching your search query.'
+                  : 'No teams have entered this contest yet.'}
               </p>
               <Link
                 href={`/team-builder/${matchId}${data?.contest?.id ? `?contestId=${data.contest.id}` : ''}`}
                 className="prime-btn-3d inline-flex items-center gap-2 text-xs !py-2 !px-4"
               >
-                + Sabse Pehle Team Banayein
+                + Be the First to Create a Team
               </Link>
             </div>
           )}
@@ -458,12 +557,12 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
         <section className="prime-card-3d overflow-hidden">
           <div className="flex items-center justify-between border-b border-[#E2E8F0] p-4 sm:p-5">
             <div>
-              <h2 className="flex items-center gap-2 text-lg font-black"><Trophy className="w-5 h-5 text-[#D97706]" /> Match player leaderboard</h2>
-              <p className="mt-1 text-xs text-[#64748B]">Match ke sabhi listed players ke fantasy points aur live rank.</p>
+              <h2 className="flex items-center gap-2 text-lg font-black"><Trophy className="w-5 h-5 text-[#D97706]" /> Match Player Leaderboard</h2>
+              <p className="mt-1 text-xs text-[#64748B]">Live fantasy points and match rankings for all participating players.</p>
             </div>
             <span className="text-xs font-black text-[#64748B]">{data?.player_leaderboard?.length || 0} players</span>
           </div>
-          {loading && !data ? <p className="p-8 text-center text-sm font-bold text-[#64748B]">Live points load ho rahe hain…</p> : (
+          {loading && !data ? <p className="p-8 text-center text-sm font-bold text-[#64748B]">Loading live fantasy points...</p> : (
             <div className="divide-y divide-[#E2E8F0]">
               {(data?.player_leaderboard || []).map(player => (
                 <div key={player.id} className="grid grid-cols-[3rem_minmax(0,1fr)_5rem] sm:grid-cols-[4rem_minmax(0,1fr)_7rem_7rem] items-center gap-2 px-4 py-3">
@@ -473,13 +572,13 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                   <span className="text-right font-mono text-base font-black text-[#D97706]">{Number(player.points || 0).toFixed(1)}</span>
                 </div>
               ))}
-              {!loading && !data?.player_leaderboard?.length && <p className="p-8 text-center text-sm font-bold text-[#64748B]">Is match ke player points abhi available nahi hain.</p>}
+              {!loading && !data?.player_leaderboard?.length && <p className="p-8 text-center text-sm font-bold text-[#64748B]">Player points are not yet available for this match.</p>}
             </div>
           )}
         </section>
       )}
 
-      {/* Dream11-Style Head-to-Head Compare XI Modal */}
+      {/* Head-to-Head Compare XI Modal */}
       <CompareTeamModal
         isOpen={!!compareOpponent}
         onClose={() => setCompareOpponent(null)}

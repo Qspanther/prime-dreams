@@ -420,8 +420,20 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
     }
 
     let contestLeaderboard = [];
+    let totalContestTeams = 0;
+    let batchPage = 1;
+    let batchLimit = 10;
+    let hasMoreBatches = false;
+
     if (selectedContest) {
-      const teams = await CricketTeam.findAll({
+      batchPage = Math.max(1, parseInt(req.query.page, 10) || 1);
+      batchLimit = req.query.all === 'true' ? 5000 : Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 10));
+      const offset = (batchPage - 1) * batchLimit;
+      const searchQuery = (req.query.search || req.query.q || '').trim();
+
+      totalContestTeams = await CricketTeam.count({ where: { contest_id: selectedContest.id } });
+
+      let teamsQueryOptions = {
         where: { contest_id: selectedContest.id },
         attributes: ['id', 'user_id', 'team_name', 'total_points', 'captain_id', 'vice_captain_id', 'created_at'],
         include: [
@@ -434,14 +446,56 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
           },
         ],
         order: [['total_points', 'DESC'], ['created_at', 'ASC']],
-      });
+      };
 
-      let priorTeamPoints = null;
-      let teamRank = 0;
-      contestLeaderboard = teams.map((team, index) => {
+      if (searchQuery) {
+        // Priority Search: Search by Team Name, Username, Full Name, or User ID
+        const matchedUsers = await User.findAll({
+          where: {
+            [Op.or]: [
+              { username: { [Op.like]: `%${searchQuery}%` } },
+              { name: { [Op.like]: `%${searchQuery}%` } },
+              { id: searchQuery }
+            ]
+          },
+          attributes: ['id'],
+          limit: 30,
+          raw: true
+        });
+        const matchedUserIds = matchedUsers.map(u => u.id);
+
+        teamsQueryOptions.where = {
+          contest_id: selectedContest.id,
+          [Op.or]: [
+            { team_name: { [Op.like]: `%${searchQuery}%` } },
+            ...(matchedUserIds.length > 0 ? [{ user_id: { [Op.in]: matchedUserIds } }] : [])
+          ]
+        };
+        teamsQueryOptions.limit = 50;
+      } else {
+        teamsQueryOptions.limit = batchLimit;
+        teamsQueryOptions.offset = offset;
+      }
+
+      const teams = await CricketTeam.findAll(teamsQueryOptions);
+
+      hasMoreBatches = !searchQuery && (offset + teams.length < totalContestTeams);
+
+      contestLeaderboard = await Promise.all(teams.map(async (team, index) => {
         const points = Number(team.total_points) || 0;
-        if (priorTeamPoints === null || points !== priorTeamPoints) teamRank = index + 1;
-        priorTeamPoints = points;
+        let teamRank = 0;
+        if (searchQuery) {
+          // Accurate global rank for priority searched team
+          const higherTeams = await CricketTeam.count({
+            where: {
+              contest_id: selectedContest.id,
+              total_points: { [Op.gt]: points }
+            }
+          });
+          teamRank = higherTeams + 1;
+        } else {
+          teamRank = offset + index + 1;
+        }
 
         const mappedPlayers = (team.teamPlayers || []).map(entry => ({
           id: entry.player?.id,
@@ -475,7 +529,7 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
           is_my_team: req.user ? team.user_id === req.user.id : false,
           players: mappedPlayers,
         };
-      });
+      }));
 
       // If user is logged in and didn't specify teamId, look up their team in this contest or match
       if (req.user && !myTeam) {
@@ -566,6 +620,10 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
         status: selectedContest.status,
       } : null,
       contest_leaderboard: contestLeaderboard,
+      total_contest_teams: totalContestTeams,
+      batch_page: batchPage,
+      batch_limit: batchLimit,
+      has_more: hasMoreBatches,
       my_team: myTeamPayload,
     };
 

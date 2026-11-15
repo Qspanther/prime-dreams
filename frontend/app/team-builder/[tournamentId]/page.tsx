@@ -366,10 +366,10 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
     if (!editingTeamId && !h2hFlow && entryFee > 0 && walletBalance !== null && walletBalance < entryFee) {
       const needed = Math.round((entryFee - walletBalance) * 100) / 100;
       const returnUrl = `/team-builder/${matchId}${selectedContestId ? `?contestId=${selectedContestId}` : ''}`;
-      setError(`Aapke wallet me paryapt balance nahi hai (Available: ₹${walletBalance}, Required: ₹${entryFee}). Redirecting to Add Cash...`);
+      setError(`Insufficient wallet balance (Available: ₹${walletBalance}, Required: ₹${entryFee}). Redirecting to Add Funds...`);
       setShowPitchPreview(false);
       setTimeout(() => {
-        router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(returnUrl)}&message=Contest (₹${entryFee}) join karne ke liye funds add karein`);
+        router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(returnUrl)}&message=Add%20funds%20to%20join%20contest%20(₹${entryFee})`);
       }, 1500);
       return;
     }
@@ -400,7 +400,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
           setError(`Insufficient wallet balance! ₹${entryFee} required. Redirecting to Add Cash...`);
           setShowPitchPreview(false);
           setTimeout(() => {
-            router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(window.location.href)}&message=Contest ke liye funds add karein`);
+            router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(window.location.href)}&message=Add%20funds%20for%20contest`);
           }, 1500);
         } else {
           setError(res?.error || 'Failed to submit team');
@@ -412,7 +412,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
         setError(`Insufficient wallet balance! ₹${entryFee} required. Redirecting to Add Cash...`);
         setShowPitchPreview(false);
         setTimeout(() => {
-          router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(window.location.href)}&message=Contest ke liye funds add karein`);
+          router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(window.location.href)}&message=Add%20funds%20for%20contest`);
         }, 1500);
       } else {
         setError(err?.message || 'Error saving team. Check contest lock and balance.');
@@ -440,7 +440,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
         <div>
           <p className="text-xl font-black text-[#0F172A] mb-1">Match Expired or Moved</p>
           <p className="text-xs text-[#64748B] font-medium leading-relaxed">
-            Ye match complete ho chuka hai ya iska ID update ho gaya hai. Active matches par jaakar nayi team banayein.
+            This match is completed or has moved. Please visit active matches to build your fantasy team.
           </p>
         </div>
         <div className="pt-2">
@@ -510,7 +510,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
             <span className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-md">🔒</span>
             <div>
               <h3 className="font-black text-sm text-red-950">Squads Locked (Match In-Play)</h3>
-              <p className="text-xs text-red-700 font-medium">Match shuru ho chuka hai. Official rules ke anusar live match me nayi team create ya edit nahi ki ja sakti.</p>
+              <p className="text-xs text-red-700 font-medium">Match has started. Per official rules, teams cannot be created or edited once the match is in-play.</p>
             </div>
           </div>
           <Link href={`/match/${matchId}`} className="prime-btn-dark-3d !py-2 !px-3 text-xs shrink-0">
@@ -674,7 +674,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                   {switching ? 'Switching...' : 'Switch Contest'}
                 </button>
               </div>
-              <p className="text-[10px] text-[#64748B] font-bold">Entry fee difference auto-adjust hoti hai (refund/extra deduction).</p>
+              <p className="text-[10px] text-[#64748B] font-bold">Entry fee difference is automatically adjusted (refunded or deducted).</p>
             </div>
           )}
         </div>
@@ -742,7 +742,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
           {isLowBalance && (
             <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 border border-red-200 text-xs font-bold text-red-700">
               <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>Insufficient balance for this contest. ₹{entryFee - (walletBalance || 0)} add karein team enter karne ke liye.</span>
+              <span>Insufficient balance for this contest. Please add ₹{entryFee - (walletBalance || 0)} to join.</span>
             </div>
           )}
         </div>

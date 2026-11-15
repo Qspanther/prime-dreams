@@ -66,9 +66,9 @@ export default function H2HChallengePage() {
     // Pre-check wallet balance
     if (walletBalance !== null && walletBalance < entryAmount) {
       const needed = Math.round((entryAmount - walletBalance) * 100) / 100;
-      setError(`Aapke wallet me paryapt balance nahi hai (Available: ₹${walletBalance}, Required: ₹${entryAmount}). Redirecting to Add Cash...`);
+      setError(`Insufficient wallet balance (Available: ₹${walletBalance}, Required: ₹${entryAmount}). Redirecting to Add Cash...`);
       setTimeout(() => {
-        router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(window.location.href)}&message=H2H Challenge (₹${entryAmount}) ke liye funds add karein`);
+        router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(window.location.href)}&message=Add funds to send H2H Challenge (₹${entryAmount})`);
       }, 1500);
       return;
     }
@@ -89,7 +89,7 @@ export default function H2HChallengePage() {
         const needed = walletBalance !== null ? Math.max(10, entryAmount - walletBalance) : entryAmount;
         setError(`Insufficient wallet balance! ₹${entryAmount} required. Redirecting to Add Cash...`);
         setTimeout(() => {
-          router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(window.location.href)}&message=H2H Challenge ke liye funds add karein`);
+          router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(window.location.href)}&message=Add funds for H2H Challenge`);
         }, 1500);
       } else {
         setError(err?.message || 'Could not send the challenge. Check your wallet balance.');
@@ -200,7 +200,7 @@ export default function H2HChallengePage() {
           {walletBalance !== null && Number(amount) > walletBalance ? (
             <button
               type="button"
-              onClick={() => router.push(`/wallet?depositAmount=${Math.max(50, Number(amount) - walletBalance)}&needed=${Number(amount) - walletBalance}&returnUrl=${encodeURIComponent(window.location.href)}&message=H2H Challenge ke liye funds add karein`)}
+              onClick={() => router.push(`/wallet?depositAmount=${Math.max(50, Number(amount) - walletBalance)}&needed=${Number(amount) - walletBalance}&returnUrl=${encodeURIComponent(window.location.href)}&message=Add%20funds%20for%20H2H%20Challenge`)}
               className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg flex items-center justify-center gap-2 border-2 border-amber-300 cursor-pointer"
             >
               <span>+ Add ₹{Number(amount) - walletBalance} to Send Challenge</span>
