@@ -12,6 +12,7 @@ const wsGateway = require('../websocket/wsGateway');
 const config = require('../../config');
 const { Op } = require('sequelize');
 const { botScheduler, checkIsEndGame, rearrangeBotsForEndGame } = require('../botScheduler');
+const { isMatchBlacklisted } = require('../deletedMatchesRegistry');
 
 let workerInterval = null;
 let isProcessing = false;
@@ -56,6 +57,10 @@ function getSourceLiveData(feedMatch, timestamp = new Date().toISOString()) {
 }
 
 async function createDiscoveredLiveMatch(feedMatch) {
+  if (isMatchBlacklisted(feedMatch)) {
+    console.log(`🛡️ [Ingestion] Blocked recreation of admin-deleted match: "${feedMatch.title}"`);
+    return null;
+  }
   const startTime = feedMatch.start_time_ms ? new Date(feedMatch.start_time_ms) : new Date();
   const now = new Date();
   const match = await CricketMatch.create({
@@ -451,6 +456,7 @@ async function processLiveIngestionTick() {
     // This does not seed sample data or alter existing users, wallets, or contests.
     for (const feedMatch of liveMatchesFeed) {
       if (feedMatch.status !== 'live' || matchedFeedIds.has(feedMatch.cricbuzz_id)) continue;
+      if (isMatchBlacklisted(feedMatch)) continue;
       const existing = await CricketMatch.findOne({ where: { cricbuzz_id: feedMatch.cricbuzz_id } });
       if (!existing) await createDiscoveredLiveMatch(feedMatch);
     }

@@ -1,30 +1,35 @@
 const sequelize = require('../db/index');
 const hotStore = require('./ingestion/hotStore');
+const { registerDeletedMatch } = require('./deletedMatchesRegistry');
 
 /**
  * 🗑️ Bulletproof Match Deletion Service
  * Permanently deletes any Cricket Match and cascades through all related records
- * (Contests, Squad Players, Cricket Teams, Team Players, H2H Challenges, Score Logs, Points Logs)
- * Guaranteed to succeed under ANY condition by temporarily disabling foreign key constraints in SQLite.
+ * (Contests, Squad Players, Cricket Teams, Team Players, H2H Challenges, Guru Teams, Score Logs, Points Logs).
+ * Registers match tombstones so background ingestion workers NEVER re-discover or recreate it.
  */
 async function deleteMatchPermanently(matchId) {
   if (!matchId) {
     throw new Error('match_id is required for deletion');
   }
 
-  // 1. Fetch match to confirm existence and title
-  const [matches] = await sequelize.query(
-    'SELECT id, title FROM cricket_matches WHERE id = ?',
-    { replacements: [matchId] }
-  ).catch(() => [[]]);
+  // 1. Fetch match details before deletion so we can blacklist its cricbuzz_id and teams
+  const matches = await sequelize.query(
+    'SELECT id, title, team_a, team_b, team_a_code, team_b_code, cricbuzz_id FROM cricket_matches WHERE id = ?',
+    { replacements: [matchId], type: sequelize.QueryTypes.SELECT }
+  ).catch(() => []);
 
-  const matchTitle = (matches && matches[0] && matches[0].title) || `Match ID ${matchId}`;
+  const matchData = (matches && matches[0]) || { id: matchId };
+  const matchTitle = matchData.title || `Match ID ${matchId}`;
+
+  // 🛡️ Register tombstone IMMEDIATELY: locks out background Cricbuzz ingestion loops permanently
+  await registerDeletedMatch(matchData);
 
   // 2. Temporarily turn off foreign keys in SQLite so constraint locks NEVER block deletion
   try {
     await sequelize.query('PRAGMA foreign_keys = OFF;');
   } catch (e) {
-    console.warn('Could not disable PRAGMA foreign_keys:', e.message);
+    // In PostgreSQL PRAGMA does not apply; child deletion handles constraints cleanly
   }
 
   try {
@@ -88,7 +93,13 @@ async function deleteMatchPermanently(matchId) {
       ).catch(() => {});
     }
 
-    // 8. Delete score_audit_logs & player_points_logs
+    // 8. Delete guru_teams
+    await sequelize.query(
+      'DELETE FROM guru_teams WHERE match_id = ?',
+      { replacements: [matchId] }
+    ).catch(() => {});
+
+    // 9. Delete score_audit_logs & player_points_logs
     await sequelize.query(
       'DELETE FROM score_audit_logs WHERE match_id = ?',
       { replacements: [matchId] }
@@ -98,7 +109,7 @@ async function deleteMatchPermanently(matchId) {
       { replacements: [matchId] }
     ).catch(() => {});
 
-    // 9. Delete cricket_teams
+    // 10. Delete cricket_teams
     await sequelize.query(
       'DELETE FROM cricket_teams WHERE match_id = ?',
       { replacements: [matchId] }
@@ -111,28 +122,50 @@ async function deleteMatchPermanently(matchId) {
       ).catch(() => {});
     }
 
-    // 10. Delete match_contests
+    // 11. Delete match_contests
     await sequelize.query(
       'DELETE FROM match_contests WHERE match_id = ?',
       { replacements: [matchId] }
     ).catch(() => {});
 
-    // 11. Delete cricket_players
+    // 12. Delete cricket_players
     await sequelize.query(
       'DELETE FROM cricket_players WHERE match_id = ?',
       { replacements: [matchId] }
     ).catch(() => {});
 
-    // 12. Delete cricket_matches
+    // 13. Delete cricket_matches
     await sequelize.query(
       'DELETE FROM cricket_matches WHERE id = ?',
       { replacements: [matchId] }
     );
 
-    // 13. HotStore memory cleanup
+    // 14. HotStore memory cleanup
     if (hotStore && typeof hotStore.cleanupMatch === 'function') {
       hotStore.cleanupMatch(matchId);
     }
+
+    // 15. Purge memory micro-cache
+    try {
+      const { purgeCache } = require('../middleware/cache');
+      purgeCache('/matches');
+      purgeCache('/api/matches');
+      purgeCache('/cricket');
+      purgeCache('/admin');
+    } catch (_) {}
+
+    // 16. Purge Redis cache
+    try {
+      const redisCache = require('../cache/redis');
+      if (redisCache && typeof redisCache.del === 'function') {
+        redisCache.del(`match:${matchId}:score`).catch(() => {});
+        redisCache.del(`match:${matchId}:leaderboard`).catch(() => {});
+        redisCache.del(`match:${matchId}:contests`).catch(() => {});
+        if (matchData.cricbuzz_id) {
+          redisCache.del(`match:${matchData.cricbuzz_id}:score`).catch(() => {});
+        }
+      }
+    } catch (_) {}
 
     return {
       success: true,
@@ -140,7 +173,7 @@ async function deleteMatchPermanently(matchId) {
       message: `Match "${matchTitle}" and all its contests, squad rosters, and player records have been permanently deleted.`
     };
   } finally {
-    // 14. Always re-enable foreign keys
+    // 17. Always re-enable foreign keys for SQLite
     try {
       await sequelize.query('PRAGMA foreign_keys = ON;');
     } catch (_) {}
@@ -148,4 +181,3 @@ async function deleteMatchPermanently(matchId) {
 }
 
 module.exports = { deleteMatchPermanently };
-

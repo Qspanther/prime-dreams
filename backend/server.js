@@ -224,6 +224,15 @@ async function start() {
     console.warn('⚠️ Database sync notice:', dbErr.message);
   }
 
+  // Load admin deleted matches tombstones
+  try {
+    const { loadDeletedMatches } = require('./services/deletedMatchesRegistry');
+    await loadDeletedMatches();
+    console.log('🛡️ Deleted matches tombstones loaded');
+  } catch (tombErr) {
+    console.warn('⚠️ Deleted matches tombstones notice:', tombErr.message);
+  }
+
   // Ensure default Admin & User accounts exist
   try {
     await seedDefaultUsers();

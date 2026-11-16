@@ -105,6 +105,15 @@ class HotStore {
   }
 
   /**
+   * Remove match snapshot and state on permanent deletion
+   */
+  cleanupMatch(matchId) {
+    if (!matchId) return;
+    this.snapshots.delete(matchId);
+    this.metrics.paused_matches.delete(matchId);
+  }
+
+  /**
    * Admin Health Snapshot
    */
   getHealthReport() {

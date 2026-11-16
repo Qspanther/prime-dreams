@@ -425,15 +425,23 @@ setInterval(syncWithCricbuzzLive, 15000);
  * Returns full Cricbuzz Live and Upcoming Feed
  */
 function getCricbuzzLiveFeed() {
+  let filteredLive = cricbuzzLiveFeed;
+  let filteredUpcoming = cricbuzzUpcomingFeed;
+  try {
+    const { isMatchBlacklisted } = require('./deletedMatchesRegistry');
+    filteredLive = cricbuzzLiveFeed.filter(m => !isMatchBlacklisted(m));
+    filteredUpcoming = cricbuzzUpcomingFeed.filter(m => !isMatchBlacklisted(m));
+  } catch (_) {}
+
   return {
     success: true,
     source: 'Prime Real-Time Telemetry Gateway',
     timestamp: new Date().toISOString(),
     last_sync: lastSyncTime,
-    liveMatchesCount: cricbuzzLiveFeed.length,
-    upcomingMatchesCount: cricbuzzUpcomingFeed.length,
-    liveMatches: cricbuzzLiveFeed,
-    upcomingMatches: cricbuzzUpcomingFeed,
+    liveMatchesCount: filteredLive.length,
+    upcomingMatchesCount: filteredUpcoming.length,
+    liveMatches: filteredLive,
+    upcomingMatches: filteredUpcoming,
   };
 }
 
@@ -442,10 +450,15 @@ function getCricbuzzLiveFeed() {
  */
 async function importCricbuzzMatchToDatabase(cricbuzzId) {
   const { CricketMatch, CricketPlayer, MatchContest } = require('../db/models');
+  const { isMatchBlacklisted } = require('./deletedMatchesRegistry');
 
   const matchData = [...cricbuzzLiveFeed, ...cricbuzzUpcomingFeed].find(m => m.cricbuzz_id === cricbuzzId);
   if (!matchData) {
     throw new Error('Cricbuzz match not found in live feed');
+  }
+
+  if (isMatchBlacklisted(matchData)) {
+    throw new Error(`Match "${matchData.title}" was permanently deleted by an administrator and cannot be re-imported.`);
   }
 
   // Check if match title or teams already exist in Prime Dreems

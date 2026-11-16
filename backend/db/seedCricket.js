@@ -245,9 +245,25 @@ async function seedCricketMatches() {
     return;
   }
 
+  const { isMatchBlacklisted, loadDeletedMatches } = require('../services/deletedMatchesRegistry');
+  try {
+    await loadDeletedMatches();
+  } catch (_) {}
+
   console.log('🌱 Seeding Prime Dreems cricket matches, players & contests...');
 
   for (const mData of MATCH_SQUADS) {
+    if (isMatchBlacklisted({
+      title: mData.title,
+      team_a: mData.team_a,
+      team_b: mData.team_b,
+      team_a_code: mData.team_a_code,
+      team_b_code: mData.team_b_code,
+    })) {
+      console.log(`🛡️ [Seed] Skipping "${mData.title}" — permanently deleted by admin.`);
+      continue;
+    }
+
     const match = await CricketMatch.create({
       title: mData.title,
       category: mData.category,
