@@ -33,6 +33,9 @@ interface CompareTeamModalProps {
     rank?: number | null;
     players: ComparePlayer[];
   } | null;
+  myTeamLabel?: string;
+  opponentTeamLabel?: string;
+  buildTeamLink?: string;
 }
 
 export default function CompareTeamModal({
@@ -40,6 +43,9 @@ export default function CompareTeamModal({
   onClose,
   myTeam,
   opponentTeam,
+  myTeamLabel,
+  opponentTeamLabel,
+  buildTeamLink,
 }: CompareTeamModalProps) {
   if (!isOpen || !myTeam || !opponentTeam) return null;
 
@@ -77,11 +83,24 @@ export default function CompareTeamModal({
           </button>
         </div>
 
+        {/* Optional Build XI Banner if user hasn't made team yet */}
+        {buildTeamLink && (
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-200 px-4 py-2 flex items-center justify-between gap-2 text-xs">
+            <span className="font-bold text-blue-900">Comparing with leader lineup. Want to compare with your own XI?</span>
+            <a
+              href={buildTeamLink}
+              className="prime-btn-royal-3d !py-1 !px-3 text-[11px] font-black shrink-0 text-white"
+            >
+              + Build My XI (Free)
+            </a>
+          </div>
+        )}
+
         {/* Team Score Header Cards */}
         <div className="grid grid-cols-2 gap-3 p-4 bg-[#F8FAFC] border-b border-[#E2E8F0]">
-          {/* My Team */}
+          {/* Team 1 / My Team */}
           <div className="p-3 rounded-xl bg-blue-50 border-2 border-blue-200">
-            <span className="text-[10px] font-black uppercase text-blue-700 block">Your Team</span>
+            <span className="text-[10px] font-black uppercase text-blue-700 block">{myTeamLabel || 'Your Team'}</span>
             <h4 className="font-black text-sm text-[#0F172A] truncate">{myTeam.team_name}</h4>
             <div className="mt-1 flex items-baseline justify-between">
               <span className="text-xl font-black text-blue-600 font-mono">

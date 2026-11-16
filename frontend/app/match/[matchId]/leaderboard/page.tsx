@@ -13,8 +13,8 @@ const CompareTeamModal = dynamic(() => import('../../../components/ui/CompareTea
 type LeaderboardData = {
   match?: { title: string; status: string; team_a: string; team_b: string; score_summary?: any; last_updated?: string | null };
   player_leaderboard?: any[];
-  contest?: { id: string; title: string; status: string; entry_fee?: number; prize_pool?: number; type?: string } | null;
-  contests?: Array<{ id: string; title: string; status: string; entry_fee?: number; prize_pool?: number; type?: string }>;
+  contest?: { id: string; contest_code?: number | null; title: string; status: string; entry_fee?: number; prize_pool?: number; type?: string } | null;
+  contests?: Array<{ id: string; contest_code?: number | null; title: string; status: string; entry_fee?: number; prize_pool?: number; type?: string }>;
   contest_leaderboard?: any[];
   total_contest_teams?: number;
   batch_page?: number;
@@ -52,7 +52,22 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
   const searchInputRef = useRef<string>('');
   const isLoopRunningRef = useRef<boolean>(false);
 
-  const [compareOpponent, setCompareOpponent] = useState<any>(null);
+  const [compareTeamA, setCompareTeamA] = useState<any>(null);
+  const [compareTeamB, setCompareTeamB] = useState<any>(null);
+
+  const handleOpenCompare = (team: any) => {
+    if (activeMyTeam) {
+      setCompareTeamA(activeMyTeam);
+      setCompareTeamB(team);
+    } else {
+      const rankOneTeam = displayedTeams.find(t => t.rank === 1 && t.team_id !== team.team_id) || 
+                          (displayedTeams[0]?.team_id !== team.team_id ? displayedTeams[0] : displayedTeams[1]);
+      if (rankOneTeam) {
+        setCompareTeamA(rankOneTeam);
+        setCompareTeamB(team);
+      }
+    }
+  };
 
   const autoLoadLoop = useCallback(async (startPage: number, contestId: string) => {
     if (isLoopRunningRef.current) return;
@@ -294,8 +309,8 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
               <Trophy className="w-4 h-4 text-[#D97706]" /> Choose Contest to Inspect Teams:
             </span>
             {data?.contest && (
-              <span className="text-xs font-mono font-black text-[#2563EB] bg-white px-2.5 py-1 rounded-lg border border-blue-200">
-                {data.contest.type === 'practice' || Number(data.contest.entry_fee) === 0 ? 'FREE ENTRY' : `Entry ₹${data.contest.entry_fee}`} • Pool ₹{Number(data.contest.prize_pool || 0).toLocaleString('en-IN')}
+              <span className="text-xs font-mono font-black text-[#059669] bg-[#ECFDF5] px-2.5 py-1 rounded-lg border border-[#A7F3D0]">
+                Contest #{data.contest.contest_code || 2011} • FREE ENTRY (PASS)
               </span>
             )}
           </div>
@@ -321,7 +336,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                       : 'bg-white text-[#475569] border-[#CBD5E1] hover:border-[#93C5FD] hover:text-[#2563EB]'
                   }`}
                 >
-                  <span>{c.title}</span>
+                  <span>{c.contest_code ? `Contest #${c.contest_code} • ` : ''}{c.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim()}</span>
                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}`}>
                     {c.filled_spots || 0}/{c.total_spots || 0}
                   </span>
@@ -337,7 +352,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
         <section className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div className="prime-card-3d p-4"><p className="text-xs font-bold text-[#64748B]">Your Contest Rank</p><p className="mt-1 text-2xl font-black text-[#2563EB]">{data.my_team.rank ? `#${data.my_team.rank}` : '—'}</p></div>
           <div className="prime-card-3d p-4"><p className="text-xs font-bold text-[#64748B]">Your Fantasy Points</p><p className="mt-1 text-2xl font-black text-[#D97706]">{Number(data.my_team.total_points || 0).toFixed(1)}</p></div>
-          <div className="prime-card-3d p-4 col-span-2 sm:col-span-1"><p className="text-xs font-bold text-[#64748B]">Current Contest</p><p className="mt-1 truncate text-base font-black">{data.contest?.title || 'Contest'}</p></div>
+          <div className="prime-card-3d p-4 col-span-2 sm:col-span-1"><p className="text-xs font-bold text-[#64748B]">Current Contest</p><p className="mt-1 truncate text-base font-black">{data.contest?.contest_code ? `Contest #${data.contest.contest_code} • ` : ''}{data.contest?.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim() || 'Contest'}</p></div>
         </section>
       )}
 
@@ -375,7 +390,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
             <div>
               <h2 className="flex items-center gap-2 text-lg font-black">
                 <Trophy className="h-5 w-5 text-[#D97706]" />
-                {data?.contest?.title || 'Contest'} — All User Teams
+                {data?.contest?.contest_code ? `Contest #${data.contest.contest_code} • ` : ''}{data?.contest?.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim() || 'Contest'} — All User Teams
               </h2>
               <p className="mt-1 text-xs text-[#64748B]">
                 All user teams, players, captains and points in this contest. Tap any team to inspect its 11 players or compare with your lineup.
@@ -387,6 +402,24 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
               </span>
             </div>
           </div>
+
+          {/* Informational Banner for user without team */}
+          {!activeMyTeam && (
+            <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🏏</span>
+                <p className="font-bold text-blue-950">
+                  <span className="font-black text-[#2563EB]">Browsing all participant teams:</span> Tap any team to inspect its 11 players, or click <strong className="text-amber-700">Compare XI</strong> to compare lineups side-by-side!
+                </p>
+              </div>
+              <Link
+                href={`/team-builder/${matchId}?contestId=${selectedContestId || ''}`}
+                className="prime-btn-gold-3d !py-1.5 !px-3 text-xs font-black shrink-0"
+              >
+                + Build My XI (Free)
+              </Link>
+            </div>
+          )}
 
           {/* Priority Search Input */}
           <div className="space-y-1.5">
@@ -498,14 +531,10 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              if (activeMyTeam) {
-                                setCompareOpponent(team);
-                              } else {
-                                alert('Please create your team in this match first to compare lineups.');
-                              }
+                              handleOpenCompare(team);
                             }}
                             className="prime-btn-dark-3d !py-1.5 !px-3 text-xs font-black flex items-center gap-1.5 cursor-pointer hover:border-[#2563EB]"
-                            title="Side-by-side compare with your team"
+                            title="Side-by-side compare with your team or leader"
                           >
                             <Swords className="w-3.5 h-3.5 text-amber-500" />
                             <span>Compare XI</span>
@@ -628,10 +657,13 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
 
       {/* Head-to-Head Compare XI Modal */}
       <CompareTeamModal
-        isOpen={!!compareOpponent}
-        onClose={() => setCompareOpponent(null)}
-        myTeam={activeMyTeam as any}
-        opponentTeam={compareOpponent}
+        isOpen={Boolean(compareTeamA && compareTeamB)}
+        onClose={() => { setCompareTeamA(null); setCompareTeamB(null); }}
+        myTeam={compareTeamA}
+        opponentTeam={compareTeamB}
+        myTeamLabel={activeMyTeam && compareTeamA?.team_id === activeMyTeam.team_id ? 'Your Team' : `Leader (Rank #${compareTeamA?.rank || 1})`}
+        opponentTeamLabel={activeMyTeam && compareTeamA?.team_id === activeMyTeam.team_id ? `Competitor (@${compareTeamB?.username || 'user'})` : `Team #${compareTeamB?.rank || '—'} (@${compareTeamB?.username || 'user'})`}
+        buildTeamLink={!activeMyTeam ? `/team-builder/${matchId}?contestId=${selectedContestId}` : undefined}
       />
     </main>
   );

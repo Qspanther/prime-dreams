@@ -171,6 +171,93 @@ async function ensureMatchSquad(match) {
   }
 }
 
+const { v4: uuidv4 } = require('uuid');
+
+async function ensureContestTeamsInDB(match, contest, players) {
+  try {
+    if (!contest || !match || !players || players.length < 11) return;
+
+    const existingCount = await CricketTeam.count({ where: { contest_id: contest.id } });
+    if (existingCount >= 20) return;
+
+    let bots = await User.findAll({
+      where: { is_bot: true },
+      attributes: ['id', 'username', 'name'],
+      limit: 60,
+    });
+
+    if (bots.length < 20) {
+      const { seedBots } = require('../services/seed-10000-bots');
+      await seedBots(50);
+      bots = await User.findAll({
+        where: { is_bot: true },
+        attributes: ['id', 'username', 'name'],
+        limit: 60,
+      });
+    }
+
+    if (bots.length === 0) return;
+
+    const { buildValidCricketLineup } = require('../services/botScheduler');
+
+    const targetTeams = Math.min(Math.max(contest.filled_spots || 25, 25), 40);
+    const needed = targetTeams - existingCount;
+    if (needed <= 0) return;
+
+    const newTeams = [];
+    const newTeamPlayers = [];
+
+    for (let i = 0; i < needed; i++) {
+      const bot = bots[(existingCount + i) % bots.length];
+      const lineup = buildValidCricketLineup(players);
+      const teamId = uuidv4();
+      const teamNumber = Math.floor((existingCount + i) / bots.length) + 1;
+      const teamSuffix = teamNumber > 1 ? ` (T${teamNumber})` : '';
+      const botFirstName = (bot.name || 'Pro').split(' ')[0];
+      const teamName = `${botFirstName}'s XI${teamSuffix}`;
+
+      let calculatedPoints = 0;
+      lineup.players.forEach(p => {
+        let pts = Number(p.points) || 0;
+        if (pts === 0) {
+          const charCode = (p.name || 'P').charCodeAt(0);
+          pts = 20 + ((charCode * 19 + i * 11) % 65);
+        }
+        const mult = p.id === lineup.captain?.id ? 2.0 : p.id === lineup.viceCaptain?.id ? 1.5 : 1.0;
+        const ptsEarned = Math.round(pts * mult * 10) / 10;
+        calculatedPoints += ptsEarned;
+
+        newTeamPlayers.push({
+          id: uuidv4(),
+          team_id: teamId,
+          player_id: p.id,
+          is_captain: p.id === lineup.captain?.id,
+          is_vice_captain: p.id === lineup.viceCaptain?.id,
+          points_earned: ptsEarned,
+        });
+      });
+
+      newTeams.push({
+        id: teamId,
+        user_id: bot.id,
+        match_id: match.id,
+        contest_id: contest.id,
+        team_name: teamName,
+        captain_id: lineup.captain?.id,
+        vice_captain_id: lineup.viceCaptain?.id,
+        total_points: Math.round(calculatedPoints * 10) / 10,
+      });
+    }
+
+    if (newTeams.length > 0) {
+      await CricketTeam.bulkCreate(newTeams);
+      await TeamPlayer.bulkCreate(newTeamPlayers);
+    }
+  } catch (err) {
+    console.error('ensureContestTeamsInDB error:', err.message);
+  }
+}
+
 /**
  * GET /api/matches
  * Returns match list with category filtering (Section 5.4)
@@ -432,6 +519,10 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
       const searchQuery = (req.query.search || req.query.q || '').trim();
 
       totalContestTeams = await CricketTeam.count({ where: { contest_id: selectedContest.id } });
+      if (totalContestTeams === 0) {
+        await ensureContestTeamsInDB(match, selectedContest, players);
+        totalContestTeams = await CricketTeam.count({ where: { contest_id: selectedContest.id } });
+      }
 
       let teamsQueryOptions = {
         where: { contest_id: selectedContest.id },
@@ -601,20 +692,22 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
       player_leaderboard: playerLeaderboard,
       contests: matchContests.map(c => ({
         id: c.id,
+        contest_code: c.contest_code,
         title: c.title,
         type: c.type,
-        entry_fee: c.entry_fee,
-        prize_pool: c.prize_pool,
+        entry_fee: 0,
+        prize_pool: 0,
         total_spots: c.total_spots,
         filled_spots: c.filled_spots,
         status: c.status,
       })),
       contest: selectedContest ? {
         id: selectedContest.id,
+        contest_code: selectedContest.contest_code,
         title: selectedContest.title,
         type: selectedContest.type,
-        entry_fee: selectedContest.entry_fee,
-        prize_pool: selectedContest.prize_pool,
+        entry_fee: 0,
+        prize_pool: 0,
         total_spots: selectedContest.total_spots,
         filled_spots: selectedContest.filled_spots,
         status: selectedContest.status,
