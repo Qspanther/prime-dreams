@@ -1,10 +1,25 @@
 const { Sequelize } = require('sequelize');
 const config = require('../config');
+const { execSync } = require('child_process');
+const path = require('path');
 
 let sequelize;
 
-const isPostgres = process.env.DATABASE_URL && 
-  (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://'));
+let isPostgres = false;
+const rawDbUrl = process.env.DATABASE_URL;
+
+if (rawDbUrl && (rawDbUrl.startsWith('postgres://') || rawDbUrl.startsWith('postgresql://'))) {
+  try {
+    // Run pre-flight check to verify Neon / PostgreSQL is reachable and has NOT exceeded quota
+    const checkScript = path.resolve(__dirname, 'checkPostgres.js');
+    execSync(`node "${checkScript}" "${rawDbUrl}"`, { timeout: 6000, stdio: 'inherit' });
+    isPostgres = true;
+  } catch (err) {
+    console.warn('⚠️ Cloud PostgreSQL unavailable, quota exceeded, or rejected connection.');
+    console.warn('🔄 Seamlessly falling back to local SQLite engine so Prime Dreems stays 100% online!');
+    isPostgres = false;
+  }
+}
 
 if (isPostgres) {
   const sslConfig = process.env.DB_SSL === 'false'
@@ -12,7 +27,7 @@ if (isPostgres) {
     : { require: false, rejectUnauthorized: false };
 
   const poolMax = parseInt(process.env.PG_POOL_MAX || '5', 10);
-  sequelize = new Sequelize(process.env.DATABASE_URL, {
+  sequelize = new Sequelize(rawDbUrl, {
     dialect: 'postgres',
     dialectOptions: sslConfig ? { ssl: sslConfig } : {},
     logging: false,
@@ -42,6 +57,7 @@ if (isPostgres) {
       underscored: true,
     },
   });
+  console.log('⚡ Ultra high-performance SQLite engine active (primedreems.sqlite).');
 }
 
 // Configure WAL mode, synchronous, memory cache, and high-performance indexes (SQLite only)

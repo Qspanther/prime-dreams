@@ -251,14 +251,6 @@ async function start() {
     console.warn('⚠️ Sample matches seed notice:', seedErr.message);
   }
 
-  // Initialize Turso Cloud sync for persistence across ephemeral deploys
-  try {
-    const { initTursoSync } = require('./services/tursoSyncService');
-    await initTursoSync();
-  } catch (tursoErr) {
-    console.warn('⚠️ Turso sync initialization notice:', tursoErr.message);
-  }
-
   // Start Ingestion Worker (Free tier: 30s poll, toggled via ENABLE_INGESTION)
   if (process.env.ENABLE_INGESTION !== 'false') {
     try {
