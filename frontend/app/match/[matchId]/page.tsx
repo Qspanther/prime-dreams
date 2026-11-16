@@ -854,11 +854,11 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                     </div>
                     <p className="text-[11px] text-[#64748B] font-bold truncate">{t.contest_title}</p>
                     {t.is_winning ? (
-                      <p className="mt-1 font-black text-sm text-[#16A34A]">🎉 Currently winning ₹{Number(t.projected_winnings || 0).toLocaleString('en-IN')}</p>
+                      <p className="mt-1 font-black text-sm text-[#16A34A]">🎉 In Rank #{t.rank || 1} Winning Position</p>
                     ) : (
                       <p className="mt-1 text-xs font-bold text-[#475569]">
                         {t.win_probability != null ? `Win probability: ${t.win_probability}%` : (t.note || 'Match is not live')}
-                        {t.projected_winnings > 0 && <span className="text-[#D97706]"> • Target ₹{Number(t.projected_winnings).toLocaleString('en-IN')}</span>}
+                        {t.rank && <span className="text-[#2563EB]"> • Contest Rank #{t.rank}</span>}
                       </p>
                     )}
                     {t.win_probability != null && (
@@ -1005,15 +1005,6 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                         className="pd-input"
                       />
                     </div>
-                    <div>
-                      <label className="pd-label">Entry Fee (₹)</label>
-                      <input
-                        type="number" min="0" step="1"
-                        value={createForm.entry_fee}
-                        onChange={(e) => setCreateForm({ ...createForm, entry_fee: e.target.value })}
-                        className="pd-input pd-num"
-                      />
-                    </div>
                     <div className="p-3 rounded-lg bg-blue-100/70 border border-blue-300 text-xs text-[#1E3A8A] space-y-1">
                       <p className="font-black">Private Contest Ground Rule:</p>
                       <p className="leading-relaxed">
@@ -1039,7 +1030,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                       <div className="min-w-0">
                         <span className="text-[10px] font-black uppercase text-[#047857] block">Ground Generated!</span>
                         <h4 className="font-black text-sm text-[#065F46] truncate">🏟️ {createResult.title}</h4>
-                        <p className="text-xs text-[#047857] font-bold mt-0.5">Entry Fee: ₹{createResult.entry_fee} • 60% Dynamic Pool</p>
+                        <p className="text-xs text-[#047857] font-bold mt-0.5">Entry: FREE (Tournament Pass) • Private Field</p>
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
@@ -1053,7 +1044,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                         {copiedCode === `link-${createResult.invite_code}` ? 'Link Copied!' : 'Copy Link'}
                       </button>
                       <button
-                        onClick={() => shareViaWhatsApp(createResult.invite_code, createResult.title, createResult.entry_fee)}
+                        onClick={() => shareViaWhatsApp(createResult.invite_code, createResult.title, 0)}
                         className="bg-[#25D366] hover:bg-[#20BD5A] text-white font-black rounded-xl p-2 text-xs flex items-center gap-1 shadow-sm shrink-0"
                         title="Share on WhatsApp"
                       >
@@ -1065,7 +1056,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                       href={`/team-builder/${matchId}?contestId=${createResult.id}`}
                       className="prime-btn-gold-3d w-full !py-2.5 !text-xs"
                     >
-                      Build Your XI & Enter Field ₹{createResult.entry_fee} →
+                      Build Your XI & Enter Private Field →
                     </Link>
                   </div>
                 )}
@@ -1130,8 +1121,8 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                   {joinedPrivate.map((c: any) => (
                     <div key={c.id} className="contest-card-3d p-4 flex flex-wrap items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <h5 className="font-black text-sm text-[#0F172A] truncate">{c.title}</h5>
-                        <p className="text-xs text-[#64748B] font-bold">₹{c.entry_fee} entry • {c.filled_spots}/{c.total_spots} joined</p>
+                        <h5 className="font-black text-sm text-[#0F172A] truncate">{c.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim()}</h5>
+                        <p className="text-xs text-[#64748B] font-bold">FREE Entry (Pass) • {c.filled_spots}/{c.total_spots} joined</p>
                       </div>
                       <span className="pd-num font-mono font-black text-xs text-[#065F46] bg-[#ECFDF5] px-2.5 py-1 rounded-lg border border-[#6EE7B7] shrink-0">
                         Joined ✓

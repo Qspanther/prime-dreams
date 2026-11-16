@@ -145,6 +145,21 @@ export default function MyTeamsPage() {
                     </span>
                   </div>
 
+                  {/* Prominent Contest Identifier & Scoped Ranking */}
+                  <div className="mb-3 p-2.5 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 flex items-center justify-between gap-2 shadow-xs">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Trophy className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span className="text-xs font-black text-blue-900 truncate">
+                        CONTEST #{contest?.contest_code || contest?.id?.slice(0, 6) || 2011}
+                      </span>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <span className="text-[11px] font-black font-mono text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-md border border-emerald-300">
+                        Rank #{team.rank || 1} <span className="text-[10px] text-emerald-600 font-bold">/ {team.total_contest_teams || contest?.filled_spots || 1}</span>
+                      </span>
+                    </div>
+                  </div>
+
                   <h3 className="font-black text-[#0F172A] text-base mb-1">{team.team_name}</h3>
                   <p className="text-xs text-[#64748B] font-bold">
                     {match?.title || 'Cricket Match'}
@@ -270,7 +285,7 @@ export default function MyTeamsPage() {
                 {/* Contest & Rank Footer */}
                 <div className="mt-4 pt-3 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
                   <span className="text-[#64748B] font-bold">
-                    Contest: <strong className="text-[#0F172A]">{contest?.title || 'Open Contest'}</strong>
+                    Contest: <strong className="text-[#0F172A]">{contest?.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim() || 'Open Contest'}</strong>
                   </span>
                   {match && (
                     <div className="flex flex-wrap items-center gap-3">

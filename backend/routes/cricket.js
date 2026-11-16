@@ -1391,7 +1391,9 @@ router.get('/matches/:id/my-teams', authenticate, async (req, res) => {
   try {
     const teams = await CricketTeam.findAll({
       where: { user_id: req.user.id, match_id: req.params.id },
-      attributes: ['id', 'team_name', 'captain_id', 'vice_captain_id', 'contest_id', 'created_at'],
+      include: [
+        { model: MatchContest, as: 'contest' },
+      ],
       order: [['created_at', 'ASC']],
     });
     res.json({ success: true, teams, max_teams: 6 });
@@ -1652,7 +1654,29 @@ router.get('/my-teams', authenticate, async (req, res) => {
       order: [['created_at', 'DESC']],
     });
 
-    res.json({ success: true, teams });
+    const enrichedTeams = await Promise.all(
+      teams.map(async (t) => {
+        const plain = t.toJSON();
+        if (plain.contest_id) {
+          const totalInContest = await CricketTeam.count({ where: { contest_id: plain.contest_id } });
+          const pts = Number(plain.total_points) || 0;
+          const higherCount = await CricketTeam.count({
+            where: {
+              contest_id: plain.contest_id,
+              total_points: { [Op.gt]: pts },
+            },
+          });
+          plain.rank = higherCount + 1;
+          plain.total_contest_teams = Math.max(totalInContest, plain.contest?.filled_spots || 1);
+        } else {
+          plain.rank = plain.rank || 1;
+          plain.total_contest_teams = 1;
+        }
+        return plain;
+      })
+    );
+
+    res.json({ success: true, teams: enrichedTeams });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

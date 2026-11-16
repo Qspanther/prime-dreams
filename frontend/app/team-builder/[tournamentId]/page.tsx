@@ -363,18 +363,6 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
       return;
     }
 
-    // Pre-check wallet balance before submitting
-    if (!editingTeamId && !h2hFlow && entryFee > 0 && walletBalance !== null && walletBalance < entryFee) {
-      const needed = Math.round((entryFee - walletBalance) * 100) / 100;
-      const returnUrl = `/team-builder/${matchId}${selectedContestId ? `?contestId=${selectedContestId}` : ''}`;
-      setError(`Insufficient wallet balance (Available: ₹${walletBalance}, Required: ₹${entryFee}). Redirecting to Add Funds...`);
-      setShowPitchPreview(false);
-      setTimeout(() => {
-        router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(returnUrl)}&message=Add%20funds%20to%20join%20contest%20(₹${entryFee})`);
-      }, 1500);
-      return;
-    }
-
     setSubmitting(true);
     setError(null);
 
@@ -396,28 +384,10 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
           router.push('/my-teams');
         }
       } else {
-        if (/insufficient/i.test(res?.error || '') || res?.code === 'INSUFFICIENT_BALANCE') {
-          const needed = walletBalance !== null ? Math.max(10, entryFee - walletBalance) : entryFee;
-          setError(`Insufficient wallet balance! ₹${entryFee} required. Redirecting to Add Cash...`);
-          setShowPitchPreview(false);
-          setTimeout(() => {
-            router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(window.location.href)}&message=Add%20funds%20for%20contest`);
-          }, 1500);
-        } else {
-          setError(res?.error || 'Failed to submit team');
-        }
+        setError(res?.error || 'Failed to submit team');
       }
     } catch (err: any) {
-      if (/insufficient/i.test(err?.message || '') || err?.code === 'INSUFFICIENT_BALANCE') {
-        const needed = walletBalance !== null ? Math.max(10, entryFee - walletBalance) : entryFee;
-        setError(`Insufficient wallet balance! ₹${entryFee} required. Redirecting to Add Cash...`);
-        setShowPitchPreview(false);
-        setTimeout(() => {
-          router.push(`/wallet?depositAmount=${Math.max(50, needed)}&needed=${needed}&returnUrl=${encodeURIComponent(window.location.href)}&message=Add%20funds%20for%20contest`);
-        }, 1500);
-      } else {
-        setError(err?.message || 'Error saving team. Check contest lock and balance.');
-      }
+      setError(err?.message || 'Error saving team. Check contest lock.');
     } finally {
       setSubmitting(false);
     }
@@ -468,6 +438,38 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
         </Link>
         {match && <CategoryBadge category={match.category} size="xs" />}
       </div>
+
+      {/* Target Contest Banner - Prominent Contest Identifier */}
+      {activeContest && (
+        <div className="rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 p-4 sm:p-5 text-white shadow-lg border-2 border-amber-400 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl font-black shrink-0 border border-white/30 shadow-inner">
+              🏆
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-white text-amber-900 shadow-xs">
+                  CONTEST IDENTIFIER
+                </span>
+                <span className="text-base sm:text-xl font-black font-mono tracking-tight bg-black/35 px-3 py-0.5 rounded-lg border border-white/30 text-yellow-300">
+                  CONTEST #{activeContest.contest_code || activeContest.id?.slice(0, 8)}
+                </span>
+              </div>
+              <h2 className="text-sm sm:text-lg font-black text-white mt-1">
+                {activeContest.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim() || 'Official Contest'}
+              </h2>
+              <p className="text-xs text-amber-100 font-semibold">
+                {activeContest.filled_spots || 1} Total Teams Competing • Results &amp; Rankings strictly scoped to this contest
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="font-black text-xs px-3 py-1.5 rounded-xl bg-emerald-500 text-white border border-emerald-300 shadow-md">
+              FREE (Pass Entry)
+            </span>
+          </div>
+        </div>
+      )}
 
       {editingTeamId && (
         <div className={`p-3.5 rounded-xl border-2 text-xs font-black flex items-center gap-2 ${isLocked

@@ -177,9 +177,8 @@ export default function CompareTeamModal({
               <div key={idx} className="grid grid-cols-2 gap-3 items-center py-1.5 border-b border-[#F1F5F9] text-xs">
                 {/* My Player */}
                 {pMy ? (
-                  <div className={`p-2 rounded-lg border flex items-center justify-between min-w-0 ${
-                    isMyCommon ? 'bg-slate-50 border-slate-200' : 'bg-blue-50/80 border-blue-300 shadow-xs'
-                  }`}>
+                  <div className={`p-2 rounded-lg border flex items-center justify-between min-w-0 ${isMyCommon ? 'bg-slate-50 border-slate-200' : 'bg-blue-50/80 border-blue-300 shadow-xs'
+                    }`}>
                     <div className="min-w-0 flex items-center gap-1.5">
                       <span className="text-[9px] font-black px-1 rounded bg-slate-200 text-slate-700">{pMy.role}</span>
                       <span className="truncate font-black text-[#0F172A]">{pMy.name}</span>
@@ -196,9 +195,8 @@ export default function CompareTeamModal({
 
                 {/* Opponent Player */}
                 {pOpp ? (
-                  <div className={`p-2 rounded-lg border flex items-center justify-between min-w-0 ${
-                    isOppCommon ? 'bg-slate-50 border-slate-200' : 'bg-amber-50/80 border-amber-300 shadow-xs'
-                  }`}>
+                  <div className={`p-2 rounded-lg border flex items-center justify-between min-w-0 ${isOppCommon ? 'bg-slate-50 border-slate-200' : 'bg-amber-50/80 border-amber-300 shadow-xs'
+                    }`}>
                     <span className="font-mono font-black text-[#D97706] shrink-0 mr-1">
                       {pOpp.points_earned ?? pOpp.points ?? 0}
                     </span>
