@@ -415,4 +415,330 @@ router.get('/promo-banner-settings', async (req, res) => {
   }
 });
 
+// ─── V2.6 DYNAMIC SUBSCRIPTION PLANS & REFERRAL OFFER ENDPOINTS ───
+
+const DEFAULT_PLANS = [
+  {
+    id: 'bronze',
+    name: 'Bronze Tier',
+    price: 49,
+    validity_days: 10,
+    max_teams_per_match: 2,
+    description: 'Create up to 2 fantasy teams per match for 10 days.',
+    badge: 'Starter',
+    is_active: true,
+  },
+  {
+    id: 'silver',
+    name: 'Silver Pro',
+    price: 99,
+    validity_days: 20,
+    max_teams_per_match: 3,
+    description: 'Create up to 3 fantasy teams per match for 20 days.',
+    badge: 'Popular',
+    is_active: true,
+  },
+  {
+    id: 'gold',
+    name: 'Gold Master',
+    price: 199,
+    validity_days: 30,
+    max_teams_per_match: 4,
+    description: 'Create up to 4 fantasy teams per match for 30 days + full leaderboard stats.',
+    badge: 'Best Value',
+    is_active: true,
+  },
+  {
+    id: 'vip',
+    name: 'VIP Platinum',
+    price: 499,
+    validity_days: 90,
+    max_teams_per_match: 6,
+    description: 'Create maximum 6 fantasy teams per match for 90 days with VIP priority access.',
+    badge: 'VIP Elite',
+    is_active: true,
+  },
+];
+
+const DEFAULT_REFERRAL_OFFER = {
+  target_count: 5,
+  reward_days: 10,
+  teams_per_match: 2,
+  is_active: true,
+  title: 'Refer 5 Friends — Get 10 Days Free Access (2 Teams/Match)',
+};
+
+/**
+ * GET /subscription/plans
+ * Returns all active subscription tiers, current referral offer, and logged-in user status.
+ */
+router.get('/plans', async (req, res) => {
+  try {
+    let plans = DEFAULT_PLANS;
+    const plansRow = await SystemSetting.findOne({ where: { key: 'subscription_plans' } });
+    if (plansRow && plansRow.value) {
+      try { plans = JSON.parse(plansRow.value); } catch (_) {}
+    }
+
+    let referralOffer = DEFAULT_REFERRAL_OFFER;
+    const offerRow = await SystemSetting.findOne({ where: { key: 'referral_offer_config' } });
+    if (offerRow && offerRow.value) {
+      try { referralOffer = JSON.parse(offerRow.value); } catch (_) {}
+    }
+
+    let userStatus = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const jwt = require('jsonwebtoken');
+      try {
+        const token = authHeader.split(' ')[1];
+        const decoded = jwt.verify(token, config.JWT_SECRET);
+        const user = await User.findByPk(decoded.userId || decoded.id);
+        if (user) {
+          const now = new Date();
+          const hasPaid = user.subscription_active_until && new Date(user.subscription_active_until) > now;
+          const hasRef = user.referral_pass_valid_until && new Date(user.referral_pass_valid_until) > now;
+          const paidDaysLeft = hasPaid ? Math.ceil((new Date(user.subscription_active_until) - now) / 86400000) : 0;
+          const refDaysLeft = hasRef ? Math.ceil((new Date(user.referral_pass_valid_until) - now) / 86400000) : 0;
+
+          userStatus = {
+            hasActivePass: hasPaid || hasRef,
+            hasPaidSubscription: hasPaid,
+            paidPlanId: user.subscription_plan_id,
+            paidExpiresAt: user.subscription_active_until,
+            paidDaysLeft,
+            paidMaxTeams: user.subscription_max_teams || 2,
+            hasReferralPass: hasRef,
+            referralPassExpiresAt: user.referral_pass_valid_until,
+            referralDaysLeft: refDaysLeft,
+            referralMaxTeams: user.referral_pass_max_teams || 1,
+            referralPassClaimedAt: user.referral_pass_claimed_at,
+            effectiveMaxTeams: Math.max(hasPaid ? (user.subscription_max_teams || 2) : 0, hasRef ? (user.referral_pass_max_teams || 1) : 0),
+            referralCode: user.referral_code,
+            totalReferralsCount: user.total_referrals_count || 0,
+            canClaimReferralPass: (user.total_referrals_count || 0) >= referralOffer.target_count && (!hasRef || refDaysLeft <= 0),
+          };
+        }
+      } catch (_) {}
+    }
+
+    res.json({
+      success: true,
+      plans: plans.filter(p => p.is_active !== false),
+      referralOffer,
+      userStatus,
+    });
+  } catch (error) {
+    console.error('Fetch plans error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /subscription/purchase-plan
+ * User selects and activates a subscription plan.
+ */
+router.post('/purchase-plan', authenticate, async (req, res) => {
+  try {
+    const { plan_id } = req.body;
+    if (!plan_id) return res.status(400).json({ error: 'plan_id is required' });
+
+    let plans = DEFAULT_PLANS;
+    const plansRow = await SystemSetting.findOne({ where: { key: 'subscription_plans' } });
+    if (plansRow && plansRow.value) {
+      try { plans = JSON.parse(plansRow.value); } catch (_) {}
+    }
+
+    const selectedPlan = plans.find(p => p.id === plan_id);
+    if (!selectedPlan) return res.status(404).json({ error: `Subscription plan "${plan_id}" not found.` });
+
+    const user = await User.findByPk(req.userId || req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const now = new Date();
+    let newExpiry;
+    if (user.subscription_active_until && new Date(user.subscription_active_until) > now) {
+      // Extend existing subscription
+      newExpiry = new Date(new Date(user.subscription_active_until).getTime() + (selectedPlan.validity_days * 86400000));
+    } else {
+      newExpiry = new Date(now.getTime() + (selectedPlan.validity_days * 86400000));
+    }
+
+    await user.update({
+      subscription_plan_id: selectedPlan.id,
+      subscription_active_until: newExpiry,
+      subscription_max_teams: selectedPlan.max_teams_per_match || 2,
+      subscription_type: 'paid_plan',
+    });
+
+    await Notification.create({
+      user_id: user.id,
+      title: `👑 ${selectedPlan.name} Activated!`,
+      message: `Your ${selectedPlan.name} is now active until ${newExpiry.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}. You can now create up to ${selectedPlan.max_teams_per_match} teams per match for free!`,
+      type: 'subscription_success',
+    }).catch(() => {});
+
+    res.json({
+      success: true,
+      message: `🎉 ${selectedPlan.name} activated successfully! Enjoy ${selectedPlan.max_teams_per_match} teams per match until ${newExpiry.toLocaleDateString('en-IN')}.`,
+      plan: selectedPlan,
+      subscriptionActiveUntil: newExpiry,
+      maxTeamsPerMatch: selectedPlan.max_teams_per_match,
+    });
+  } catch (error) {
+    console.error('Purchase plan error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /subscription/claim-referral-pass
+ * User claims their free referral tournament pass when they hit the required referral count.
+ * Freezes the snapshot: valid_until and max_teams are permanently locked in for this pass!
+ */
+router.post('/claim-referral-pass', authenticate, async (req, res) => {
+  try {
+    const user = await User.findByPk(req.userId || req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    let referralOffer = DEFAULT_REFERRAL_OFFER;
+    const offerRow = await SystemSetting.findOne({ where: { key: 'referral_offer_config' } });
+    if (offerRow && offerRow.value) {
+      try { referralOffer = JSON.parse(offerRow.value); } catch (_) {}
+    }
+
+    const currentReferrals = user.total_referrals_count || 0;
+    if (currentReferrals < referralOffer.target_count) {
+      return res.status(400).json({
+        error: `You need ${referralOffer.target_count} referrals to claim this pass. You currently have ${currentReferrals}.`,
+        needed: referralOffer.target_count - currentReferrals,
+      });
+    }
+
+    const now = new Date();
+    // Snapshot preservation: lock in current offer values into user record!
+    const validUntil = new Date(now.getTime() + (referralOffer.reward_days * 86400000));
+    const maxTeams = parseInt(referralOffer.teams_per_match, 10) || 1;
+
+    await user.update({
+      referral_pass_valid_until: validUntil,
+      referral_pass_max_teams: maxTeams,
+      referral_pass_claimed_at: now,
+    });
+
+    await Notification.create({
+      user_id: user.id,
+      title: '🎁 Referral Free Pass Claimed!',
+      message: `Congratulations! Your free pass is active until ${validUntil.toLocaleDateString('en-IN')}. You can create ${maxTeams} team(s) per match for free!`,
+      type: 'referral_reward',
+    }).catch(() => {});
+
+    res.json({
+      success: true,
+      message: `🎉 Free Referral Pass claimed successfully! Valid for ${referralOffer.reward_days} days (${maxTeams} team/match).`,
+      pass: {
+        valid_until: validUntil,
+        max_teams: maxTeams,
+        claimed_at: now,
+      }
+    });
+  } catch (error) {
+    console.error('Claim referral pass error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * ADMIN: GET /admin/subscription-plans
+ * Returns current subscription plans and referral offer configuration for Admin Deck.
+ */
+router.get('/admin/plans', authenticate, async (req, res) => {
+  try {
+    const { isAdmin } = require('../middleware/auth');
+    if (req.user?.role !== 'admin' && req.role !== 'admin') {
+      const u = await User.findByPk(req.userId || req.user?.id);
+      if (!u || u.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    let plans = DEFAULT_PLANS;
+    const plansRow = await SystemSetting.findOne({ where: { key: 'subscription_plans' } });
+    if (plansRow && plansRow.value) {
+      try { plans = JSON.parse(plansRow.value); } catch (_) {}
+    }
+
+    let referralOffer = DEFAULT_REFERRAL_OFFER;
+    const offerRow = await SystemSetting.findOne({ where: { key: 'referral_offer_config' } });
+    if (offerRow && offerRow.value) {
+      try { referralOffer = JSON.parse(offerRow.value); } catch (_) {}
+    }
+
+    res.json({ success: true, plans, referralOffer });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * ADMIN: PUT /admin/subscription-plans
+ * Updates subscription plans and referral offer in real-time.
+ */
+router.put('/admin/plans', authenticate, async (req, res) => {
+  try {
+    const u = await User.findByPk(req.userId || req.user?.id);
+    if (!u || u.role !== 'admin') return res.status(403).json({ error: 'Admin access required' });
+
+    const { plans, referralOffer } = req.body;
+
+    if (Array.isArray(plans)) {
+      const cleanPlans = plans.map(p => ({
+        id: String(p.id || '').trim().toLowerCase(),
+        name: String(p.name || '').trim(),
+        price: parseFloat(p.price) || 0,
+        validity_days: parseInt(p.validity_days, 10) || 30,
+        max_teams_per_match: parseInt(p.max_teams_per_match, 10) || 2,
+        description: String(p.description || '').trim(),
+        badge: String(p.badge || '').trim(),
+        is_active: p.is_active !== false,
+      })).filter(p => p.id && p.name);
+
+      let row = await SystemSetting.findOne({ where: { key: 'subscription_plans' } });
+      if (row) {
+        await row.update({ value: JSON.stringify(cleanPlans) });
+      } else {
+        await SystemSetting.create({
+          key: 'subscription_plans',
+          value: JSON.stringify(cleanPlans),
+          description: 'Admin configured subscription plans',
+        });
+      }
+    }
+
+    if (referralOffer && typeof referralOffer === 'object') {
+      const cleanOffer = {
+        target_count: parseInt(referralOffer.target_count, 10) || 5,
+        reward_days: parseInt(referralOffer.reward_days, 10) || 10,
+        teams_per_match: parseInt(referralOffer.teams_per_match, 10) || 2,
+        is_active: referralOffer.is_active !== false,
+        title: String(referralOffer.title || 'Refer friends to unlock free access').trim(),
+      };
+
+      let row = await SystemSetting.findOne({ where: { key: 'referral_offer_config' } });
+      if (row) {
+        await row.update({ value: JSON.stringify(cleanOffer) });
+      } else {
+        await SystemSetting.create({
+          key: 'referral_offer_config',
+          value: JSON.stringify(cleanOffer),
+          description: 'Admin configured referral offer',
+        });
+      }
+    }
+
+    res.json({ success: true, message: 'Subscription plans and referral offer updated successfully!' });
+  } catch (error) {
+    console.error('Update plans error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

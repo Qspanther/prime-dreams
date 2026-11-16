@@ -1094,11 +1094,37 @@ router.post('/matches/:id/teams', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Contest selection is locked. Match starts shortly!' });
     }
 
-    // Max 6 teams per user per match (Dream11-style)
+    // Dynamic Subscription & Referral Pass Check (§2.6)
+    let maxAllowedTeams = 6;
+    if (req.user && !req.user.is_bot && req.user.role !== 'admin') {
+      const userRecord = await User.findByPk(req.user.id, { transaction });
+      const freeModeSetting = await SystemSetting.findOne({ where: { key: 'subscription_free_mode' }, transaction });
+      const isFreeMode = freeModeSetting && freeModeSetting.value === 'true';
+
+      const hasPaidSub = userRecord?.subscription_active_until && new Date(userRecord.subscription_active_until) > now;
+      const hasReferralPass = userRecord?.referral_pass_valid_until && new Date(userRecord.referral_pass_valid_until) > now;
+
+      if (!isFreeMode && !hasPaidSub && !hasReferralPass) {
+        await transaction.rollback();
+        return res.status(403).json({
+          error: 'An active Subscription Pass or Referral Pass is required to create fantasy teams. Choose a tier or invite friends to play!',
+          requiresSubscription: true,
+        });
+      }
+
+      const paidTeams = hasPaidSub ? (parseInt(userRecord.subscription_max_teams, 10) || 2) : 0;
+      const refTeams = hasReferralPass ? (parseInt(userRecord.referral_pass_max_teams, 10) || 1) : 0;
+      maxAllowedTeams = Math.max(paidTeams, refTeams, isFreeMode ? 6 : 0);
+    }
+
     const myTeamCount = await CricketTeam.count({ where: { user_id: req.user.id, match_id: match.id }, transaction });
-    if (myTeamCount >= 6) {
+    if (myTeamCount >= maxAllowedTeams) {
       await transaction.rollback();
-      return res.status(400).json({ error: 'Maximum 6 teams allowed per match.' });
+      return res.status(400).json({
+        error: `You have reached your limit of ${maxAllowedTeams} team(s) per match under your current pass. Upgrade your plan to create more teams!`,
+        maxTeams: maxAllowedTeams,
+        currentTeams: myTeamCount,
+      });
     }
 
     const { team_name, player_ids, captain_id, vice_captain_id, contest_id } = req.body;
@@ -1138,10 +1164,8 @@ router.post('/matches/:id/teams', authenticate, async (req, res) => {
         }
       }
 
-      const fee = Number(contest.entry_fee) || 0;
-      if (fee > 0) {
-        await chargeWalletEntry(req.user.id, fee, `Entry fee for "${contest.title}"`, transaction);
-      }
+      // In Prime Dreems v2.6, contest entry is 100% FREE with active subscription / referral pass!
+      // Real-money entry fees are decoupled to keep Prime Dreems purely skill-based.
     }
 
     const newTeam = await CricketTeam.create({
@@ -1227,11 +1251,11 @@ router.post('/matches/:id/teams', authenticate, async (req, res) => {
     res.json({
       success: true,
       message: contest
-        ? `Team "${newTeam.team_name}" entered into "${contest.title}" successfully!${fee > 0 ? ` ₹${fee} deducted from wallet.` : ''} Best of luck 🏏`
+        ? `Team "${newTeam.team_name}" registered into Contest #${contest.contest_code || ''} ("${contest.title}") via your active Pass! Best of luck 🏏`
         : `Team "${newTeam.team_name}" successfully saved! Best of luck 🏏`,
       team: newTeam,
       contest,
-      deducted_amount: fee,
+      deducted_amount: 0,
     });
   } catch (err) {
     if (transaction && !transaction.finished) await transaction.rollback();
@@ -2098,6 +2122,7 @@ router.get('/contests/:id/prize-breakup', async (req, res) => {
       success: true,
       contest: {
         id: contest.id,
+        contest_code: contest.contest_code,
         title: contest.title,
         prize_pool: prizePool,
         total_spots: totalSpots,
@@ -2110,6 +2135,211 @@ router.get('/contests/:id/prize-breakup', async (req, res) => {
       winners,
     });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * 🏆 SECOND PORTAL: GET /contests/code/:code
+ * Lookup contest by numeric ID (e.g. 2013) with full prize breakup and match info.
+ */
+router.get('/contests/code/:code', async (req, res) => {
+  try {
+    const rawCode = String(req.params.code || '').trim().replace('#', '');
+    const codeNum = parseInt(rawCode, 10);
+    if (isNaN(codeNum)) {
+      return res.status(400).json({ error: 'Please enter a valid numeric Contest ID (e.g. 2013).' });
+    }
+
+    const contest = await MatchContest.findOne({
+      where: { contest_code: codeNum },
+      include: [
+        {
+          model: CricketMatch,
+          as: 'match',
+          attributes: ['id', 'title', 'team_a', 'team_b', 'status', 'start_time', 'score_summary']
+        }
+      ]
+    });
+
+    if (!contest) {
+      return res.status(404).json({ error: `No contest found with ID #${codeNum}. Please check the Contest ID.` });
+    }
+
+    const prizePool = parseFloat(contest.prize_pool) || 0;
+    const totalSpots = parseInt(contest.total_spots, 10) || 0;
+    let customBreakup = null;
+    try {
+      if (contest.prize_breakup) {
+        customBreakup = typeof contest.prize_breakup === 'string'
+          ? JSON.parse(contest.prize_breakup)
+          : contest.prize_breakup;
+      }
+    } catch (_) {}
+
+    const breakup = buildPrizeBreakup(prizePool, totalSpots, customBreakup);
+
+    const topTeams = await CricketTeam.findAll({
+      where: { contest_id: contest.id },
+      order: [['total_points', 'DESC']],
+      include: [{ model: User, as: 'user', attributes: ['id', 'name', 'username'] }],
+      limit: 50,
+    });
+
+    const winners = computeWinnersWithTies(topTeams, breakup);
+
+    res.json({
+      success: true,
+      contest: {
+        id: contest.id,
+        contest_code: contest.contest_code,
+        title: contest.title,
+        type: contest.type,
+        prize_pool: prizePool,
+        total_spots: totalSpots,
+        filled_spots: contest.filled_spots,
+        status: contest.status,
+        match: contest.match,
+        prize_breakup: customBreakup,
+      },
+      total_prize: prizePool,
+      breakup,
+      winners,
+    });
+  } catch (err) {
+    console.error('Contest lookup error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * 🏆 SECOND PORTAL: GET /contests/directory
+ * Browse all contests with numeric IDs for the payout/prize portal search directory.
+ */
+router.get('/contests/directory', async (req, res) => {
+  try {
+    const contests = await MatchContest.findAll({
+      where: { is_active: true },
+      include: [
+        {
+          model: CricketMatch,
+          as: 'match',
+          attributes: ['id', 'title', 'team_a', 'team_b', 'status', 'start_time']
+        }
+      ],
+      order: [['contest_code', 'ASC'], ['created_at', 'DESC']],
+      limit: 100,
+    });
+
+    res.json({
+      success: true,
+      contests: contests.map(c => ({
+        id: c.id,
+        contest_code: c.contest_code,
+        title: c.title,
+        type: c.type,
+        prize_pool: parseFloat(c.prize_pool) || 0,
+        total_spots: c.total_spots,
+        filled_spots: c.filled_spots,
+        status: c.status,
+        match_title: c.match ? c.match.title : 'Cricket Fixture',
+        match_status: c.match ? c.match.status : 'upcoming',
+        start_time: c.match ? c.match.start_time : null,
+      }))
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/**
+ * 🏆 SECOND PORTAL: GET /contests/my-participations
+ * User's joined contests with rank, points, and entitled/won prize verification.
+ */
+router.get('/contests/my-participations', authenticate, async (req, res) => {
+  try {
+    const userTeams = await CricketTeam.findAll({
+      where: { user_id: req.user.id },
+      include: [
+        {
+          model: MatchContest,
+          as: 'contest',
+          include: [
+            {
+              model: CricketMatch,
+              as: 'match',
+              attributes: ['id', 'title', 'team_a', 'team_b', 'status', 'start_time']
+            }
+          ]
+        },
+        {
+          model: CricketMatch,
+          as: 'match',
+          attributes: ['id', 'title', 'team_a', 'team_b', 'status', 'start_time']
+        }
+      ],
+      order: [['created_at', 'DESC']],
+      limit: 50,
+    });
+
+    const participations = [];
+    for (const t of userTeams) {
+      if (!t.contest) continue;
+      const contest = t.contest;
+      const prizePool = parseFloat(contest.prize_pool) || 0;
+      const totalSpots = parseInt(contest.total_spots, 10) || 0;
+      let customBreakup = null;
+      try {
+        if (contest.prize_breakup) {
+          customBreakup = typeof contest.prize_breakup === 'string'
+            ? JSON.parse(contest.prize_breakup)
+            : contest.prize_breakup;
+        }
+      } catch (_) {}
+
+      const breakup = buildPrizeBreakup(prizePool, totalSpots, customBreakup);
+
+      // Calculate rank of this team in the contest
+      const rankCount = await CricketTeam.count({
+        where: {
+          contest_id: contest.id,
+          total_points: { [sequelize.Sequelize.Op.gt]: t.total_points || 0 }
+        }
+      });
+      const myRank = rankCount + 1;
+
+      // Find prize for this rank
+      let prizeAmount = 0;
+      for (const slab of breakup) {
+        if (myRank >= slab.rank_from && myRank <= slab.rank_to) {
+          prizeAmount = slab.prize;
+          break;
+        }
+      }
+
+      participations.push({
+        team_id: t.id,
+        team_name: t.team_name,
+        total_points: t.total_points || 0,
+        my_rank: myRank,
+        prize_amount: prizeAmount,
+        contest_id: contest.id,
+        contest_code: contest.contest_code,
+        contest_title: contest.title,
+        prize_pool: prizePool,
+        contest_status: contest.status,
+        match_title: (contest.match || t.match)?.title || 'Cricket Match',
+        match_status: (contest.match || t.match)?.status || 'upcoming',
+        created_at: t.created_at,
+      });
+    }
+
+    res.json({
+      success: true,
+      participations,
+    });
+  } catch (err) {
+    console.error('My participations error:', err);
     res.status(500).json({ error: err.message });
   }
 });

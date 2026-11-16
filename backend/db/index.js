@@ -61,6 +61,27 @@ sequelize.authenticate().then(async () => {
       await sequelize.query('ALTER TABLE bot_win_history ADD COLUMN IF NOT EXISTS phase INTEGER DEFAULT 1;').catch(() => {});
       await sequelize.query('ALTER TABLE notifications ADD COLUMN IF NOT EXISTS link VARCHAR(255);').catch(() => {});
       await sequelize.query('ALTER TABLE match_contests ADD COLUMN IF NOT EXISTS prize_breakup TEXT;').catch(() => {});
+      await sequelize.query('ALTER TABLE match_contests ADD COLUMN IF NOT EXISTS contest_code INTEGER;').catch(() => {});
+      await sequelize.query('CREATE UNIQUE INDEX IF NOT EXISTS idx_match_contests_contest_code ON match_contests(contest_code);').catch(() => {});
+      await sequelize.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_plan_id VARCHAR(50);').catch(() => {});
+      await sequelize.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS subscription_max_teams INTEGER DEFAULT 2;').catch(() => {});
+      await sequelize.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_pass_valid_until TIMESTAMP WITH TIME ZONE;').catch(() => {});
+      await sequelize.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_pass_max_teams INTEGER DEFAULT 1;').catch(() => {});
+      await sequelize.query('ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_pass_claimed_at TIMESTAMP WITH TIME ZONE;').catch(() => {});
+
+      try {
+        const [contestsWithoutCode] = await sequelize.query('SELECT id FROM match_contests WHERE contest_code IS NULL ORDER BY created_at ASC;');
+        if (contestsWithoutCode && contestsWithoutCode.length > 0) {
+          const [maxCodeRow] = await sequelize.query('SELECT MAX(contest_code) as max_code FROM match_contests;');
+          let nextCode = (maxCodeRow[0]?.max_code ? parseInt(maxCodeRow[0].max_code, 10) : 2010) + 1;
+          for (const c of contestsWithoutCode) {
+            await sequelize.query('UPDATE match_contests SET contest_code = :code WHERE id = :id;', {
+              replacements: { code: nextCode++, id: c.id }
+            });
+          }
+          console.log(`🔢 Backfilled ${contestsWithoutCode.length} contests with unique numeric Contest IDs.`);
+        }
+      } catch (_) {}
       console.log('🐘 Cloud PostgreSQL schema verified & indexes active.');
     } catch (pgErr) {
       console.warn('PostgreSQL initialization notice:', pgErr.message);
@@ -90,6 +111,26 @@ sequelize.authenticate().then(async () => {
     await sequelize.query('ALTER TABLE bot_win_history ADD COLUMN phase INTEGER DEFAULT 1;').catch(() => {});
     await sequelize.query('ALTER TABLE notifications ADD COLUMN link TEXT;').catch(() => {});
     await sequelize.query('ALTER TABLE match_contests ADD COLUMN prize_breakup TEXT;').catch(() => {});
+    await sequelize.query('ALTER TABLE match_contests ADD COLUMN contest_code INTEGER;').catch(() => {});
+    await sequelize.query('ALTER TABLE users ADD COLUMN subscription_plan_id TEXT;').catch(() => {});
+    await sequelize.query('ALTER TABLE users ADD COLUMN subscription_max_teams INTEGER DEFAULT 2;').catch(() => {});
+    await sequelize.query('ALTER TABLE users ADD COLUMN referral_pass_valid_until TEXT;').catch(() => {});
+    await sequelize.query('ALTER TABLE users ADD COLUMN referral_pass_max_teams INTEGER DEFAULT 1;').catch(() => {});
+    await sequelize.query('ALTER TABLE users ADD COLUMN referral_pass_claimed_at TEXT;').catch(() => {});
+
+    // SQLite backfill
+    try {
+      const [contestsWithoutCode] = await sequelize.query('SELECT id FROM match_contests WHERE contest_code IS NULL ORDER BY created_at ASC;');
+      if (contestsWithoutCode && contestsWithoutCode.length > 0) {
+        const [maxCodeRow] = await sequelize.query('SELECT MAX(contest_code) as max_code FROM match_contests;');
+        let nextCode = (maxCodeRow[0]?.max_code ? parseInt(maxCodeRow[0].max_code, 10) : 2010) + 1;
+        for (const c of contestsWithoutCode) {
+          await sequelize.query('UPDATE match_contests SET contest_code = :code WHERE id = :id;', {
+            replacements: { code: nextCode++, id: c.id }
+          });
+        }
+      }
+    } catch (_) {}
     console.log('⚡ Ultra high-performance SQLite engine & cricket indexes active.');
   } catch (err) {
     console.warn('SQLite PRAGMA tuning notice:', err.message);

@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { 
-  Bell, LogOut, Menu, X, Home, Users, Wallet, Settings, Radio, Shield, Coins 
+  Bell, LogOut, Menu, X, Home, Users, Wallet, Settings, Radio, Shield, Coins, Crown, Trophy 
 } from 'lucide-react';
 import { apiGet, apiPut } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
@@ -92,23 +92,24 @@ export default function TopBar() {
 
         {/* Right: Wallet Balance, Notifications & User */}
         <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          {/* 3D Gold Rewards (Prime Coins) Pill */}
+          {/* Tournament Passes Pill */}
           <Link
-            href="/rewards"
-            className="prime-btn-gold-3d !py-1.5 !px-2 sm:!px-3 !text-xs font-black shrink-0"
-            title="Prime Coins Rewards"
+            href="/subscription"
+            className="prime-btn-gold-3d !py-1.5 !px-2 sm:!px-3 !text-xs font-black shrink-0 flex items-center gap-1.5"
+            title="Prime Dreems Tournament Passes"
           >
-            <Coins className="w-4 h-4 text-[#92400E] shrink-0" />
-            <span className="pd-num font-mono text-xs hidden sm:inline">Rewards</span>
+            <Crown className="w-4 h-4 text-[#92400E] shrink-0" />
+            <span className="font-mono text-xs hidden sm:inline">Passes</span>
           </Link>
 
-          {/* 3D Gold Wallet Balance Pill */}
+          {/* Official Payouts & Winnings Portal Link */}
           <Link
-            href="/wallet"
-            className="prime-btn-gold-3d !py-1.5 !px-2 sm:!px-3.5 !text-xs font-black shrink-0"
+            href="/payouts-portal"
+            className="prime-btn-royal-3d !py-1.5 !px-2 sm:!px-3.5 !text-xs font-black shrink-0 flex items-center gap-1.5 text-white"
+            title="Official Winnings & Payouts Portal"
           >
-            <Wallet className="w-4 h-4 text-[#92400E] shrink-0" />
-            <span className="pd-num font-mono text-xs sm:text-sm whitespace-nowrap">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+            <Trophy className="w-4 h-4 text-[#FDE047] shrink-0" />
+            <span className="font-mono text-xs sm:text-sm whitespace-nowrap">Payouts Portal ↗</span>
           </Link>
 
           {/* Notifications */}
@@ -279,7 +280,8 @@ export default function TopBar() {
                 {[
                   { label: 'Home', href: '/', icon: Home },
                   { label: 'My Teams', href: '/my-teams', icon: Users },
-                  { label: 'Wallet', href: '/wallet', icon: Wallet },
+                  { label: 'Tournament Passes', href: '/subscription', icon: Crown },
+                  { label: 'Payouts Portal', href: '/payouts-portal', icon: Trophy },
                   { label: 'Settings', href: '/settings', icon: Settings },
                 ].map((item) => {
                   const Icon = item.icon;

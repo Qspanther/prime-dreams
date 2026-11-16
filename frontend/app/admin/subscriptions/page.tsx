@@ -80,6 +80,22 @@ export default function AdminSubscriptionsPage() {
 
   const [users, setUsers] = useState<UserAudit[]>([]);
 
+  // Dynamic Subscription Plans State
+  const [plans, setPlans] = useState<any[]>([
+    { id: 'bronze', name: 'Bronze Tier', price: 49, validity_days: 10, max_teams_per_match: 2, description: 'Create up to 2 fantasy teams per match for 10 days.', badge: 'Starter', is_active: true },
+    { id: 'silver', name: 'Silver Pro', price: 99, validity_days: 20, max_teams_per_match: 3, description: 'Create up to 3 fantasy teams per match for 20 days.', badge: 'Popular', is_active: true },
+    { id: 'gold', name: 'Gold Master', price: 199, validity_days: 30, max_teams_per_match: 4, description: 'Create up to 4 fantasy teams per match for 30 days.', badge: 'Best Value', is_active: true },
+    { id: 'vip', name: 'VIP Platinum', price: 499, validity_days: 90, max_teams_per_match: 6, description: 'Create maximum 6 fantasy teams per match for 90 days.', badge: 'VIP Elite', is_active: true },
+  ]);
+  const [referralOffer, setReferralOffer] = useState<any>({
+    target_count: 5,
+    reward_days: 10,
+    teams_per_match: 2,
+    is_active: true,
+    title: 'Refer 5 Friends — Get 10 Days Free Access (2 Teams/Match)',
+  });
+  const [savingPlans, setSavingPlans] = useState(false);
+
   const fetchSettings = () => {
     if (!token) return;
     setLoading(true);
@@ -93,9 +109,61 @@ export default function AdminSubscriptionsPage() {
       })
       .catch(err => {
         console.error(err);
-        setMessage({ type: 'error', text: 'Failed to load subscription settings' });
+      });
+
+    // Also fetch dynamic plans
+    apiGet('/subscription/admin/plans', token)
+      .then(res => {
+        if (res && res.plans) setPlans(res.plans);
+        if (res && res.referralOffer) setReferralOffer(res.referralOffer);
+      })
+      .catch(err => {
+        console.error('Fetch admin plans error:', err);
       })
       .finally(() => setLoading(false));
+  };
+
+  const handleSavePlans = async () => {
+    if (!token) return;
+    setSavingPlans(true);
+    setMessage(null);
+    try {
+      await apiPut('/subscription/admin/plans', { plans, referralOffer }, token);
+      setMessage({ type: 'success', text: '🎉 Subscription tiers and referral offer updated successfully!' });
+      setTimeout(() => setMessage(null), 4000);
+    } catch (err: unknown) {
+      setMessage({ type: 'error', text: err instanceof Error ? err.message : 'Failed to update plans' });
+    } finally {
+      setSavingPlans(false);
+    }
+  };
+
+  const handleUpdatePlan = (index: number, field: string, value: any) => {
+    const updated = [...plans];
+    updated[index] = { ...updated[index], [field]: value };
+    setPlans(updated);
+  };
+
+  const handleAddPlan = () => {
+    const newId = `tier_${Date.now().toString().slice(-4)}`;
+    setPlans([
+      ...plans,
+      {
+        id: newId,
+        name: 'New Custom Tier',
+        price: 99,
+        validity_days: 15,
+        max_teams_per_match: 2,
+        description: 'Create teams per match during validity.',
+        badge: 'Custom',
+        is_active: true,
+      }
+    ]);
+  };
+
+  const handleRemovePlan = (index: number) => {
+    const updated = plans.filter((_, idx) => idx !== index);
+    setPlans(updated);
   };
 
   useEffect(() => {
@@ -476,6 +544,169 @@ export default function AdminSubscriptionsPage() {
           </div>
         </div>
       </form>
+
+      {/* ═════ SECTION: DYNAMIC SUBSCRIPTION TIERS & REFERRAL OFFER MANAGER (v2.6) ═════ */}
+      <div className="prime-card-3d bg-white p-6 border border-[#CBD5E1] space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#E2E8F0]">
+          <div>
+            <h3 className="text-lg font-black text-[#0F172A] flex items-center gap-2">
+              <Crown className="text-[#D97706]" size={20} />
+              Subscription Tiers &amp; Team Limits Configuration
+            </h3>
+            <p className="text-xs text-[#334155] mt-0.5">
+              Configure each subscription category (Bronze, Silver, Gold, VIP): Price (₹), Validity in Days, and Maximum Teams allowed per match.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleAddPlan}
+              className="px-3.5 py-1.5 rounded-lg bg-[#F1F5F9] hover:bg-[#E2E8F0] text-xs font-bold text-[#0F172A] border border-[#CBD5E1] transition-all"
+            >
+              + Add Tier
+            </button>
+            <button
+              type="button"
+              onClick={handleSavePlans}
+              disabled={savingPlans}
+              className="px-5 py-1.5 rounded-lg bg-gradient-to-r from-[#D97706] to-[#B45309] text-white text-xs font-bold shadow-md shadow-[#D97706]/20 hover:opacity-90 disabled:opacity-50 transition-all flex items-center gap-1.5"
+            >
+              <Save size={14} /> {savingPlans ? 'Saving Tiers...' : 'Save Tiers & Offers'}
+            </button>
+          </div>
+        </div>
+
+        {/* Subscription Plans Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {plans.map((p, idx) => (
+            <div key={idx} className="p-4 rounded-xl bg-[#F8FAFC] border border-[#CBD5E1] space-y-3 relative">
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase font-extrabold px-2 py-0.5 rounded bg-[#E2E8F0] text-[#0F172A]">
+                  Tier #{idx + 1} ({p.id})
+                </span>
+                {plans.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemovePlan(idx)}
+                    className="text-xs font-bold text-red-600 hover:text-red-700"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[11px] font-bold text-[#334155] block mb-1">Tier / Category Name</label>
+                  <input
+                    type="text"
+                    value={p.name}
+                    onChange={(e) => handleUpdatePlan(idx, 'name', e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-[#CBD5E1] rounded-lg text-xs font-bold text-[#0F172A]"
+                    placeholder="e.g. Bronze Tier"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-[#334155] block mb-1">Price (₹)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={p.price}
+                    onChange={(e) => handleUpdatePlan(idx, 'price', e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-[#CBD5E1] rounded-lg text-xs font-bold text-[#D97706]"
+                    placeholder="e.g. 49"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-[#334155] block mb-1">Validity (Days)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={p.validity_days}
+                    onChange={(e) => handleUpdatePlan(idx, 'validity_days', e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-[#CBD5E1] rounded-lg text-xs font-bold text-[#0F172A]"
+                    placeholder="e.g. 10"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-bold text-[#334155] block mb-1">Max Teams / Match</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="6"
+                    value={p.max_teams_per_match}
+                    onChange={(e) => handleUpdatePlan(idx, 'max_teams_per_match', e.target.value)}
+                    className="w-full px-3 py-1.5 bg-white border border-[#CBD5E1] rounded-lg text-xs font-bold text-[#2563EB]"
+                    placeholder="e.g. 2"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-[#334155] block mb-1">Perks &amp; Description</label>
+                <input
+                  type="text"
+                  value={p.description || ''}
+                  onChange={(e) => handleUpdatePlan(idx, 'description', e.target.value)}
+                  className="w-full px-3 py-1.5 bg-white border border-[#CBD5E1] rounded-lg text-xs text-[#0F172A]"
+                  placeholder="e.g. Create up to 2 fantasy teams per match for 10 days"
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Dynamic Referral Offer Settings */}
+        <div className="p-4 rounded-xl bg-[#EFF6FF] border border-[#BFDBFE] space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-sm font-black text-[#1E3A8A] flex items-center gap-2">
+              <Gift size={16} /> Dynamic Referral Offer Configuration
+            </h4>
+            <span className="text-[11px] text-[#2563EB] font-bold">
+              Snapshot-Protected: Updates apply to new claims; existing user passes keep full validity.
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-[11px] font-bold text-[#1E3A8A] block mb-1">Referral Friends Target</label>
+              <input
+                type="number"
+                min="1"
+                value={referralOffer.target_count || 5}
+                onChange={(e) => setReferralOffer({ ...referralOffer, target_count: parseInt(e.target.value, 10) || 5 })}
+                className="w-full px-3 py-1.5 bg-white border border-[#93C5FD] rounded-lg text-xs font-bold text-[#0F172A]"
+                placeholder="e.g. 5"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-[#1E3A8A] block mb-1">Reward Validity (Days)</label>
+              <input
+                type="number"
+                min="1"
+                max="365"
+                value={referralOffer.reward_days || 10}
+                onChange={(e) => setReferralOffer({ ...referralOffer, reward_days: parseInt(e.target.value, 10) || 10 })}
+                className="w-full px-3 py-1.5 bg-white border border-[#93C5FD] rounded-lg text-xs font-bold text-[#0F172A]"
+                placeholder="e.g. 10"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-bold text-[#1E3A8A] block mb-1">Max Teams / Match (Referral)</label>
+              <input
+                type="number"
+                min="1"
+                max="6"
+                value={referralOffer.teams_per_match || 2}
+                onChange={(e) => setReferralOffer({ ...referralOffer, teams_per_match: parseInt(e.target.value, 10) || 2 })}
+                className="w-full px-3 py-1.5 bg-white border border-[#93C5FD] rounded-lg text-xs font-bold text-[#0F172A]"
+                placeholder="e.g. 2"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* SECTION 3: User Share & Subscription Audit Table */}
       <div className="prime-card-3d bg-white p-6 border border-[#CBD5E1] space-y-4">

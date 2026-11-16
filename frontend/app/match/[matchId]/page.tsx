@@ -1178,12 +1178,19 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                 >
                   <div>
                     <div className="flex items-center justify-between mb-3">
-                      <CategoryBadge category={match.category} size="xs" />
+                      <div className="flex items-center gap-2">
+                        <CategoryBadge category={match.category} size="xs" />
+                        {c.contest_code && (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-black font-mono bg-[#38BDF8]/15 text-[#0284C7] border border-[#38BDF8]/40 shadow-sm">
+                            Contest #{c.contest_code}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-2">
                         {contestLocked && <span className="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-2 py-1 text-[9px] font-black uppercase text-red-700"><Lock className="h-3 w-3" />Contest Locked</span>}
                         {contestFull && !contestLocked && <span className="rounded-lg border border-slate-300 bg-slate-100 px-2 py-1 text-[9px] font-black uppercase text-slate-600">Full</span>}
-                        <span className="font-mono font-black text-sm text-[#1D4ED8] bg-[#EFF6FF] px-2.5 py-1 rounded-lg border border-[#BFDBFE]">
-                          {c.type === 'practice' || Number(c.entry_fee) === 0 ? 'FREE' : `₹${c.entry_fee}`}
+                        <span className="font-mono font-black text-xs text-[#059669] bg-[#ECFDF5] px-2.5 py-1 rounded-lg border border-[#A7F3D0]">
+                          FREE (Pass)
                         </span>
                       </div>
                     </div>
@@ -1243,11 +1250,20 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                       </Link>
                     </div>
                     <div className="flex items-center justify-between text-xs pt-0.5">
-                      <span className="text-[10px] text-[#64748B] font-bold flex items-center gap-1">
-                        <span>{c.total_spots > 2 ? 'Up to 20 Teams' : 'Single Entry'}</span>
-                        <span>•</span>
-                        <span>{c.type === 'practice' ? 'Practice' : /rookie/i.test(c.title || '') ? 'Rookie' : 'Flexible'}</span>
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-[#64748B] font-bold">
+                          {c.total_spots > 2 ? 'Up to 20 Teams' : 'Single Entry'}
+                        </span>
+                        {c.contest_code && (
+                          <Link
+                            href={`/payouts-portal`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-[10px] font-black text-[#2563EB] hover:text-[#1D4ED8] flex items-center gap-0.5"
+                          >
+                            Chart #{c.contest_code} ↗
+                          </Link>
+                        )}
+                      </div>
                       {contestLocked ? (
                         <span className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase text-red-600">
                           <Lock className="w-3 h-3" /> Locked

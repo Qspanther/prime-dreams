@@ -1,15 +1,19 @@
-# 🏏 PRIME DREEMS — CRICKET FANTASY SPORTS PLATFORM (v2.5)
-> **Original Brand & Architecture:** Prime Dreems (100% Brand-Isolated, Dream11-style cricket mechanics)  
+# 🏏 PRIME DREEMS — CRICKET FANTASY SPORTS PLATFORM (v2.6)
+> **Original Brand & Architecture:** Prime Dreems (100% Brand-Isolated, Decoupled Payouts & Free-Pass System)  
 > **Visual Identity:** Jet Black (`#000000`), Royal Blue (`#2563EB`), Emerald Green (`#059669`), Shiny Amber/Gold (`#D97706`) with tactile 3D interactive controls.
 
 ---
 
 ## 🧭 Platform Overview & Architecture
 
-Prime Dreems is an enterprise-grade cricket fantasy sports platform powered by a **Zero-Mistake Ingestion Pipeline**, **Real-Time WebSocket Gateway**, **Live Stadium Pitch View**, **Wallet Entry Deduction Engine**, and **Dream11-Style Contest Lock Lifecycle**.
+Prime Dreems is an enterprise-grade cricket fantasy sports platform re-engineered for compliance with **Zero-Cash Team Creation**, a **Decoupled Payouts & Winnings Portal**, **Numeric Contest IDs (#2013-style)**, **Admin-Configurable Dynamic Subscription Tiers**, and **Snapshot-Protected Referral Passes**:
 
-- **Frontend:** Next.js 15 (App Router, Turbopack), React 19, Tailwind CSS, Lucide Icons, WebSocket streaming client with 0-3s reconnection jitter.
-- **Backend:** Node.js, Express, WebSocket Gateway (`ws`), SQLite (WAL mode, high-concurrency indexes).
+- **Decoupled Payouts & Wallet Architecture:** Prime Dreems main platform is 100% cash-free for match participation. Users create lineups and compete for free using their Subscription or Referral Pass. All cash winnings, UPI/Bank IMPS withdrawals, and transaction ledgers reside exclusively on the dedicated **Official Payouts & Winnings Portal** (`/payouts-portal`), sharing seamless unified login credentials.
+- **Auto-Increment Numeric Contest IDs:** Every contest displays a clean, memorable numeric ID (e.g. `Contest #2013`). Users can enter this ID into the Payouts Portal search engine to inspect spots, prize pool, and full rank-wise prize distribution charts.
+- **Dynamic Subscription Tiers (`/subscription` & `/admin/subscriptions`):** Admin configures custom subscription categories (Bronze, Silver, Gold, VIP) with custom validity days and team creation limits per match.
+- **Snapshot-Protected Referral Passes:** Dynamic promo/referral offers (e.g. invite 5 friends for 10 days of free entries). When claimed, the user's entitlement snapshot is permanently locked in for the duration of validity, protecting users even if admin alters the offer later.
+- **Frontend:** Next.js 15 (App Router, Turbopack), React 19, Tailwind CSS, Lucide Icons, WebSocket streaming client.
+- **Backend:** Node.js, Express, WebSocket Gateway (`ws`), Neon PostgreSQL Serverless DB (with local SQLite fallback).
 - **Live Stream Engine:** Official Cricbuzz Ingestion Engine with Dual-Source Cross-Check & Monotonicity Guards.
 - **Brand Rules:** Strictly **Prime Dreems** only. Zero third-party platform names in UI, code, or routes.
 
@@ -47,17 +51,18 @@ Prime Dreems is an enterprise-grade cricket fantasy sports platform powered by a
 
 ---
 
-## 💰 3. Wallet Balance Check & Contest Entry Fee Flow
-- **Pre-Submission Balance Verification:**
-  - When creating or editing a team for any contest (or creating an H2H challenge at `/h2h/challenge`), the system checks if `wallet.balance >= contest.entry_fee`.
-- **Insufficient Funds Redirection:**
-  - If balance is insufficient, the action button dynamically turns into **`+ Add ₹{needed} to Join →`**.
-  - Tapping redirects to `/wallet` with pre-filled parameters: `depositAmount`, `needed`, and `returnUrl`.
-  - The wallet page displays a direct notification banner explaining the required funds with a 1-click **`← Return to Match / XI`** button.
-- **Instant Quick Cash in Development:**
-  - One-click instant add cash options (`+ Quick ₹50`, `+ Quick ₹100`, `+ Quick ₹250`, `+ Quick ₹500`) with instant auto-approval for smooth testing.
-- **Atomic Balance Deduction:**
-  - On team creation or contest entry, entry fees are deducted atomically via bucket priority (`bonus_balance` ➔ `winnings_balance` ➔ `deposit_balance`), recording a complete ledger transaction.
+## 🎟️ 3. Free Team Creation with Pass & Decoupled Payouts Architecture
+- **Free Contest Entry via Pass:**
+  - Team creation and contest participation on Prime Dreems requires zero entry fee deduction (`entry_fee: 0`).
+  - Access is governed purely by active **Subscription Passes** or **Referral Passes** (`max_teams_per_match` quota).
+- **Decoupled Payouts & Winnings Portal (`/payouts-portal`):**
+  - Dedicated portal accessed with the exact same user credentials.
+  - Features real-time winnings balance, lifetime earnings, and direct UPI / IMPS bank withdrawal requests.
+  - Search any contest by its numeric ID (e.g. `2013`) to inspect total spots, prize pool, and rank distribution charts.
+  - Dedicated "My Joined Contests & Prize Verification" tab allows users to verify their ranks and claimed prizes.
+- **Admin Subscription & Referral Controls (`/admin/subscriptions`):**
+  - Full CRUD control over subscription tier pricing (₹), validity days, and max teams allowed per match.
+  - Dynamic referral promo configuration with snapshot isolation guaranteeing user pass benefits even across offer updates.
 
 ---
 

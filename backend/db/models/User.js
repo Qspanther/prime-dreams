@@ -99,6 +99,26 @@ const User = sequelize.define('User', {
     type: DataTypes.INTEGER,
     defaultValue: 0,
   },
+  subscription_plan_id: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  subscription_max_teams: {
+    type: DataTypes.INTEGER,
+    defaultValue: 2,
+  },
+  referral_pass_valid_until: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
+  referral_pass_max_teams: {
+    type: DataTypes.INTEGER,
+    defaultValue: 1,
+  },
+  referral_pass_claimed_at: {
+    type: DataTypes.DATE,
+    allowNull: true,
+  },
 }, {
   tableName: 'users',
 });

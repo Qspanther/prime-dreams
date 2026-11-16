@@ -3,13 +3,13 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, Wallet, Settings, Coins } from 'lucide-react';
+import { Home, Users, Trophy, Settings, Crown } from 'lucide-react';
 
 const navItems = [
   { label: 'Home', href: '/', icon: Home },
   { label: 'My Teams', href: '/my-teams', icon: Users },
-  { label: 'Rewards', href: '/rewards', icon: Coins },
-  { label: 'Wallet', href: '/wallet', icon: Wallet },
+  { label: 'Passes', href: '/subscription', icon: Crown },
+  { label: 'Payouts', href: '/payouts-portal', icon: Trophy },
   { label: 'Settings', href: '/settings', icon: Settings },
 ];
 

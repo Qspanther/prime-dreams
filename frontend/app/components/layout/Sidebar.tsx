@@ -3,17 +3,17 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Users, Wallet, Settings } from 'lucide-react';
+import { Home, Users, Crown, Trophy, Settings } from 'lucide-react';
 import PrimeLogo from '../ui/PrimeLogo';
 
 export default function Sidebar() {
   const pathname = usePathname();
 
-  // EXACTLY 4 Items as strictly required by Section 2
   const navItems = [
     { label: 'Home', href: '/', icon: Home },
     { label: 'My Teams', href: '/my-teams', icon: Users },
-    { label: 'Wallet', href: '/wallet', icon: Wallet },
+    { label: 'Tournament Passes', href: '/subscription', icon: Crown },
+    { label: 'Payouts Portal', href: '/payouts-portal', icon: Trophy },
     { label: 'Settings', href: '/settings', icon: Settings },
   ];
 

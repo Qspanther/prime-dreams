@@ -41,6 +41,11 @@ const MatchContest = sequelize.define('MatchContest', {
     defaultValue: 0,
     allowNull: true,
   },
+  contest_code: {
+    type: DataTypes.INTEGER,
+    allowNull: true,
+    unique: true,
+  },
   // Type 2 Multi-Battlefield settings
   spots_per_battlefield: {
     type: DataTypes.INTEGER,
@@ -87,6 +92,19 @@ const MatchContest = sequelize.define('MatchContest', {
     { fields: ['match_id', 'is_active'] },
     { fields: ['invite_code'] },
   ],
+  hooks: {
+    beforeCreate: async (contest) => {
+      if (!contest.contest_code) {
+        try {
+          const [result] = await sequelize.query('SELECT MAX(contest_code) as max_code FROM match_contests;');
+          const maxCode = result && result[0]?.max_code ? parseInt(result[0].max_code, 10) : 2010;
+          contest.contest_code = maxCode + 1;
+        } catch (_) {
+          contest.contest_code = 2011;
+        }
+      }
+    }
+  }
 });
 
 module.exports = MatchContest;
