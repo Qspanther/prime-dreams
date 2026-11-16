@@ -245,14 +245,13 @@ Prime Dreems is structured as an enterprise-grade 3-tier distributed system:
 > [!IMPORTANT]
 > The active production infrastructure for Prime Dreems is deployed across **Neon PostgreSQL** and **Render Cloud**. All connection secrets, API keys, and platform credentials must be managed strictly via environment variables (`.env`) and Render Dashboard environment variables. Never commit raw keys to git.
 
-### 🐘 1. Neon Cloud Database (Free Tier)
+### 🐘 1. Neon Cloud Database (Active Serverless PostgreSQL)
 - **Platform:** [Neon Serverless PostgreSQL](https://console.neon.tech)
-- **Configuration:** Set `DATABASE_URL` in `.env` or Render environment settings using your pooled connection string:
-  ```text
-  postgresql://<username>:<password>@<ep-hostname>.aws.neon.tech/neondb?sslmode=require&pgbouncer=true
-  ```
-- **Connection Pool:** Capped at `PG_POOL_MAX=5` on user backend and `BOT_PG_POOL_MAX=3` on bot service to strictly respect Neon's connection limit.
-- **Seeded Data:** Fully migrated schema, live cricket fixtures, contests, and autonomous bots.
+- **Host Endpoint:** `ep-winter-scene-bev77yoi-pooler.c-9.us-east-2.aws.neon.tech`
+- **Database:** `neondb` (Pooled with `sslmode=require`)
+- **Configuration:** Set `DATABASE_URL` and `BOT_DATABASE_URL` in `.env` and Render environment settings.
+- **Connection Pool:** Capped at `PG_POOL_MAX=5` on user backend and `BOT_PG_POOL_MAX=3` on bot service to strictly respect Neon connection quotas.
+- **Seeded Data:** Fully migrated schema, live cricket fixtures, contests, wallets, and autonomous bots verified active.
 
 ### 🚀 2. Render Cloud Platform (Free Tier Multi-Service Blueprint)
 - **Platform:** [Render Dashboard](https://dashboard.render.com)
