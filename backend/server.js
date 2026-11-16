@@ -240,13 +240,23 @@ async function start() {
     console.warn('⚠️ Default users seed notice:', defaultUserErr.message);
   }
 
-  // Seed sample matches only for local SQLite development.
-  if (!process.env.DATABASE_URL && process.env.NODE_ENV !== 'production') {
-    try {
+  // Ensure default sample matches exist if database is empty
+  try {
+    const { CricketMatch } = require('./db/models');
+    const matchCount = await CricketMatch.count().catch(() => 0);
+    if (matchCount === 0) {
       await seedCricketMatches();
-    } catch (seedErr) {
-      console.warn('⚠️ Sample matches seed notice:', seedErr.message);
     }
+  } catch (seedErr) {
+    console.warn('⚠️ Sample matches seed notice:', seedErr.message);
+  }
+
+  // Initialize Turso Cloud sync for persistence across ephemeral deploys
+  try {
+    const { initTursoSync } = require('./services/tursoSyncService');
+    await initTursoSync();
+  } catch (tursoErr) {
+    console.warn('⚠️ Turso sync initialization notice:', tursoErr.message);
   }
 
   // Start Ingestion Worker (Free tier: 30s poll, toggled via ENABLE_INGESTION)
