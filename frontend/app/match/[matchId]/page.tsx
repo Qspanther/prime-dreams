@@ -215,7 +215,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
   const shareViaWhatsApp = (code: string, title?: string, fee?: number | string) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const shareUrl = `${origin}/match/${matchId}?joinCode=${code}`;
-    const text = `🏏 Join my private cricket playground "${title || 'Cricket Field'}" on Prime Dreems!\n💰 Entry Fee: ₹${fee || 0}\n🏆 Dynamic Prize Pool: 60% of all player fees\n🔑 Code: ${code}\n👉 Join & Build XI: ${shareUrl}`;
+    const text = `🏏 Join my private cricket ground "${title || 'Cricket Field'}" on Prime Dreems!\n🎟️ Entry: FREE with Tournament Pass\n🔑 Contest Code: ${code}\n👉 Join & Build XI: ${shareUrl}`;
     if (typeof window !== 'undefined') {
       window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
     }
@@ -961,17 +961,17 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                         <h4 className="font-black text-sm text-[#0F172A] truncate">{joinResult.contest.title}</h4>
                         <p className="text-xs text-[#475569] font-bold mt-0.5">{joinResult.match?.team_a} vs {joinResult.match?.team_b}</p>
                       </div>
-                      <span className="pd-num font-mono font-black text-sm text-[#1D4ED8] bg-white px-2.5 py-1 rounded-lg border border-[#BFDBFE]">₹{joinResult.contest.entry_fee}</span>
+                      <span className="font-mono font-black text-xs text-[#059669] bg-[#ECFDF5] px-2.5 py-1 rounded-lg border border-[#A7F3D0]">FREE (Pass)</span>
                     </div>
                     <div className="flex items-center justify-between text-xs font-bold text-[#475569]">
-                      <span>Prize Pool: <span className="pd-num font-black text-[#D97706]">₹{Number(joinResult.contest.prize_pool).toLocaleString('en-IN')}</span></span>
+                      <span>Contest ID: <span className="font-mono font-black text-[#2563EB]">#{joinResult.contest.contest_code || joinResult.contest.id?.slice(0,6)}</span></span>
                       <span>{joinResult.contest.filled_spots}/{joinResult.contest.total_spots} joined</span>
                     </div>
                     <Link
                       href={`/team-builder/${joinResult.match?.id || matchId}?contestId=${joinResult.contest.id}`}
                       className="prime-btn-gold-3d w-full !py-2.5 !text-xs"
                     >
-                      Join Contest ₹{joinResult.contest.entry_fee}
+                      Join Contest (Free)
                     </Link>
                   </div>
                 )}
@@ -1014,10 +1014,10 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                         className="pd-input pd-num"
                       />
                     </div>
-                    <div className="p-3 rounded-lg bg-amber-100/70 border border-amber-300 text-xs text-[#92400E] space-y-1">
-                      <p className="font-black">Dynamic 60% Prize Pool Rule:</p>
+                    <div className="p-3 rounded-lg bg-blue-100/70 border border-blue-300 text-xs text-[#1E3A8A] space-y-1">
+                      <p className="font-black">Private Contest Ground Rule:</p>
                       <p className="leading-relaxed">
-                        60% of all entry fees collected in this contest forms the dynamic prize pool. As new participants join (e.g. 2 entries @ ₹{createForm.entry_fee || 100} = ₹{Math.round((Number(createForm.entry_fee) || 100) * 2 * 0.6)}, 3 entries = ₹{Math.round((Number(createForm.entry_fee) || 100) * 3 * 0.6)}), the prize pool scales up in real time with unlimited dynamic spots.
+                        Create your own private cricket ground to compete with friends. Lineup entries are free using your active Tournament Pass.
                       </p>
                     </div>
                     {createError && (
@@ -1090,8 +1090,8 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                       }`}
                     >
                       <div className="min-w-0">
-                        <h5 className="font-black text-sm text-[#0F172A] truncate">{c.title}</h5>
-                        <p className="text-xs text-[#64748B] font-bold">₹{c.entry_fee} entry • ₹{Number(c.prize_pool).toLocaleString('en-IN')} pool • {c.filled_spots}/{c.total_spots} joined</p>
+                        <h5 className="font-black text-sm text-[#0F172A] truncate">{c.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim()}</h5>
+                        <p className="text-xs text-[#64748B] font-bold">FREE Entry (Pass) • {c.filled_spots}/{c.total_spots} teams joined</p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <button
@@ -1177,40 +1177,27 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                   }`}
                 >
                   <div>
-                    <div className="flex items-center justify-between mb-3">
+                    {/* High-Impact Highlighted Contest ID Header */}
+                    <div className="flex items-center justify-between mb-3 bg-gradient-to-r from-[#0F172A] to-[#1E293B] px-3.5 py-2.5 rounded-xl border-2 border-[#334155] shadow-md">
                       <div className="flex items-center gap-2">
-                        <CategoryBadge category={match.category} size="xs" />
-                        {c.contest_code && (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-black font-mono bg-[#38BDF8]/15 text-[#0284C7] border border-[#38BDF8]/40 shadow-sm">
-                            Contest #{c.contest_code}
-                          </span>
-                        )}
+                        <span className="text-[11px] sm:text-xs font-black text-[#F59E0B] tracking-widest uppercase">CONTEST ID:</span>
+                        <span className="px-2.5 py-0.5 rounded-md text-sm sm:text-base font-black font-mono bg-[#F59E0B] text-[#0F172A] tracking-wider shadow">
+                          #{c.contest_code || 2011}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {contestLocked && <span className="inline-flex items-center gap-1 rounded-lg border border-red-300 bg-red-50 px-2 py-1 text-[9px] font-black uppercase text-red-700"><Lock className="h-3 w-3" />Contest Locked</span>}
-                        {contestFull && !contestLocked && <span className="rounded-lg border border-slate-300 bg-slate-100 px-2 py-1 text-[9px] font-black uppercase text-slate-600">Full</span>}
-                        <span className="font-mono font-black text-xs text-[#059669] bg-[#ECFDF5] px-2.5 py-1 rounded-lg border border-[#A7F3D0]">
+                      <div className="flex items-center gap-1.5">
+                        <CategoryBadge category={match.category} size="xs" />
+                        <span className="font-mono font-black text-[11px] sm:text-xs text-[#10B981] bg-[#064E3B]/80 px-2.5 py-0.5 rounded-lg border border-[#059669]/60 shadow-xs">
                           FREE (Pass)
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <h4 className="font-black text-[#0F172A] text-base">{c.title}</h4>
+                      <h4 className="font-black text-[#0F172A] text-base">{c.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').replace(/\(\s*\)/g, '').trim()}</h4>
                       {c.type !== 'practice' && (
                         <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 text-[9px] font-black uppercase text-emerald-700">
                           <ShieldCheck className="w-3 h-3" /> Guaranteed
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="mt-1 flex items-baseline justify-between">
-                      <p className="text-xs text-[#64748B] font-bold">
-                        Prize Pool: <span className="font-black text-[#D97706] font-mono text-sm">₹{Number(c.prize_pool || 0).toLocaleString('en-IN')}</span>
-                      </p>
-                      {firstPrize > 0 && (
-                        <span className="text-[11px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded font-mono">
-                          🥇 1st: ₹{firstPrize.toLocaleString('en-IN')}
                         </span>
                       )}
                     </div>
@@ -1230,40 +1217,19 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                   </div>
 
                   <div className="mt-5 pt-3 border-t border-[#E2E8F0] space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openPrizeBreakup(c);
-                        }}
-                        className="text-[11px] font-black text-[#2563EB] hover:text-[#1D4ED8] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer py-1.5 border border-blue-100 rounded-lg hover:bg-blue-50"
-                      >
-                        <Trophy className="w-3.5 h-3.5" /> Prize Breakup
-                      </button>
+                    <div className="flex items-center justify-between">
                       <Link
                         href={`/match/${matchId}/leaderboard?contestId=${c.id}`}
                         onClick={(e) => e.stopPropagation()}
-                        className="text-[11px] font-black text-[#D97706] hover:text-[#B45309] uppercase tracking-wider flex items-center justify-center gap-1 cursor-pointer py-1.5 border border-amber-100 rounded-lg hover:bg-amber-50"
+                        className="text-xs font-black text-[#2563EB] hover:text-[#1D4ED8] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer py-2 px-3 border-2 border-blue-100 rounded-xl hover:bg-blue-50 w-full"
                       >
-                        <Users className="w-3.5 h-3.5" /> Teams ({c.filled_spots || 0})
+                        <Users className="w-4 h-4 text-[#2563EB]" /> Live Contest Ranks & Teams ({c.filled_spots || 0})
                       </Link>
                     </div>
                     <div className="flex items-center justify-between text-xs pt-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-[#64748B] font-bold">
-                          {c.total_spots > 2 ? 'Up to 20 Teams' : 'Single Entry'}
-                        </span>
-                        {c.contest_code && (
-                          <Link
-                            href={`/payouts-portal`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-[10px] font-black text-[#2563EB] hover:text-[#1D4ED8] flex items-center gap-0.5"
-                          >
-                            Chart #{c.contest_code} ↗
-                          </Link>
-                        )}
-                      </div>
+                      <span className="text-[10px] text-[#64748B] font-bold">
+                        {c.total_spots > 2 ? 'Up to 20 Teams' : 'Single Entry'}
+                      </span>
                       {contestLocked ? (
                         <span className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase text-red-600">
                           <Lock className="w-3 h-3" /> Locked

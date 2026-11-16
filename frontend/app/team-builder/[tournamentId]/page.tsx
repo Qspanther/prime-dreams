@@ -262,8 +262,8 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const creditsLeft = Math.round((TOTAL_CREDITS - totalCreditsUsed) * 10) / 10;
 
   const activeContest = loadedContest || (match?.contests || []).find((c: any) => c.id === selectedContestId);
-  const entryFee = (!editingTeamId && !h2hFlow && activeContest) ? (Number(activeContest.entry_fee) || 0) : 0;
-  const isLowBalance = !editingTeamId && !h2hFlow && entryFee > 0 && walletBalance !== null && walletBalance < entryFee;
+  const entryFee = 0;
+  const isLowBalance = false;
 
   const togglePlayer = (p: Player) => {
     if (isLocked) {
@@ -490,15 +490,15 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
             <span className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xl shrink-0 shadow-md">🏟️</span>
             <div>
               <span className="text-[10px] font-black uppercase text-blue-700 tracking-wider block">Entering Private Ground</span>
-              <h3 className="font-black text-base text-blue-950">{activeContest.title}</h3>
+              <h3 className="font-black text-base text-blue-950">{activeContest.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim()}</h3>
               <p className="text-xs text-blue-700 font-medium">
-                Dynamic 60% Prize Pool • Current Pool: ₹{activeContest.prize_pool || Math.round((Number(activeContest.filled_spots) || 1) * (Number(activeContest.entry_fee) || 0) * 0.6)}
+                Contest ID: #{activeContest.contest_code || activeContest.id?.slice(0, 6)} • {activeContest.filled_spots || 1} Teams Joined
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-mono font-black text-sm text-blue-800 bg-white px-3 py-1.5 rounded-xl border border-blue-200 shadow-sm">
-              ₹{activeContest.entry_fee} Entry Fee
+            <span className="font-mono font-black text-sm text-[#059669] bg-[#ECFDF5] px-3 py-1.5 rounded-xl border border-[#A7F3D0] shadow-sm">
+              FREE (Pass)
             </span>
           </div>
         </div>
@@ -664,7 +664,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                   {(match.contests || [])
                     .filter((c: any) => c.is_active && !c.is_private && c.status === 'open' && (c.filled_spots || 0) < (c.total_spots || 0))
                     .map((c: any) => (
-                      <option key={c.id} value={c.id}>{c.title} (₹{c.entry_fee})</option>
+                      <option key={c.id} value={c.id}>Contest #{c.contest_code || 2011} • {c.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim()}</option>
                     ))}
                 </select>
                 <button
@@ -675,13 +675,12 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                   {switching ? 'Switching...' : 'Switch Contest'}
                 </button>
               </div>
-              <p className="text-[10px] text-[#64748B] font-bold">Entry fee difference is automatically adjusted (refunded or deducted).</p>
             </div>
           )}
         </div>
       )}
 
-      {/* Contest Selection & Wallet Balance Bar */}
+      {/* Contest Selection & Free Access Mode Bar */}
       {!h2hFlow && (
         <div className="prime-card-3d p-4 bg-gradient-to-r from-blue-50/70 via-amber-50/50 to-slate-50 border-2 border-blue-200/90 space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -698,7 +697,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                   .filter((c: any) => c.is_active && !c.is_private)
                   .map((c: any) => (
                     <option key={c.id} value={c.id}>
-                      {c.title} • {c.type === 'practice' || Number(c.entry_fee) === 0 ? 'FREE' : `₹${c.entry_fee} Entry`} • Pool ₹{Number(c.prize_pool || 0).toLocaleString('en-IN')}
+                      Contest #{c.contest_code || 2011} • {c.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim()} • FREE (Pass)
                     </option>
                   ))}
                 <option value="practice_free">Practice Contest (Free)</option>
@@ -708,44 +707,21 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
             <div className="flex items-center gap-3 shrink-0 pt-3 sm:pt-0">
               <div className="text-right">
                 <span className="text-[10px] text-[#64748B] font-bold block">Entry Fee</span>
-                <span className="font-mono text-sm font-black text-[#2563EB]">
-                  {entryFee === 0 ? 'FREE' : `₹${entryFee}`}
+                <span className="font-mono text-sm font-black text-[#059669]">
+                  FREE (Pass)
                 </span>
               </div>
 
               <div className="h-8 w-px bg-slate-300" />
 
               <div className="text-right">
-                <span className="text-[10px] text-[#64748B] font-bold block">Wallet Balance</span>
-                <span className={`font-mono text-sm font-black ${isLowBalance ? 'text-red-600' : 'text-emerald-700'}`}>
-                  ₹{walletBalance != null ? Number(walletBalance).toFixed(0) : '0'}
+                <span className="text-[10px] text-[#64748B] font-bold block">Access Mode</span>
+                <span className="font-mono text-xs font-black text-[#2563EB]">
+                  Tournament Pass
                 </span>
               </div>
-
-              {isLowBalance ? (
-                <Link
-                  href={`/wallet?depositAmount=${entryFee - (walletBalance || 0)}&needed=${entryFee}&returnUrl=${encodeURIComponent(typeof window !== 'undefined' ? window.location.pathname + window.location.search : '')}`}
-                  className="prime-btn-gold-3d !py-2 !px-3 text-xs font-black uppercase shrink-0"
-                >
-                  + Add ₹{entryFee - (walletBalance || 0)}
-                </Link>
-              ) : (
-                <Link
-                  href="/wallet"
-                  className="prime-btn-dark-3d !py-2 !px-3 text-xs font-black uppercase shrink-0"
-                >
-                  + Add Cash
-                </Link>
-              )}
             </div>
           </div>
-
-          {isLowBalance && (
-            <div className="flex items-center gap-2 p-2 rounded-lg bg-red-50 border border-red-200 text-xs font-bold text-red-700">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>Insufficient balance for this contest. Please add ₹{entryFee - (walletBalance || 0)} to join.</span>
-            </div>
-          )}
         </div>
       )}
 

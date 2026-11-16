@@ -102,16 +102,6 @@ export default function TopBar() {
             <span className="font-mono text-xs hidden sm:inline">Passes</span>
           </Link>
 
-          {/* Official Payouts & Winnings Portal Link */}
-          <Link
-            href="/payouts-portal"
-            className="prime-btn-royal-3d !py-1.5 !px-2 sm:!px-3.5 !text-xs font-black shrink-0 flex items-center gap-1.5 text-white"
-            title="Official Winnings & Payouts Portal"
-          >
-            <Trophy className="w-4 h-4 text-[#FDE047] shrink-0" />
-            <span className="font-mono text-xs sm:text-sm whitespace-nowrap">Payouts Portal ↗</span>
-          </Link>
-
           {/* Notifications */}
           <div className="relative">
             <button
@@ -281,7 +271,6 @@ export default function TopBar() {
                   { label: 'Home', href: '/', icon: Home },
                   { label: 'My Teams', href: '/my-teams', icon: Users },
                   { label: 'Tournament Passes', href: '/subscription', icon: Crown },
-                  { label: 'Payouts Portal', href: '/payouts-portal', icon: Trophy },
                   { label: 'Settings', href: '/settings', icon: Settings },
                 ].map((item) => {
                   const Icon = item.icon;

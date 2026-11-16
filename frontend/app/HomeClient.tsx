@@ -468,15 +468,15 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                           </div>
                         </div>
 
-                        {/* High-Converting Advertising Highlights */}
+                        {/* High-Converting Tournament Highlights */}
                         <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 pt-0.5 sm:pt-1">
                           <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
                             <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F59E0B] shrink-0" />
-                            <span className="text-[11px] sm:text-xs font-bold">Prize: <strong className="text-[#FDE047] text-xs sm:text-sm font-mono">{slide.prizePool}</strong></span>
+                            <span className="text-[11px] sm:text-xs font-bold">Colosseum: <strong className="text-[#FDE047] text-xs sm:text-sm font-mono">Mega Tournament</strong></span>
                           </div>
                           <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
                             <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
-                            <span className="text-[11px] sm:text-xs font-bold">Entry: <strong className="text-white text-xs sm:text-sm font-mono">{slide.entryFee}</strong></span>
+                            <span className="text-[11px] sm:text-xs font-bold">Entry: <strong className="text-emerald-300 text-xs sm:text-sm font-mono">FREE (Pass)</strong></span>
                           </div>
                           <div className="col-span-2 sm:col-span-1 bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
                             <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-300 shrink-0" />
@@ -489,8 +489,8 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                       <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-2 sm:gap-3">
                         <div className="bg-black/30 backdrop-blur-md p-2.5 sm:p-4 rounded-2xl border border-white/20 text-center w-full lg:max-w-[280px]">
                           <span className="text-[9px] sm:text-[10px] text-amber-300 uppercase tracking-widest font-black block">Grand Colosseum</span>
-                          <span className="text-sm sm:text-lg font-black text-white block mt-0.5">1st Prize ₹15,00,000</span>
-                          <span className="text-[9px] sm:text-[10px] text-white/70 block mt-0.5">Instant UPI Bank Withdrawals</span>
+                          <span className="text-sm sm:text-lg font-black text-white block mt-0.5">Mega League Arena</span>
+                          <span className="text-[9px] sm:text-[10px] text-white/70 block mt-0.5">Free Lineups with Tournament Pass</span>
                         </div>
 
                         <Link
@@ -531,11 +531,11 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                         <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap pt-0.5 sm:pt-1">
                           <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
                             <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F59E0B]" />
-                            <span className="text-[11px] sm:text-xs font-bold">Prize Pool: <strong className="text-[#FDE047] text-xs sm:text-sm font-mono">{slide.prizePool}</strong></span>
+                            <span className="text-[11px] sm:text-xs font-bold">Colosseum: <strong className="text-[#FDE047] text-xs sm:text-sm font-mono">Mega Tournament</strong></span>
                           </div>
                           <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
                             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-300" />
-                            <span className="text-[11px] sm:text-xs font-bold">10,000 Spots Pool</span>
+                            <span className="text-[11px] sm:text-xs font-bold">10,000 Teams Pool</span>
                           </div>
                         </div>
                       </div>
@@ -934,9 +934,9 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
                 <div className="pt-2.5 border-t border-[#E2E8F0] mt-2 flex items-center justify-between text-xs">
                   <div>
-                    <span className="text-[#64748B] block text-[9px] font-bold uppercase">Prize Pool</span>
-                    <span className="font-black text-[#D97706] text-xs sm:text-sm font-mono">
-                      ₹{m.total_prize_pool > 0 ? m.total_prize_pool.toLocaleString('en-IN') : '10,00,000'}
+                    <span className="text-[#64748B] block text-[9px] font-bold uppercase">Contests</span>
+                    <span className="font-black text-[#2563EB] text-xs sm:text-sm font-mono">
+                      {m.contests_count || 5} Available Contests
                     </span>
                   </div>
 

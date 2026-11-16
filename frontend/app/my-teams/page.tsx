@@ -34,7 +34,7 @@ export default function MyTeamsPage() {
     if (!team.contest?.invite_code || !team.match?.id) return;
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const shareUrl = `${origin}/match/${team.match.id}?joinCode=${team.contest.invite_code}`;
-    const text = `🏏 Join my cricket ground "${team.contest.title}" on Prime Dreems!\n💰 Entry Fee: ₹${team.contest.entry_fee}\n🏆 Dynamic Prize Pool (60%): ₹${team.contest.prize_pool}\n🔑 Code: ${team.contest.invite_code}\n👉 Join here: ${shareUrl}`;
+    const text = `🏏 Join my cricket ground "${team.contest.title}" on Prime Dreems!\n🎟️ Entry: FREE with Tournament Pass\n🔑 Code: ${team.contest.invite_code}\n👉 Join here: ${shareUrl}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 
@@ -208,16 +208,16 @@ export default function MyTeamsPage() {
                           <span>🏟️</span>
                           <span className="truncate">{contest.title || 'Private Field'}</span>
                         </span>
-                        <span className="text-[10px] font-black bg-white px-2 py-0.5 rounded-md border border-[#BFDBFE] text-[#1D4ED8] shrink-0">
-                          ₹{contest.entry_fee} Entry
+                        <span className="text-[10px] font-black bg-[#ECFDF5] px-2 py-0.5 rounded-md border border-[#A7F3D0] text-[#059669] shrink-0">
+                          FREE (Pass)
                         </span>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2 text-center p-2 rounded-lg bg-white/90 border border-[#BFDBFE]">
                         <div>
-                          <span className="text-[10px] font-bold text-[#64748B] block">Prize Pool (60%)</span>
-                          <span className="text-xs font-black font-mono text-[#D97706]">
-                            ₹{contest.prize_pool || Math.round((Number(contest.filled_spots) || 1) * (Number(contest.entry_fee) || 0) * 0.6)}
+                          <span className="text-[10px] font-bold text-[#64748B] block">Contest ID</span>
+                          <span className="text-xs font-black font-mono text-[#2563EB]">
+                            #{contest.contest_code || contest.id?.slice(0, 6)}
                           </span>
                         </div>
                         <div>

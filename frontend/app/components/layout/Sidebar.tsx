@@ -13,7 +13,6 @@ export default function Sidebar() {
     { label: 'Home', href: '/', icon: Home },
     { label: 'My Teams', href: '/my-teams', icon: Users },
     { label: 'Tournament Passes', href: '/subscription', icon: Crown },
-    { label: 'Payouts Portal', href: '/payouts-portal', icon: Trophy },
     { label: 'Settings', href: '/settings', icon: Settings },
   ];
 

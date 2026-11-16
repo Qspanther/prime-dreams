@@ -9,7 +9,6 @@ const navItems = [
   { label: 'Home', href: '/', icon: Home },
   { label: 'My Teams', href: '/my-teams', icon: Users },
   { label: 'Passes', href: '/subscription', icon: Crown },
-  { label: 'Payouts', href: '/payouts-portal', icon: Trophy },
   { label: 'Settings', href: '/settings', icon: Settings },
 ];
 
