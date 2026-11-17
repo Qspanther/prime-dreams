@@ -80,6 +80,28 @@ function calculateFantasyPoints(stats, role = 'BAT', rules = config.SCORING_WEIG
 }
 
 /**
+ * Apply Captain (2.0x) and Vice-Captain (1.5x) multipliers (Section 6.3)
+ */
+function applyMultipliers(basePoints, isCaptain = false, isViceCaptain = false) {
+  const pts = Number(basePoints) || 0;
+  if (isCaptain) return Math.round(pts * (config.CAPTAIN_MULTIPLIER || 2.0) * 10) / 10;
+  if (isViceCaptain) return Math.round(pts * (config.VICE_CAPTAIN_MULTIPLIER || 1.5) * 10) / 10;
+  return pts;
+}
+
+/**
+ * Calculate total lineup score with multipliers applied
+ */
+function calculateTeamScore(lineupPlayers = []) {
+  let total = 0;
+  for (const p of lineupPlayers) {
+    const raw = Number(p.points ?? p.points_earned ?? 0);
+    total += applyMultipliers(raw, p.is_captain, p.is_vice_captain);
+  }
+  return Math.round(total * 10) / 10;
+}
+
+/**
  * Audit log for every points modification (Section 6.2)
  */
 async function auditPointsChange(matchId, playerId, playerName, eventType, oldPts, newPts, ballEventId = null) {
@@ -104,6 +126,8 @@ async function auditPointsChange(matchId, playerId, playerName, eventType, oldPt
 
 module.exports = {
   calculateFantasyPoints,
+  applyMultipliers,
+  calculateTeamScore,
   auditPointsChange,
 };
 
