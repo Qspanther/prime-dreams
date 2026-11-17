@@ -10,6 +10,7 @@ interface User {
   kycStatus?: string;
   role?: string;
   referral_code?: string;
+  referralCode?: string;
   total_referrals_count?: number;
 }
 

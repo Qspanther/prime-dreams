@@ -126,6 +126,8 @@ export default function SubscriptionPage() {
     }
   };
 
+  const [copiedLink, setCopiedLink] = useState(false);
+
   const copyReferralCode = () => {
     const code = userStatus?.referralCode || (user as any)?.referral_code || (user as any)?.referralCode || '';
     if (code) {
@@ -133,6 +135,24 @@ export default function SubscriptionPage() {
       setCopiedCode(true);
       setTimeout(() => setCopiedCode(false), 3000);
     }
+  };
+
+  const copyReferralLink = () => {
+    const code = userStatus?.referralCode || (user as any)?.referral_code || (user as any)?.referralCode || '';
+    if (code) {
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://prime-dreams.onrender.com';
+      navigator.clipboard.writeText(`${origin}/signup?ref=${code}`);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 3000);
+    }
+  };
+
+  const shareWhatsApp = () => {
+    const code = userStatus?.referralCode || (user as any)?.referral_code || (user as any)?.referralCode || '';
+    if (!code) return;
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://prime-dreams.onrender.com';
+    const text = `🏏 Join me on Prime Dreems Cricket Fantasy! Use my unique promo code "${code}" to unlock Free Tournament Passes & Contest Entries:\n👉 ${origin}/signup?ref=${code}`;
+    window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   return (
@@ -286,17 +306,17 @@ export default function SubscriptionPage() {
 
         {/* ═════ SECTION 2: REFERRAL & PROMO CODE REWARDS ═════ */}
         {referralOffer && (
-          <div className="p-6 rounded-2xl bg-gradient-to-br from-[#0F172A] to-[#1E293B]/70 border border-[#38BDF8]/30 space-y-6">
+          <div id="referral" className="p-6 rounded-2xl bg-gradient-to-br from-[#0F172A] to-[#1E293B]/70 border border-[#38BDF8]/30 space-y-6 scroll-mt-20">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <span className="text-xs uppercase font-extrabold px-3 py-1 rounded-full bg-[#38BDF8]/15 text-[#38BDF8] border border-[#38BDF8]/30">
-                  🎁 Invite &amp; Play Free
+                  🎁 Invite &amp; Play Free Matches
                 </span>
                 <h3 className="text-2xl font-black text-white mt-2">
                   {referralOffer.title || `Refer ${referralOffer.target_count} Friends — Get ${referralOffer.reward_days} Days Free Access`}
                 </h3>
                 <p className="text-xs text-[#94A3B8]">
-                  Share your unique referral code. When {referralOffer.target_count} friends sign up, you unlock {referralOffer.reward_days} days of free tournament access with {referralOffer.teams_per_match} team(s) per match!
+                  Apna unique promo code share karo. Jab {referralOffer.target_count} friends sign up karenge, to aapko milega {referralOffer.reward_days} days ka FREE tournament pass jisme aap har match me {referralOffer.teams_per_match} team(s) bina kisi fees ke bana sakte hain!
                 </p>
               </div>
 
@@ -326,7 +346,7 @@ export default function SubscriptionPage() {
                   <span>
                     {userStatus.totalReferralsCount >= referralOffer.target_count
                       ? '🎯 Target Reached! Claim your free pass below.'
-                      : `${referralOffer.target_count - userStatus.totalReferralsCount} more friends needed`}
+                      : `${referralOffer.target_count - userStatus.totalReferralsCount} more friends needed to unlock pass`}
                   </span>
                 </div>
               </div>
@@ -334,21 +354,39 @@ export default function SubscriptionPage() {
 
             {/* Referral Code Share Row */}
             <div className="flex flex-col sm:flex-row items-center gap-3 pt-2">
-              <div className="w-full sm:flex-1 p-3 rounded-xl bg-[#07090E] border border-[#334155] flex items-center justify-between">
+              <div className="w-full sm:flex-1 p-3.5 rounded-xl bg-[#07090E] border border-[#334155] flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Users size={16} className="text-[#38BDF8]" />
                   <span className="text-xs text-[#94A3B8]">Your Promo Code:</span>
-                  <span className="text-sm font-black text-white tracking-wider">
-                    {userStatus?.referralCode || (user as any)?.referral_code || (user as any)?.referralCode || 'LOG_IN_TO_VIEW'}
+                  <span className="text-base font-black text-emerald-400 font-mono tracking-widest bg-emerald-950/40 px-2 py-0.5 rounded border border-emerald-500/30">
+                    {userStatus?.referralCode || (user as any)?.referral_code || (user as any)?.referralCode || (user ? 'PRIME100' : 'LOG_IN_TO_VIEW')}
                   </span>
                 </div>
-                {user && (
-                  <button
-                    onClick={copyReferralCode}
-                    className="text-xs font-bold text-[#38BDF8] hover:text-[#7DD3FC] flex items-center gap-1"
-                  >
-                    <Copy size={13} /> {copiedCode ? 'Copied!' : 'Copy Code'}
-                  </button>
+                {user ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={copyReferralCode}
+                      className="text-xs font-bold px-2.5 py-1 rounded-lg bg-blue-600/30 hover:bg-blue-600/50 text-[#38BDF8] border border-blue-500/30 flex items-center gap-1 cursor-pointer transition"
+                    >
+                      <Copy size={13} /> {copiedCode ? 'Code Copied!' : 'Copy Code'}
+                    </button>
+                    <button
+                      onClick={copyReferralLink}
+                      className="text-xs font-bold px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-white border border-slate-600 flex items-center gap-1 cursor-pointer transition"
+                    >
+                      <Copy size={13} /> {copiedLink ? 'Link Copied!' : 'Copy Link'}
+                    </button>
+                    <button
+                      onClick={shareWhatsApp}
+                      className="text-xs font-bold px-3 py-1 rounded-lg bg-[#25D366] hover:bg-[#20BD5A] text-white flex items-center gap-1 shadow-sm cursor-pointer transition"
+                    >
+                      <Share2 size={13} /> WhatsApp
+                    </button>
+                  </div>
+                ) : (
+                  <Link href="/login" className="text-xs font-black text-[#F59E0B] hover:underline">
+                    Log In to View Code →
+                  </Link>
                 )}
               </div>
 
@@ -357,10 +395,10 @@ export default function SubscriptionPage() {
                 <button
                   onClick={handleClaimReferralPass}
                   disabled={claimingReferral}
-                  className="w-full sm:w-auto px-6 py-3 rounded-xl bg-[#10B981] hover:bg-[#059669] text-white font-bold text-sm shadow-lg shadow-[#10B981]/20 transition-all flex items-center justify-center gap-2"
+                  className="w-full sm:w-auto px-6 py-3.5 rounded-xl bg-gradient-to-r from-[#10B981] to-[#059669] hover:from-[#059669] hover:to-[#047857] text-white font-black text-sm shadow-lg shadow-[#10B981]/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  <Gift size={16} />
-                  {claimingReferral ? 'Claiming...' : 'Claim Free Pass Now!'}
+                  <Gift size={18} />
+                  {claimingReferral ? 'Claiming Pass...' : '🎁 Claim Free Pass Now!'}
                 </button>
               )}
             </div>

@@ -49,28 +49,24 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
   const [activeSlide, setActiveSlide] = useState<number>(0);
   const [isHovered, setIsHovered] = useState<boolean>(false);
   const [copiedReferral, setCopiedReferral] = useState<boolean>(false);
-  const [claimingDaily, setClaimingDaily] = useState<boolean>(false);
-  const [dailyClaimedSession, setDailyClaimedSession] = useState<boolean>(false);
+  const [copiedCode, setCopiedCode] = useState<boolean>(false);
 
   // Touch Swipe Coordinates for Mobile Banner Gestures
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
   const isSwipingBanner = useRef<boolean>(false);
 
-  // User Reward & Promo Configuration
-  const [rewardsState, setRewardsState] = useState<any>(null);
-  const [promoSettings, setPromoSettings] = useState<{
-    referral_bonus_amount: number;
-    welcome_bonus_amount: number;
-    share_unlock_target: number;
-    promo_banner_title: string;
-    promo_banner_subtitle: string;
+  // Dynamic Referral & Promo Configuration
+  const [referralOffer, setReferralOffer] = useState<{
+    target_count: number;
+    reward_days: number;
+    teams_per_match: number;
+    title?: string;
   }>({
-    referral_bonus_amount: 500,
-    welcome_bonus_amount: 100,
-    share_unlock_target: 3,
-    promo_banner_title: 'Share & Earn ₹500 Bonus Cash!',
-    promo_banner_subtitle: 'Invite 3 friends with your referral link to unlock instant cash bonus + 30 days tournament access!',
+    target_count: 5,
+    reward_days: 10,
+    teams_per_match: 2,
+    title: 'Refer 5 Friends — Get 10 Days Free Access (2 Teams/Match)',
   });
 
   const toggleReminder = (e: React.MouseEvent, matchId: string, matchTitle: string) => {
@@ -107,29 +103,15 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
     return () => clearInterval(interval);
   }, [selectedCategory]);
 
-  // Fetch Admin Promo Settings & User Rewards
+  // Fetch Admin Promo Settings & Dynamic Referral Offer
   useEffect(() => {
-    apiGet('/subscription/promo-banner-settings')
+    apiGet('/subscription/plans')
       .then((res) => {
-        if (res?.settings) {
-          setPromoSettings({
-            referral_bonus_amount: Number(res.settings.referral_bonus_amount) || 500,
-            welcome_bonus_amount: Number(res.settings.welcome_bonus_amount) || 100,
-            share_unlock_target: Number(res.settings.share_unlock_target) || 3,
-            promo_banner_title: res.settings.promo_banner_title || 'Share & Earn ₹500 Bonus Cash!',
-            promo_banner_subtitle: res.settings.promo_banner_subtitle || 'Invite 3 friends with your referral link to unlock instant cash bonus + 30 days tournament access!',
-          });
+        if (res?.referralOffer) {
+          setReferralOffer(res.referralOffer);
         }
       })
       .catch(() => {});
-
-    if (token) {
-      apiGet('/rewards/state', token)
-        .then((res) => {
-          if (res?.success) setRewardsState(res);
-        })
-        .catch(() => {});
-    }
   }, [token]);
 
   // Session-only dismiss for personalized welcome banner
@@ -147,41 +129,32 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
     }
   };
 
-  // Claim Daily Login Reward Directly from Banner
-  const handleClaimDailyReward = async () => {
-    if (!token) {
-      setReminderToast('Please log in to claim your daily bonus!');
-      setTimeout(() => setReminderToast(null), 3000);
-      return;
+  // Copy Promo Code Only
+  const handleCopyCode = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const code = user?.referral_code || (user as any)?.referralCode || 'PRIME100';
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(code);
     }
-    setClaimingDaily(true);
-    try {
-      const res = await apiPost('/rewards/claim-daily', {}, token);
-      if (res?.success) {
-        setDailyClaimedSession(true);
-        setReminderToast(`🎉 Congratulations! You claimed ${res.coins_earned || 20} Prime Coins!`);
-        setTimeout(() => setReminderToast(null), 4000);
-        // Refresh reward state
-        apiGet('/rewards/state', token).then(r => r?.success && setRewardsState(r)).catch(() => {});
-      } else {
-        setReminderToast(res?.error || 'Could not claim daily reward');
-        setTimeout(() => setReminderToast(null), 3000);
-      }
-    } catch (err: any) {
-      setReminderToast(err.message || 'Already claimed or server error');
-      setTimeout(() => setReminderToast(null), 3000);
-    } finally {
-      setClaimingDaily(false);
-    }
+    setCopiedCode(true);
+    setReminderToast(`📋 Promo code "${code}" copied!`);
+    setTimeout(() => {
+      setCopiedCode(false);
+      setReminderToast(null);
+    }, 3000);
   };
 
   // Copy Referral Share Link
-  const handleCopyReferral = () => {
-    const code = user?.referral_code || 'PRIME100';
-    const shareText = `🏏 Join me on Prime Dreams Cricket Fantasy! Use my code "${code}" to unlock a ₹${promoSettings.welcome_bonus_amount} Signup Bonus + Free Match Passes: https://prime-dreams.onrender.com/signup?ref=${code}`;
-    navigator.clipboard.writeText(shareText);
+  const handleCopyReferral = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    const code = user?.referral_code || (user as any)?.referralCode || 'PRIME100';
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://prime-dreams.onrender.com';
+    const shareText = `🏏 Join me on Prime Dreems Cricket Fantasy! Use my unique promo code "${code}" to unlock Free Tournament Passes & Contest Entries:\n👉 ${origin}/signup?ref=${code}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(shareText);
+    }
     setCopiedReferral(true);
-    setReminderToast(`📋 Referral link copied! Share with friends to earn ₹${promoSettings.referral_bonus_amount} Bonus!`);
+    setReminderToast(`📋 Referral link copied! Share with friends to unlock free match passes!`);
     setTimeout(() => {
       setCopiedReferral(false);
       setReminderToast(null);
@@ -273,50 +246,26 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
       });
     }
 
-    // 3. Account-Wise Daily Reward Banner (Shown only if NOT redeemed yet)
-    const canClaimDaily = (!dailyClaimedSession && rewardsState?.can_claim_daily !== false);
-    if (canClaimDaily) {
-      slides.push({
-        id: 'account-daily-reward',
-        type: 'daily_reward',
-        badge: '🎁 DAILY REWARD READY',
-        badgeClass: 'bg-emerald-500 text-white font-black',
-        title: 'Claim Your Daily 20 Prime Coins + Free Scratch Card!',
-        subtitle: 'Log in daily to claim free coins, spin the wheel, and unlock free tournament passes.',
-        actionType: 'claim_daily',
-        gradient: 'from-[#064E3B] via-[#047857] to-[#0284C7]',
-      });
-    }
-
-    // 4. Admin-Configured Referral / Share Bonus Cash Banner
+    // 3. Share & Unlock Free Matches / Tournament Pass Banner
+    const userPromoCode = user?.referral_code || (user as any)?.referralCode || '';
     slides.push({
-      id: 'account-referral-promo',
-      type: 'referral_bonus',
-      badge: `📢 EARN ₹${promoSettings.referral_bonus_amount} BONUS CASH`,
-      badgeClass: 'bg-gradient-to-r from-amber-500 to-orange-600 text-white font-black',
-      title: promoSettings.promo_banner_title,
-      subtitle: promoSettings.promo_banner_subtitle,
-      targetFriends: promoSettings.share_unlock_target,
+      id: 'account-referral-unlock',
+      type: 'referral_unlock',
+      badge: '🎁 SHARE & UNLOCK ACCESS',
+      badgeClass: 'bg-emerald-500 text-slate-950 font-black',
+      title: 'Share With Friends & Play Free Matches!',
+      subtitle: 'Apne unique promo code se friends ko invite karo aur FREE tournament pass paao — bina kisi fees ke matches aur mega contests khelo!',
+      targetFriends: referralOffer?.target_count || 5,
+      rewardDays: referralOffer?.reward_days || 10,
+      teamsPerMatch: referralOffer?.teams_per_match || 2,
       completedFriends: user?.total_referrals_count || 0,
-      referralCode: user?.referral_code || 'PRIME100',
-      actionType: 'copy_referral',
-      gradient: 'from-[#1E1B4B] via-[#312E81] to-[#2563EB]',
-    });
-
-    // 5. Welcome 100% Deposit Bonus Banner
-    slides.push({
-      id: 'account-deposit-boost',
-      type: 'deposit_boost',
-      badge: '⚡ 100% DEPOSIT BONUS',
-      badgeClass: 'bg-purple-600 text-white font-black',
-      title: 'Instant 100% Match Deposit Bonus',
-      subtitle: `Add cash to your wallet & get an instant bonus up to ₹${promoSettings.referral_bonus_amount}! Play mega contests risk-free.`,
-      actionLink: '/wallet',
-      gradient: 'from-[#3B0764] via-[#581C87] to-[#7E22CE]',
+      referralCode: userPromoCode,
+      actionLink: '/subscription#referral',
+      gradient: 'from-[#064E3B] via-[#047857] to-[#0284C7]',
     });
 
     return slides;
-  }, [liveMatches, upcomingMatches, rewardsState, dailyClaimedSession, promoSettings, user]);
+  }, [liveMatches, upcomingMatches, referralOffer, user]);
 
   // Auto-rotate advertisement banners:
   // Immediate auto-swap cue on mount (swaps after 2.5s so mobile/desktop users immediately notice auto-rotation),
@@ -561,95 +510,82 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                     </div>
                   )}
 
-                  {/* ─── SLIDE TYPE 3: ACCOUNT-WISE DAILY REWARD BANNER ─── */}
-                  {slide.type === 'daily_reward' && (
-                    <div className="relative z-10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sm:gap-6 py-1 sm:py-2">
-                      <div className="space-y-1.5 sm:space-y-2 max-w-xl">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-amber-400 text-slate-950 shadow-md">
-                          <Gift className="w-3.5 h-3.5" />
-                          DAILY REWARD BONUS
-                        </span>
-                        <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug">
-                          {slide.title}
-                        </h2>
-                        <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-medium">
-                          {slide.subtitle}
-                        </p>
-                      </div>
-
-                      <div className="shrink-0 flex flex-col items-stretch sm:items-center gap-1.5 sm:gap-2">
-                        <button
-                          onClick={handleClaimDailyReward}
-                          disabled={claimingDaily}
-                          className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-300 to-yellow-400 text-slate-950 text-xs sm:text-sm font-black hover:scale-105 transition shadow-[0_10px_25px_rgba(245,158,11,0.5)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                        >
-                          <Sparkles className="w-4 h-4 text-amber-700" />
-                          <span>{claimingDaily ? 'Claiming Coins...' : '⚡ CLAIM DAILY REWARD NOW'}</span>
-                        </button>
-                        <span className="text-[10px] sm:text-[11px] text-white/80 font-bold text-center">100% Free • One-click credit</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ─── SLIDE TYPE 4: REFERRAL & SHARE BONUS BANNER ─── */}
-                  {slide.type === 'referral_bonus' && (
-                    <div className="relative z-10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sm:gap-6 py-1 sm:py-2">
-                      <div className="space-y-1.5 sm:space-y-2 max-w-xl">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-orange-500 text-white shadow-md">
-                          <Share2 className="w-3.5 h-3.5" />
-                          {slide.badge}
-                        </span>
-                        <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug">
-                          {slide.title}
-                        </h2>
-                        <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-medium">
-                          {slide.subtitle}
-                        </p>
-                        <div className="flex items-center gap-2 sm:gap-3 pt-1 flex-wrap">
-                          <span className="text-xs text-amber-300 font-bold">Your Referral Code:</span>
-                          <span className="px-2.5 py-0.5 rounded-lg bg-black/40 border border-white/20 font-mono font-black text-white text-xs">
-                            {slide.referralCode}
+                  {/* ─── SLIDE TYPE 3: SHARE & UNLOCK TOURNAMENT PASS BANNER ─── */}
+                  {slide.type === 'referral_unlock' && (
+                    <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center py-1 sm:py-2">
+                      <div className="lg:col-span-8 flex flex-col gap-2 sm:gap-3">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-emerald-500 text-slate-950 shadow-md">
+                            <Gift className="w-3.5 h-3.5" />
+                            🎁 SHARE &amp; UNLOCK ACCESS
                           </span>
+                          <span className="bg-emerald-950/70 border border-emerald-400/40 text-emerald-300 px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold">
+                            🎯 Offer: {slide.targetFriends} Friends = {slide.rewardDays} Days Pass ({slide.teamsPerMatch} Teams/Match)
+                          </span>
+                        </div>
+
+                        <div>
+                          <h2 className="text-xl sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug drop-shadow-md">
+                            Share With Friends &amp; Play Free Matches!
+                          </h2>
+                          <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed font-medium mt-1">
+                            Apne unique promo code se friends ko invite karo aur FREE tournament pass paao — bina kisi fees ke matches aur mega contests khelo!
+                          </p>
+                        </div>
+
+                        {/* Promo Code & Quick Action Row */}
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-1">
+                          <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-emerald-500/30 px-3 py-1.5 rounded-xl">
+                            <Users className="w-4 h-4 text-emerald-400" />
+                            <span className="text-xs text-[#94A3B8] font-bold">Your Promo Code:</span>
+                            {slide.referralCode ? (
+                              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/50 font-mono font-black text-emerald-300 text-sm tracking-wider">
+                                {slide.referralCode}
+                              </span>
+                            ) : (
+                              <Link href="/login" className="text-xs font-black text-amber-400 hover:underline">
+                                Log in to view code →
+                              </Link>
+                            )}
+                          </div>
+
+                          {slide.referralCode && (
+                            <button
+                              onClick={handleCopyCode}
+                              className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                            >
+                              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-emerald-300" />}
+                              <span>{copiedCode ? 'Code Copied!' : 'Copy Code'}</span>
+                            </button>
+                          )}
                         </div>
                       </div>
 
-                      <div className="shrink-0 flex flex-col items-stretch sm:items-center gap-1.5 sm:gap-2">
-                        <button
-                          onClick={handleCopyReferral}
-                          className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-white text-slate-900 text-xs sm:text-sm font-black hover:bg-slate-100 hover:scale-105 transition shadow-[0_10px_25px_rgba(255,255,255,0.3)] flex items-center justify-center gap-2 cursor-pointer"
-                        >
-                          {copiedReferral ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4 text-[#2563EB]" />}
-                          <span>{copiedReferral ? 'Link Copied!' : '📲 SHARE LINK & CLAIM BONUS'}</span>
-                        </button>
-                        <span className="text-[10px] sm:text-[11px] text-white/80 font-bold text-center">Invite friends via WhatsApp or Link</span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* ─── SLIDE TYPE 5: 100% DEPOSIT BOOST BANNER ─── */}
-                  {slide.type === 'deposit_boost' && (
-                    <div className="relative z-10 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4 sm:gap-6 py-1 sm:py-2">
-                      <div className="space-y-1.5 sm:space-y-2 max-w-xl">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-purple-400 text-slate-950 shadow-md">
-                          <Coins className="w-3.5 h-3.5" />
-                          WALLET CASH BONUS
-                        </span>
-                        <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug">
-                          {slide.title}
-                        </h2>
-                        <p className="text-xs sm:text-sm text-white/90 leading-relaxed font-medium">
-                          {slide.subtitle}
-                        </p>
-                      </div>
-
-                      <div className="shrink-0">
+                      {/* Right Action CTA */}
+                      <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-2.5 sm:gap-3">
                         <Link
-                          href={slide.actionLink}
-                          className="w-full sm:w-auto px-5 sm:px-6 py-2.5 sm:py-3 rounded-2xl bg-gradient-to-r from-amber-400 to-yellow-400 text-slate-950 text-xs sm:text-sm font-black hover:scale-105 transition shadow-[0_10px_25px_rgba(245,158,11,0.5)] flex items-center justify-center gap-2"
+                          href="/subscription#referral"
+                          className="w-full lg:max-w-[280px] px-5 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500 hover:from-emerald-300 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider text-center shadow-[0_10px_25px_rgba(16,185,129,0.4)] hover:scale-105 transition flex items-center justify-center gap-2 cursor-pointer"
                         >
-                          <span>💰 ADD CASH &amp; CLAIM 100% BONUS</span>
-                          <ArrowRight className="w-4 h-4" />
+                          <Gift className="w-4 h-4 text-slate-900" />
+                          <span>SHARE &amp; UNLOCK ACCESS →</span>
                         </Link>
+
+                        <div className="flex items-center justify-center gap-2 w-full lg:max-w-[280px]">
+                          <button
+                            onClick={handleCopyReferral}
+                            className="flex-1 py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[11px] font-bold text-center flex items-center justify-center gap-1.5 cursor-pointer transition"
+                          >
+                            <Share2 className="w-3.5 h-3.5 text-emerald-300" />
+                            <span>{copiedReferral ? 'Link Copied!' : 'Copy Invite Link'}</span>
+                          </button>
+                          <Link
+                            href="/subscription#referral"
+                            className="text-[11px] text-emerald-300 hover:underline font-bold px-2 py-1"
+                          >
+                            Rules &amp; Offer
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   )}

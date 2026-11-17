@@ -378,23 +378,27 @@ router.get('/promo-banner-settings', async (req, res) => {
     const keys = [
       'share_unlock_target',
       'share_unlock_reward_days',
-      'referral_bonus_amount',
-      'welcome_bonus_amount',
       'promo_banner_title',
       'promo_banner_subtitle',
+      'referral_offer_config',
     ];
     const rows = await SystemSetting.findAll({ where: { key: keys } });
     const settings = {
-      share_unlock_target: 3,
-      share_unlock_reward_days: 30,
-      referral_bonus_amount: 500,
-      welcome_bonus_amount: 100,
-      promo_banner_title: 'Share & Earn ₹500 Bonus Cash',
-      promo_banner_subtitle: 'Invite 3 friends with your referral link to unlock instant cash bonus + 30 days tournament access!',
+      share_unlock_target: 5,
+      share_unlock_reward_days: 10,
+      promo_banner_title: 'Share & Unlock Free Match Passes!',
+      promo_banner_subtitle: 'Apne unique promo code se friends ko invite karo aur FREE tournament pass paao — bina kisi fees ke matches aur mega contests khelo!',
     };
     rows.forEach(r => {
-      if (['share_unlock_target', 'share_unlock_reward_days', 'referral_bonus_amount', 'welcome_bonus_amount'].includes(r.key)) {
+      if (['share_unlock_target', 'share_unlock_reward_days'].includes(r.key)) {
         settings[r.key] = Number(r.value) || settings[r.key];
+      } else if (r.key === 'referral_offer_config' && r.value) {
+        try {
+          const cfg = JSON.parse(r.value);
+          if (cfg.target_count) settings.share_unlock_target = Number(cfg.target_count);
+          if (cfg.reward_days) settings.share_unlock_reward_days = Number(cfg.reward_days);
+          if (cfg.title) settings.promo_banner_title = cfg.title;
+        } catch {}
       } else {
         settings[r.key] = r.value || settings[r.key];
       }
@@ -404,12 +408,10 @@ router.get('/promo-banner-settings', async (req, res) => {
     res.json({
       success: true,
       settings: {
-        share_unlock_target: 3,
-        share_unlock_reward_days: 30,
-        referral_bonus_amount: 500,
-        welcome_bonus_amount: 100,
-        promo_banner_title: 'Share & Earn ₹500 Bonus Cash',
-        promo_banner_subtitle: 'Invite 3 friends with your referral link to unlock instant cash bonus + 30 days tournament access!',
+        share_unlock_target: 5,
+        share_unlock_reward_days: 10,
+        promo_banner_title: 'Share & Unlock Free Match Passes!',
+        promo_banner_subtitle: 'Apne unique promo code se friends ko invite karo aur FREE tournament pass paao — bina kisi fees ke matches aur mega contests khelo!',
       }
     });
   }

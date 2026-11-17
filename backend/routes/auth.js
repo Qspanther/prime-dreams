@@ -486,6 +486,7 @@ router.get('/me', async (req, res) => {
       otpVerified: user.otp_verified,
       role: user.role,
       referralCode: user.referral_code,
+      referral_code: user.referral_code,
       subscriptionActiveUntil: user.subscription_active_until,
       subscriptionType: user.subscription_type,
       hasActiveSubscription,
