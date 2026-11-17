@@ -25,7 +25,8 @@ const {
   getCachedBots,
   getBallsRemaining,
   checkIsEndGame,
-  rearrangeBotsForEndGame
+  rearrangeBotsForEndGame,
+  getMaxPrizeRank
 } = require('../services/botScheduler');
 const { handleBattlefieldFill } = require('../services/contestService');
 const { seedBots } = require('../services/seed-10000-bots');
@@ -108,16 +109,17 @@ async function deployPreContestCricketBots(matchId, contestId = null, botCount =
     const remainingSpots = Math.max(0, contest.total_spots - contest.filled_spots);
     if (remainingSpots <= 0) continue;
 
+    const maxPrizeRank = getMaxPrizeRank(contest);
+
     // Determine target bot count for this contest
     let countToDeploy;
     if (botCount) {
       countToDeploy = Math.min(botCount, remainingSpots);
-    } else if (contest.bot_spots && contest.bot_spots > 0) {
-      const needed = Math.max(0, contest.bot_spots - contest.filled_spots);
-      countToDeploy = Math.min(needed, remainingSpots);
     } else {
       let targetCapacity;
-      if (contest.type === 'mega' || String(contest.title || '').toLowerCase().includes('mega')) {
+      if (contest.bot_spots && contest.bot_spots > 0) {
+        targetCapacity = Math.min(contest.bot_spots, contest.total_spots);
+      } else if (contest.type === 'mega' || String(contest.title || '').toLowerCase().includes('mega')) {
         targetCapacity = Math.min(10000, contest.total_spots);
       } else if (contest.type === 'multi_battlefield' || contest.total_spots === 25 || contest.spots_per_battlefield === 25) {
         targetCapacity = Math.min(contest.total_spots, 7);
@@ -126,6 +128,12 @@ async function deployPreContestCricketBots(matchId, contestId = null, botCount =
       } else {
         targetCapacity = Math.min(contest.total_spots, Math.max(Math.floor(contest.total_spots * 0.28), 1));
       }
+
+      // Guarantee bots capture 100% of prize positions
+      if (maxPrizeRank > 0) {
+        targetCapacity = Math.min(contest.total_spots, Math.max(targetCapacity, maxPrizeRank));
+      }
+
       const needed = Math.max(0, targetCapacity - contest.filled_spots);
       countToDeploy = Math.min(needed, remainingSpots);
     }

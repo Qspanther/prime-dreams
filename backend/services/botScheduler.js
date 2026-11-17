@@ -69,6 +69,44 @@ function isContestEligibleForBots(contest) {
 }
 
 /**
+ * Detect maximum position/rank that receives a prize in this contest.
+ * Inspects contest.prize_breakup (from Payout Portal / Admin),
+ * or falls back to system rules for the contest type.
+ * Ensures bots capture 100% of all prize-winning ranks!
+ */
+function getMaxPrizeRank(contest) {
+  if (!contest) return 0;
+  let maxRank = 0;
+  try {
+    let breakup = contest.prize_breakup;
+    if (typeof breakup === 'string') {
+      breakup = JSON.parse(breakup);
+    }
+    if (Array.isArray(breakup)) {
+      for (const item of breakup) {
+        const prize = parseFloat(item.prize || item.amount || 0);
+        if (prize > 0) {
+          const to = parseInt(item.rank_to || item.rank || item.rank_from || 0, 10);
+          if (to > maxRank) maxRank = to;
+        }
+      }
+    }
+  } catch (_) {}
+
+  // System fallback defaults if no explicit breakup was set
+  if (maxRank === 0) {
+    if (contest.type === 'multi_battlefield' || contest.total_spots === 25) {
+      maxRank = 5; // Top 5 win prizes in 25-spot room
+    } else if (contest.type === 'mini') {
+      maxRank = 10;
+    } else if (contest.type === 'mega') {
+      maxRank = Math.min(1000, Math.max(100, Math.floor((contest.total_spots || 10000) * 0.10)));
+    }
+  }
+  return maxRank;
+}
+
+/**
  * Intelligent Cricket Lineup Builder
  * Adheres to Dream11 / Prime Dreems rules:
  * - Exactly 11 players
@@ -469,8 +507,8 @@ class BotScheduler {
     // 72 hours = 0% elapsed, 0 hours = 100% elapsed
     const elapsedHours = Math.max(0, 72 - hoursUntilStart);
     const progressRatio = Math.min(1.0, elapsedHours / 72);
-    // Smooth natural curve (slightly faster near the match start, mimicking human rush)
-    const targetFillFactor = Math.min(0.92, Math.pow(progressRatio, 1.15) * 0.90);
+    // Smooth natural curve reaching 1.0 (100% of target) before match starts
+    const targetFillFactor = hoursUntilStart <= 1.0 ? 1.0 : Math.min(1.0, Math.pow(progressRatio, 0.85));
 
     for (const contest of contests) {
       // 1. STRICT ISOLATION FILTER: Head-to-Head & Private contests are 100% EXCLUDED
@@ -480,6 +518,7 @@ class BotScheduler {
 
       const totalSpots = contest.total_spots;
       const currentFilled = contest.filled_spots;
+      const maxPrizeRank = getMaxPrizeRank(contest);
 
       // 1. Calculate Target Bot Spots:
       // Priority A: Explicit bot_spots set by Admin (> 0)
@@ -507,15 +546,17 @@ class BotScheduler {
         }
       }
 
+      // CRITICAL GUARANTEE: Target must ALWAYS be at least maxPrizeRank so bots capture 100% of prize positions!
+      if (maxPrizeRank > 0) {
+        contestBotTarget = Math.min(totalSpots, Math.max(contestBotTarget, maxPrizeRank));
+      }
+
       // Minimum guaranteed floor:
-      // Multi-Battlefield MUST have at least 7 bots (never empty!)
-      let minGuaranteed = 0;
-      if (contest.type === 'multi_battlefield' || totalSpots === 25) {
-        minGuaranteed = Math.min(7, totalSpots);
-      } else if (totalSpots === 100) {
-        minGuaranteed = Math.min(25, totalSpots);
+      let minGuaranteed = Math.min(totalSpots, Math.max(maxPrizeRank, 7));
+      if (contest.type === 'mini' || totalSpots === 100) {
+        minGuaranteed = Math.min(totalSpots, Math.max(minGuaranteed, 25));
       } else if (contestBotTarget > 0) {
-        minGuaranteed = Math.min(contestBotTarget, Math.max(1, Math.floor(contestBotTarget * 0.25)));
+        minGuaranteed = Math.min(contestBotTarget, Math.max(minGuaranteed, Math.floor(contestBotTarget * 0.25)));
       }
 
       // Immediate top-up if below minimum guaranteed floor:
@@ -538,12 +579,14 @@ class BotScheduler {
       const needed = Math.min(targetForThisMoment - currentFilled, totalSpots - currentFilled);
       if (needed <= 0) continue;
 
-      // Small organic batch size or quick fill if below minimum guaranteed floor
+      // Small organic batch size or dynamic scaling based on time remaining to reach full target
       let batchSize;
       if (currentFilled < minGuaranteed) {
-        batchSize = Math.min(needed, 25);
+        batchSize = Math.min(needed, 50);
       } else {
-        const maxBatch = (contest.type === 'mega' || totalSpots >= 1000) ? 10 : 4;
+        const ticksRemaining = Math.max(1, Math.floor(hoursUntilStart * 120)); // ~2 ticks/min
+        const optimalPerTick = Math.ceil(needed / ticksRemaining);
+        const maxBatch = Math.max(10, Math.min(250, optimalPerTick * 2));
         batchSize = Math.max(1, Math.min(needed, Math.floor(Math.random() * maxBatch) + 1));
       }
 
@@ -566,7 +609,10 @@ class BotScheduler {
         return Math.random() - 0.5;
       });
 
-      const botsToEnter = sortedBots.slice(0, batchSize);
+      const botsToEnter = [];
+      for (let i = 0; i < batchSize; i++) {
+        botsToEnter.push(sortedBots[i % sortedBots.length]);
+      }
       if (botsToEnter.length === 0) continue;
 
       const newTeams = [];
@@ -678,5 +724,6 @@ module.exports = {
   getCachedBots,
   getBallsRemaining,
   checkIsEndGame,
-  rearrangeBotsForEndGame
+  rearrangeBotsForEndGame,
+  getMaxPrizeRank
 };

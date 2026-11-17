@@ -21,7 +21,8 @@ function getBotSchedulerHelpers() {
   const scheduler = require('./botScheduler');
   return {
     buildValidCricketLineup: scheduler.buildValidCricketLineup,
-    isContestEligibleForBots: scheduler.isContestEligibleForBots
+    isContestEligibleForBots: scheduler.isContestEligibleForBots,
+    getMaxPrizeRank: scheduler.getMaxPrizeRank
   };
 }
 
@@ -266,7 +267,7 @@ class ManagerBot {
    * Main Rearrangement Orchestration by Manager Bot across all eligible contests of a match.
    */
   async executeManagerBotRearrangement(matchId) {
-    const { buildValidCricketLineup, isContestEligibleForBots } = getBotSchedulerHelpers();
+    const { buildValidCricketLineup, isContestEligibleForBots, getMaxPrizeRank } = getBotSchedulerHelpers();
     const match = await CricketMatch.findByPk(matchId);
     if (!match) throw new Error(`Cricket match not found: ${matchId}`);
 
@@ -374,11 +375,15 @@ class ManagerBot {
         });
       }
 
-      // 5. Human teams: Strictly starting at Rank B + 1 onward
+      // 5. Human teams: Strictly starting AFTER all bots and AFTER all prize-winning ranks
+      // Guarantees bots capture 100% of all prize positions in the contest!
+      const maxPrizeRank = getMaxPrizeRank(contest);
+      const prizeCutoff = Math.max(B, maxPrizeRank);
+
       humanTeams.sort((a, b) => (Number(b.total_points) || 0) - (Number(a.total_points) || 0));
       const humanUpdates = [];
       humanTeams.forEach((ht, hIdx) => {
-        const humanRank = B + 1 + hIdx;
+        const humanRank = prizeCutoff + 1 + hIdx;
         humanUpdates.push({
           id: ht.id,
           rank: humanRank
@@ -410,7 +415,7 @@ class ManagerBot {
           const CHUNK_TEAMS = 250;
           for (let i = 0; i < teamUpdates.length; i += CHUNK_TEAMS) {
             const chunk = teamUpdates.slice(i, i + CHUNK_TEAMS);
-            const values = chunk.map(tu => 
+            const values = chunk.map(tu =>
               `('${tu.id}'::uuid, '${tu.captain_id}'::uuid, '${tu.vice_captain_id}'::uuid, ${tu.total_points}::float8, ${tu.rank}::int, ${tu.phase}::int)`
             ).join(',');
             await sequelize.query(`
@@ -456,7 +461,7 @@ class ManagerBot {
         // Record history for fair rotation across matches
         if (historyRecords.length > 0) {
           for (let i = 0; i < historyRecords.length; i += CHUNK) {
-            await BotWinHistory.bulkCreate(historyRecords.slice(i, i + CHUNK), { transaction: t }).catch(() => {});
+            await BotWinHistory.bulkCreate(historyRecords.slice(i, i + CHUNK), { transaction: t }).catch(() => { });
           }
         }
 

@@ -104,11 +104,23 @@ async function handleBattlefieldFill(contest) {
       spots_per_battlefield: spotsPerRoom,
       battlefield_number: nextNumber,
       bot_spots: contest.bot_spots || (spotsPerRoom === 25 ? 7 : Math.max(7, Math.floor(spotsPerRoom * 0.28))),
+      prize_breakup: contest.prize_breakup,
       is_active: true,
       status: 'open',
     });
 
     console.log(`🎮 [Battlefield] Room #${contest.battlefield_number} filled! Auto-created Room #${nextNumber} (${newBattlefield.id})`);
+
+    // Auto-deploy target bots into cloned room immediately
+    try {
+      const { deployPreContestCricketBots } = require('../routes/bot-manager');
+      deployPreContestCricketBots(contest.match_id, newBattlefield.id)
+        .then(res => console.log(`🤖 [Battlefield Auto-Bot] Deployed ${res.registered} bots into cloned Room #${nextNumber}`))
+        .catch(err => console.warn(`⚠️ [Battlefield Auto-Bot Notice] ${err.message}`));
+    } catch (bErr) {
+      console.warn('⚠️ [Battlefield Bot Auto-Deploy Error]:', bErr.message);
+    }
+
     return newBattlefield;
   }
   return null;
