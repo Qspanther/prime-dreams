@@ -1,10 +1,41 @@
 const { Sequelize } = require('sequelize');
+const { spawnSync } = require('child_process');
 const config = require('../config');
 
 let sequelize;
 
-const isPostgres = Boolean(process.env.DATABASE_URL && 
+function probePostgresConnection(databaseUrl) {
+  try {
+    const probeScript = "const { Client } = require('pg'); const client = new Client({ connectionString: process.env._PROBE_URL, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 3500 }); client.connect(err => { if (err) { console.error(err.message); process.exit(1); } client.query('SELECT 1', (qErr) => { client.end(); process.exit(qErr ? 1 : 0); }); });";
+    const res = spawnSync(process.execPath, ['-e', probeScript], {
+      env: { ...process.env, _PROBE_URL: databaseUrl },
+      timeout: 4500,
+      encoding: 'utf-8',
+    });
+    if (res.status === 0) {
+      return { ok: true };
+    }
+    const errText = (res.stderr || res.stdout || '').trim();
+    return { ok: false, error: errText || 'Connection failed or timed out' };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+const hasPostgresUrl = Boolean(process.env.DATABASE_URL && 
   (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://')));
+
+let isPostgres = false;
+
+if (hasPostgresUrl) {
+  const check = probePostgresConnection(process.env.DATABASE_URL);
+  if (check.ok) {
+    isPostgres = true;
+  } else {
+    console.warn(`⚠️ [DB Fallback] Cloud PostgreSQL is unavailable or quota exceeded: ${check.error}`);
+    console.warn(`⚡ [DB Fallback] Automatically falling back to resilient local SQLite database to prevent 500 errors.`);
+  }
+}
 
 if (isPostgres) {
   const sslConfig = process.env.DB_SSL === 'false'
