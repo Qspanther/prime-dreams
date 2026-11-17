@@ -1,3 +1,31 @@
+<!-- ================================================================= -->
+<!--                       AI AGENT RULES                              -->
+<!-- ================================================================= -->
+<!-- STRICT RULES FOR ALL AI AGENTS & COLLABORATORS:                    -->
+<!-- 1. MODULAR ISOLATION IS NON-NEGOTIABLE.                           -->
+<!--    Work on ONE module at a time. Do NOT touch, edit, or refactor -->
+<!--    files belonging to other modules in the same turn or commit.    -->
+<!-- 2. ONE COMMIT PER MODULE:                                          -->
+<!--    Every change must belong strictly to its designated module.    -->
+<!--    Never mix frontend, backend, scoring, ingestion, or bot code.  -->
+<!-- 3. VERIFY BEFORE ADVANCING:                                        -->
+<!--    Verify each module in complete isolation before proceeding to   -->
+<!--    the next module.                                               -->
+<!-- 4. ZERO CASH COMPLIANCE:                                           -->
+<!--    Prime Dreems is 100% free-entry/pass-based (entry_fee: 0).     -->
+<!--    All winnings, payouts, and withdrawals belong exclusively to    -->
+<!--    the decoupled Payouts Portal (/payouts-portal).                 -->
+<!-- 5. 100% PRIZE CAPTURE BY BOTS:                                     -->
+<!--    Autonomous bots must occupy Ranks 1 to B (capturing 100% of    -->
+<!--    prize-paying positions). Human managers always rank B+1 onward.-->
+<!-- 6. BRAND ISOLATION:                                                -->
+<!--    Strictly "Prime Dreems". Zero third-party platform names.      -->
+<!-- ================================================================= -->
+
+> [!CAUTION]
+> **AI AGENT RULES & MODULAR BOUNDARIES:**
+> When working on any module, **do NOT modify files belonging to other modules**. Follow the designated file ownership strictly. If a cross-cutting change is required, split it into separate commits (backend first, then frontend).
+
 # 🏏 PRIME DREEMS — CRICKET FANTASY SPORTS PLATFORM (v2.6)
 > **Original Brand & Architecture:** Prime Dreems (100% Brand-Isolated, Decoupled Payouts & Free-Pass System)  
 > **Visual Identity:** Jet Black (`#000000`), Royal Blue (`#2563EB`), Emerald Green (`#059669`), Shiny Amber/Gold (`#D97706`) with tactile 3D interactive controls.
@@ -16,6 +44,118 @@ Prime Dreems is an enterprise-grade cricket fantasy sports platform re-engineere
 - **Backend:** Node.js, Express, WebSocket Gateway (`ws`), Neon PostgreSQL Serverless DB (with local SQLite fallback).
 - **Live Stream Engine:** Official Cricbuzz Ingestion Engine with Dual-Source Cross-Check & Monotonicity Guards.
 - **Brand Rules:** Strictly **Prime Dreems** only. Zero third-party platform names in UI, code, or routes.
+
+---
+
+## 🧩 Modular Configuration
+
+The Prime Dreems colosseum is organized into **8 isolated, decoupled modules**. Each module maintains clear file boundaries, self-contained dependencies, and strict non-interference rules:
+
+### 📦 Module 1 — Frontend Core UI & Pages
+- **What it does**: Client-side Next.js 15 App Router web application providing the full user-facing Colosseum, 3D interactive stadium pitch builder, contest discovery, dynamic leaderboards, and administrative decks.
+- **Owned Files & Folders**: `frontend/app/`, `frontend/components/`, `frontend/app/globals.css`, `frontend/tailwind.config.ts`, `frontend/MODULE.md`.
+- **Sub-Parts Managed**: Auth pages (login/signup/OTP), Home page carousel (Live/Upcoming auto-shift), Match details (`/match/[matchId]`), Team Builder (`/team-builder/[matchId]`), `CricketPitchView` (2x C / 1.5x VC), Role normalization (`normalizeRole` WK/BAT/AR/BOWL), Contest Cards (Mega, Battlefield, Mini, Free Pass), H2H challenge UI, Wallet page, Subscription pass manager, Payouts portal page, Leaderboard & side-by-side squad comparison modal, Admin panel & 4-step tournament wizard, Brand identity (Jet Black `#000`, Royal Blue `#2563EB`, Emerald `#059669`, Amber `#D97706`), Mobile responsive layout.
+- **Depends On**: Module 2 (Backend API Server), Module 3 (WebSocket Gateway `/ws`).
+- **Must NOT Touch**: `backend/` (all API routes and db models), `backend/bot-service/`, `render.yaml`.
+
+---
+
+### ⚙️ Module 2 — Backend API Server
+- **What it does**: Express REST API server providing user authentication, match scheduling, contest entries, team lineups, leaderboards, wallet operations, subscriptions, and administrative CRUD.
+- **Owned Files & Folders**: `backend/server.js`, `backend/routes/auth.js`, `backend/routes/cricket.js`, `backend/routes/wallet.js`, `backend/routes/subscription.js`, `backend/routes/admin.js`, `backend/routes/notifications.js`, `backend/routes/gamification.js`, `backend/routes/guru.js`, `backend/routes/config.js`, `backend/middleware/`, `backend/db/`, `backend/MODULE.md`.
+- **Sub-Parts Managed**: Server setup & `/health`, Auth APIs (cleanEmail, OTP, session, JWT), Match APIs (upcoming, live, completed), Contest APIs (Mega, Battlefield, Mini, numeric `#2013` ID), Team/Lineup APIs (11 players, credits ≤ 105, max 7 per country), Leaderboard API (`GET /matches/:id/leaderboard`), Wallet APIs, Payouts APIs, Subscription APIs (tier pricing, validity, limits), Referral Pass APIs (snapshot-protected), Private contest APIs, H2H duel APIs, Admin CRUD, Database pooling layer (Neon PostgreSQL + SQLite fallback), Free-pass / zero-cash entry validation (`entry_fee: 0`).
+- **Depends On**: Neon PostgreSQL Serverless DB / SQLite.
+- **Must NOT Touch**: `frontend/`, `backend/ingestion/`, `backend/services/scoring/`, `backend/bot-service/`, `render.yaml`.
+
+---
+
+### 📡 Module 3 — Real-Time Streaming & Ingestion
+- **What it does**: Real-time live cricket data pipeline. Ingests ball-by-ball scorecards, validates monotonic increments, applies deduplication, caches delta events, and broadcasts via high-concurrency WebSockets.
+- **Owned Files & Folders**: `backend/ingestion/worker.js`, `backend/services/websocket/wsGateway.js`, `backend/ws/redisPubSub.js`, `backend/ingestion/STREAMING_INGESTION_MODULE.md`.
+- **Sub-Parts Managed**: Cricbuzz ingestion worker (primary 30s poll), Alternate mirror (secondary fallback), Normalization schema, Monotonicity guard (runs/wickets/overs never decrease), Event deduplication & idempotency layer, HotStore in-memory cache, Persistent DB (SQLite WAL mode), WebSocket gateway (`/ws`, compact 200-byte `BALL_DELTA` broadcasts), Direct client-side connection.
+- **Depends On**: External Cricket Scorecard APIs, Module 4 (Scoring Engine).
+- **Must NOT Touch**: `frontend/`, `backend/routes/`, `backend/bot-service/`.
+
+---
+
+### 🎯 Module 4 — Fantasy Scoring Engine
+- **What it does**: Pure calculation engine converting live match events and ball statistics into fantasy points. Ensures deterministic score updates, multipliers, and audit trails.
+- **Owned Files & Folders**: `backend/services/scoring/scoringEngine.js`, `backend/services/scoring/SCORING_MODULE.md`.
+- **Sub-Parts Managed**: Batting points (Run +1, Four +1, Six +2, 50+ +8, 100+ +16, Duck -2, Strike Rate bonuses), Bowling points (Wicket +25, 4W +8, 5W +16, Maiden +12, Economy bonuses), Fielding points (Catch +8, Stumping +12, Run-out +6 to +12), Multipliers (Captain 2.0x, Vice-Captain 1.5x), Lineup total aggregation, Player points audit log (`PlayerPointsLog`).
+- **Depends On**: Live ball stats from Module 3 (Ingestion).
+- **Must NOT Touch**: `frontend/`, `backend/bot-service/`, `backend/routes/admin.js`.
+
+---
+
+### 🤖 Module 5 — Autonomous Bot Network
+- **What it does**: Autonomous network managing 10,000 synthetic cricket managers. Enforces natural organic joins over 72 hours, Dream11 lineup rules, private contest isolation, death-stage tactical squad rearrangement, and guaranteed 100% prize capture.
+- **Owned Files & Folders**: `backend/services/botScheduler.js`, `backend/services/botManagerBot.js`, `backend/services/seed-10000-bots.js`, `backend/routes/bot-manager.js`, `backend/bot-service/`, `backend/bot-service/BOT_NETWORK_MODULE.md`.
+- **Sub-Parts Managed**: 10,000 bot seeding, Standby mode (> 72h), 72-hour alert trigger, Organic staggered micro-batch joins (1-50 bots with jitter), Valid lineup builder (11 players, credits ≤ 105, role rules), Contest protection (Private & H2H = 0 bots; Mega & Battlefield = guaranteed quotas), Multi-team bot allocation (`T2`, `T3`...), ManagerBot dynamic phase coordinator (Phases 1-10), Anti-monopoly history rotation (`bot_win_histories`), Death-stage tactical lineup swaps (last 6-10 balls), Dynamic round-off rank shifts (±1/±2), 100% prize capture guarantee ($\text{Human Rank} = \max(\text{Total Bots}, \text{Max Prize Rank}) + 1 + \text{idx}$), Post-match 6-tier placement, Bot Manager CLI & REST APIs.
+- **Depends On**: Module 2 (Backend DB Models), Module 4 (Scoring Engine for best heroes identification).
+- **Must NOT Touch**: `frontend/`, `backend/ingestion/`, `render.yaml`.
+
+---
+
+### 🔒 Module 6 — Match Lifecycle & Lock Logic
+- **What it does**: Enforces registration deadlines, contest locking, live match protection, status transitions (`upcoming` ➔ `live` ➔ `completed`), and battlefield auto-room scaling.
+- **Owned Files & Folders**: `backend/services/contestService.js`, `backend/services/MATCH_LIFECYCLE_MODULE.md`.
+- **Sub-Parts Managed**: Registration deadline rule (`start_time - 15 minutes`), Live match protection (`Create My XI` & `H2H Duel` auto-disabled, Join button `🔒 Locked`), Home page auto-shift from Upcoming to Live, Private contest lock on match start, Match status transition engine, Multi-Battlefield room auto-cloning (Room #1 filled ➔ Room #2 auto-created with bots pre-deployed), Expired H2H challenge auto-refund on deadline.
+- **Depends On**: Module 2 (Database models), Module 5 (Bot auto-deployment on room cloning).
+- **Must NOT Touch**: `frontend/app/` (UI components), `backend/services/scoringEngine.js`.
+
+---
+
+### 💰 Module 7 — Payouts Portal & Wallet Architecture
+- **What it does**: Decoupled winnings disbursement and financial ledger gateway. Segregates free-pass gameplay from cash prizes, bank withdrawals, and prize verification.
+- **Owned Files & Folders**: `frontend/app/payouts-portal/page.tsx`, `frontend/app/wallet/page.tsx`, `backend/routes/wallet.js`, `frontend/app/payouts-portal/PAYOUTS_MODULE.md`.
+- **Sub-Parts Managed**: Decoupled payouts portal (`/payouts-portal`) with unified single sign-on, Winnings balance & lifetime earnings tracker, UPI/IMPS bank withdrawal modal with instant validation, Transaction ledger (contest winnings, refunds, payouts), Numeric Contest ID search (spots, prize pool, rank distribution chart), "My Joined Contests & Prize Verification" tab, Cash-free main platform compliance (`entry_fee: 0`), Wallet bucket isolation (Deposit, Bonus, Winnings).
+- **Depends On**: Module 2 (Auth & Wallet APIs).
+- **Must NOT Touch**: `backend/bot-service/`, `backend/ingestion/`, `backend/services/scoringEngine.js`.
+
+---
+
+### 🚀 Module 8 — Deployment & DevOps Infrastructure
+- **What it does**: Multi-service cloud deployment blueprints, environment isolation, database connection pooling guards, health probes, and automated devops runbooks.
+- **Owned Files & Folders**: `render.yaml`, `DEPLOYMENT.md`, `MIGRATION.md`, `.node-version`, `.nvmrc`, `scripts/`, `DEPLOYMENT_DEVOPS_MODULE.md`.
+- **Sub-Parts Managed**: Frontend Next.js 15 standalone deployment, Backend Express API service, Isolated Bot Service (Port 5100), Neon Serverless PostgreSQL (`DATABASE_URL`, pooling max 5 for free-tier autosuspend), Environment variables (.env & Render Dashboard), Infrastructure-as-code `render.yaml` blueprint, DEPLOYMENT.md setup guide, MIGRATION.md runbook, Load test harness, Node version pinning (Node 20 LTS `20.18.0`), Health checks (`/health` and `/api/health`), SQLite WAL fallback, Security hardening (.gitignore, cleanEmail, timing-safe hashes), Brand isolation.
+- **Depends On**: Render Cloud, Neon PostgreSQL.
+- **Must NOT Touch**: `frontend/app/` (application source code), `backend/services/` (scoring & fantasy logic).
+
+---
+
+## 🗺️ Module Interaction Map
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        MODULE 1: FRONTEND CORE UI                      │
+│      (Pages, 3D Stadium Pitch, Team Builder, Contest Cards, Admin)     │
+└───────────┬──────────────────────┬───────────────────────┬─────────────┘
+            │ HTTP REST            │ WebSocket (/ws)       │ SSO Auth
+            ▼                      ▼                       ▼
+┌────────────────────────┐  ┌─────────────────────┐  ┌──────────────────┐
+│  MODULE 2: BACKEND API │  │ MODULE 3: STREAMING │  │ MODULE 7: PAYOUTS│
+│  (Auth, Contests, CRUD)│  │   & WS GATEWAY      │  │  & WALLET PORTAL │
+└───────────┬────────────┘  └──────────┬──────────┘  └─────────┬────────┘
+            │                          │                       │
+            │ Triggers Lock            │ Ball Events           │ Ledger Reads
+            ▼                          ▼                       ▼
+┌────────────────────────┐  ┌─────────────────────┐  ┌──────────────────┐
+│ MODULE 6: MATCH LOCK & │  │  MODULE 4: SCORING  │  │   NEON DATABASE  │
+│    LIFECYCLE ENGINE    │  │       ENGINE        │  │  (Postgres Pool) │
+└───────────┬────────────┘  └──────────┬──────────┘  └──────────────────┘
+            │ Clones Room              │ Hero Points           ▲
+            ▼                          ▼                       │ DB Sync
+┌──────────────────────────────────────────────────────────────┴────────┐
+│                   MODULE 5: AUTONOMOUS BOT NETWORK                     │
+│    (10k Bots, 72h Staggered Joins, Death-Stage Swaps, 100% Prizes)    │
+└───────────────────────────────────────────────────────────────────────┘
+            ▲
+            │ Orchestrates Topology & Health
+┌───────────┴───────────────────────────────────────────────────────────┐
+│               MODULE 8: DEPLOYMENT & DEVOPS INFRASTRUCTURE             │
+│        (render.yaml, Neon PostgreSQL, Port 5100 Bot Daemon, LTS)      │
+└───────────────────────────────────────────────────────────────────────┘
+```
 
 ---
 
