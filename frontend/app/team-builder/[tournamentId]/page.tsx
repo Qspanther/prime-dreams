@@ -10,6 +10,7 @@ import { apiGet, apiPost, apiPut, resolveImageUrl } from '../../lib/api';
 import { useAuth } from '../../lib/auth-context';
 import CategoryBadge from '../../components/ui/CategoryBadge';
 import PlayerPhoto from '../../components/ui/PlayerPhoto';
+import TeamLimitModal from '../../components/ui/TeamLimitModal';
 
 const CricketPitchView = dynamic(() => import('../../components/ui/CricketPitchView'), { ssr: false });
 const PlayerDetailModal = dynamic(() => import('../../components/ui/PlayerDetailModal'), { ssr: false });
@@ -70,6 +71,42 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [selectedContestId, setSelectedContestId] = useState<string>(contestId || '');
   const [loadedContest, setLoadedContest] = useState<any>(null);
+
+  // Dynamic Subscription / Referral Pass Match Team Limit Quota State
+  const [showLimitModal, setShowLimitModal] = useState<boolean>(false);
+  const [limitInfo, setLimitInfo] = useState<{
+    maxTeams: number;
+    currentTeams: number;
+    passName: string;
+    daysLeft?: number;
+  }>({
+    maxTeams: 2,
+    currentTeams: 0,
+    passName: 'Tournament Pass',
+  });
+
+  useEffect(() => {
+    if (!token || !matchId) return;
+    apiGet(`/matches/${matchId}/my-teams`, token)
+      .then((res) => {
+        if (res?.success) {
+          const count = res.count ?? (res.teams?.length || 0);
+          const maxAllowed = res.max_teams || 2;
+          const pass = res.pass_name || 'Tournament Pass';
+          setLimitInfo({
+            maxTeams: maxAllowed,
+            currentTeams: count,
+            passName: pass,
+            daysLeft: res.days_left,
+          });
+          // If not editing an existing team and already reached limit, trigger standard English limit popup
+          if (!teamId && count >= maxAllowed && maxAllowed > 0) {
+            setShowLimitModal(true);
+          }
+        }
+      })
+      .catch(() => {});
+  }, [token, matchId, teamId]);
 
   useEffect(() => {
     if (!contestId) return;
@@ -329,6 +366,11 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
       setError('This match has ended. Team editing is closed.');
       return;
     }
+    // Prevent entry beyond subscription / referral pass limits
+    if (!teamId && !editingTeamId && limitInfo.currentTeams >= limitInfo.maxTeams && limitInfo.maxTeams > 0) {
+      setShowLimitModal(true);
+      return;
+    }
     const validationError = validateTeamComposition();
     if (validationError) {
       setError(validationError);
@@ -363,6 +405,11 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
       return;
     }
 
+    if (!teamId && !editingTeamId && limitInfo.currentTeams >= limitInfo.maxTeams && limitInfo.maxTeams > 0) {
+      setShowLimitModal(true);
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
@@ -384,10 +431,25 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
           router.push('/my-teams');
         }
       } else {
-        setError(res?.error || 'Failed to submit team');
+        if (res?.limitReached || String(res?.error || '').toLowerCase().includes('limit of')) {
+          setLimitInfo(prev => ({
+            ...prev,
+            maxTeams: res.maxTeams || prev.maxTeams,
+            currentTeams: res.currentTeams || prev.currentTeams,
+            passName: res.passName || prev.passName,
+            daysLeft: res.daysLeft ?? prev.daysLeft,
+          }));
+          setShowLimitModal(true);
+        } else {
+          setError(res?.error || 'Failed to submit team');
+        }
       }
     } catch (err: any) {
-      setError(err?.message || 'Error saving team. Check contest lock.');
+      if (err?.limitReached || String(err?.message || '').toLowerCase().includes('limit of')) {
+        setShowLimitModal(true);
+      } else {
+        setError(err?.message || 'Error saving team. Check contest lock.');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -967,6 +1029,17 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
         onClose={() => setDetailPlayer(null)}
         isSelected={detailPlayer ? selectedPlayerIds.includes(detailPlayer.id) : false}
         onToggleSelect={(p) => togglePlayer(p as any)}
+      />
+
+      {/* Standard English Team Creation Limit Quota Modal */}
+      <TeamLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        maxTeams={limitInfo.maxTeams}
+        currentTeams={limitInfo.currentTeams}
+        passName={limitInfo.passName}
+        daysLeft={limitInfo.daysLeft}
+        matchTitle={match?.title}
       />
     </div>
   );

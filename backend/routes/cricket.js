@@ -1222,6 +1222,9 @@ router.post('/matches/:id/teams', authenticate, async (req, res) => {
 
     // Dynamic Subscription & Referral Pass Check (§2.6)
     let maxAllowedTeams = 6;
+    let passName = 'VIP Platinum';
+    let daysLeft = 30;
+    let validUntil = null;
     if (req.user && !req.user.is_bot && req.user.role !== 'admin') {
       const userRecord = await User.findByPk(req.user.id, { transaction });
       const freeModeSetting = await SystemSetting.findOne({ where: { key: 'subscription_free_mode' }, transaction });
@@ -1235,21 +1238,39 @@ router.post('/matches/:id/teams', authenticate, async (req, res) => {
         return res.status(403).json({
           error: 'An active Subscription Pass or Referral Pass is required to create fantasy teams. Choose a tier or invite friends to play!',
           requiresSubscription: true,
+          limitReached: false,
         });
       }
 
       const paidTeams = hasPaidSub ? (parseInt(userRecord.subscription_max_teams, 10) || 2) : 0;
       const refTeams = hasReferralPass ? (parseInt(userRecord.referral_pass_max_teams, 10) || 1) : 0;
       maxAllowedTeams = Math.max(paidTeams, refTeams, isFreeMode ? 6 : 0);
+
+      if (hasPaidSub && paidTeams >= refTeams) {
+        passName = userRecord.subscription_type || 'Subscription Pass';
+        validUntil = userRecord.subscription_active_until;
+        daysLeft = Math.ceil((new Date(userRecord.subscription_active_until) - now) / 86400000);
+      } else if (hasReferralPass) {
+        passName = 'Referral Pass';
+        validUntil = userRecord.referral_pass_valid_until;
+        daysLeft = Math.ceil((new Date(userRecord.referral_pass_valid_until) - now) / 86400000);
+      } else {
+        passName = 'Free Access Mode';
+        daysLeft = 30;
+      }
     }
 
     const myTeamCount = await CricketTeam.count({ where: { user_id: req.user.id, match_id: match.id }, transaction });
     if (myTeamCount >= maxAllowedTeams) {
       await transaction.rollback();
-      return res.status(400).json({
-        error: `You have reached your limit of ${maxAllowedTeams} team(s) per match under your current pass. Upgrade your plan to create more teams!`,
+      return res.status(403).json({
+        error: `You have reached your maximum limit of ${maxAllowedTeams} team(s) for this match under your current ${passName} pass. Upgrade your Tournament Pass or invite friends to unlock additional lineups!`,
+        limitReached: true,
         maxTeams: maxAllowedTeams,
         currentTeams: myTeamCount,
+        passName,
+        daysLeft,
+        validUntil,
       });
     }
 
@@ -1418,10 +1439,38 @@ router.get('/matches/:id/my-team', authenticate, async (req, res) => {
 
 /**
  * GET /api/matches/:id/my-teams
- * All of the user's teams for this match (max 6) — for the team selector.
+ * All of the user's teams for this match with dynamic tier limit tracking.
  */
 router.get('/matches/:id/my-teams', authenticate, async (req, res) => {
   try {
+    const now = new Date();
+    const userRecord = await User.findByPk(req.user.id);
+    const freeModeSetting = await SystemSetting.findOne({ where: { key: 'subscription_free_mode' } });
+    const isFreeMode = freeModeSetting && freeModeSetting.value === 'true';
+
+    const hasPaidSub = userRecord?.subscription_active_until && new Date(userRecord.subscription_active_until) > now;
+    const hasReferralPass = userRecord?.referral_pass_valid_until && new Date(userRecord.referral_pass_valid_until) > now;
+
+    const paidTeams = hasPaidSub ? (parseInt(userRecord.subscription_max_teams, 10) || 2) : 0;
+    const refTeams = hasReferralPass ? (parseInt(userRecord.referral_pass_max_teams, 10) || 1) : 0;
+    const maxAllowedTeams = req.user.role === 'admin' ? 6 : Math.max(paidTeams, refTeams, isFreeMode ? 6 : 0);
+
+    let passName = 'No Active Pass';
+    let daysLeft = 0;
+    let validUntil = null;
+    if (hasPaidSub && paidTeams >= refTeams) {
+      passName = userRecord.subscription_type || 'Subscription Pass';
+      validUntil = userRecord.subscription_active_until;
+      daysLeft = Math.ceil((new Date(userRecord.subscription_active_until) - now) / 86400000);
+    } else if (hasReferralPass) {
+      passName = 'Referral Pass';
+      validUntil = userRecord.referral_pass_valid_until;
+      daysLeft = Math.ceil((new Date(userRecord.referral_pass_valid_until) - now) / 86400000);
+    } else if (isFreeMode || req.user.role === 'admin') {
+      passName = req.user.role === 'admin' ? 'Admin Unlimited' : 'Free Access Mode';
+      daysLeft = 30;
+    }
+
     const teams = await CricketTeam.findAll({
       where: { user_id: req.user.id, match_id: req.params.id },
       include: [
@@ -1429,7 +1478,18 @@ router.get('/matches/:id/my-teams', authenticate, async (req, res) => {
       ],
       order: [['created_at', 'ASC']],
     });
-    res.json({ success: true, teams, max_teams: 6 });
+
+    res.json({
+      success: true,
+      teams,
+      count: teams.length,
+      max_teams: maxAllowedTeams,
+      has_active_pass: Boolean(hasPaidSub || hasReferralPass || isFreeMode || req.user.role === 'admin'),
+      limit_reached: teams.length >= maxAllowedTeams && maxAllowedTeams > 0,
+      pass_name: passName,
+      days_left: daysLeft,
+      valid_until: validUntil,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1437,7 +1497,7 @@ router.get('/matches/:id/my-teams', authenticate, async (req, res) => {
 
 /**
  * POST /api/matches/:id/teams/:teamId/clone
- * Duplicate an existing team (Dream11-style clone). No entry fee.
+ * Duplicate an existing team (Dream11-style clone) with strict tier limit check.
  */
 router.post('/matches/:id/teams/:teamId/clone', authenticate, async (req, res) => {
   try {
@@ -1455,9 +1515,56 @@ router.post('/matches/:id/teams/:teamId/clone', authenticate, async (req, res) =
       return res.status(400).json({ error: 'Contest is locked. Teams can no longer be created.' });
     }
 
+    // Dynamic Subscription & Referral Pass Check for Clone
+    let maxAllowedTeams = 6;
+    let passName = 'VIP Platinum';
+    let daysLeft = 30;
+    let validUntil = null;
+    if (req.user && !req.user.is_bot && req.user.role !== 'admin') {
+      const userRecord = await User.findByPk(req.user.id);
+      const freeModeSetting = await SystemSetting.findOne({ where: { key: 'subscription_free_mode' } });
+      const isFreeMode = freeModeSetting && freeModeSetting.value === 'true';
+
+      const hasPaidSub = userRecord?.subscription_active_until && new Date(userRecord.subscription_active_until) > now;
+      const hasReferralPass = userRecord?.referral_pass_valid_until && new Date(userRecord.referral_pass_valid_until) > now;
+
+      if (!isFreeMode && !hasPaidSub && !hasReferralPass) {
+        return res.status(403).json({
+          error: 'An active Subscription Pass or Referral Pass is required to create or clone fantasy teams. Choose a tier or invite friends to play!',
+          requiresSubscription: true,
+          limitReached: false,
+        });
+      }
+
+      const paidTeams = hasPaidSub ? (parseInt(userRecord.subscription_max_teams, 10) || 2) : 0;
+      const refTeams = hasReferralPass ? (parseInt(userRecord.referral_pass_max_teams, 10) || 1) : 0;
+      maxAllowedTeams = Math.max(paidTeams, refTeams, isFreeMode ? 6 : 0);
+
+      if (hasPaidSub && paidTeams >= refTeams) {
+        passName = userRecord.subscription_type || 'Subscription Pass';
+        validUntil = userRecord.subscription_active_until;
+        daysLeft = Math.ceil((new Date(userRecord.subscription_active_until) - now) / 86400000);
+      } else if (hasReferralPass) {
+        passName = 'Referral Pass';
+        validUntil = userRecord.referral_pass_valid_until;
+        daysLeft = Math.ceil((new Date(userRecord.referral_pass_valid_until) - now) / 86400000);
+      } else {
+        passName = 'Free Access Mode';
+        daysLeft = 30;
+      }
+    }
+
     const myTeamCount = await CricketTeam.count({ where: { user_id: req.user.id, match_id: match.id } });
-    if (myTeamCount >= 6) {
-      return res.status(400).json({ error: 'Maximum 6 teams allowed per match.' });
+    if (myTeamCount >= maxAllowedTeams) {
+      return res.status(403).json({
+        error: `You have reached your maximum limit of ${maxAllowedTeams} team(s) for this match under your current ${passName} pass. Upgrade your Tournament Pass or invite friends to unlock additional lineups!`,
+        limitReached: true,
+        maxTeams: maxAllowedTeams,
+        currentTeams: myTeamCount,
+        passName,
+        daysLeft,
+        validUntil,
+      });
     }
 
     const clone = await CricketTeam.create({

@@ -15,6 +15,7 @@ import CategoryBadge from '../../components/ui/CategoryBadge';
 import PlayerPhoto from '../../components/ui/PlayerPhoto';
 
 const PrizeBreakupModal = dynamic(() => import('../../components/ui/PrizeBreakupModal'), { ssr: false });
+const TeamLimitModal = dynamic(() => import('../../components/ui/TeamLimitModal'), { ssr: false });
 
 interface MatchDetailProps {
   params: Promise<{ matchId: string }>;
@@ -42,6 +43,44 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
   const [guruLoaded, setGuruLoaded] = useState(false);
   const [guruCopying, setGuruCopying] = useState<string | null>(null);
   const [guruError, setGuruError] = useState<string | null>(null);
+
+  // Dynamic Subscription / Referral Match Quota Tracking
+  const [showLimitModal, setShowLimitModal] = useState<boolean>(false);
+  const [limitInfo, setLimitInfo] = useState<{
+    maxTeams: number;
+    currentTeams: number;
+    passName: string;
+    daysLeft?: number;
+  }>({
+    maxTeams: 2,
+    currentTeams: 0,
+    passName: 'Tournament Pass',
+  });
+
+  useEffect(() => {
+    if (!token || !matchId) return;
+    apiGet(`/matches/${matchId}/my-teams`, token)
+      .then((res) => {
+        if (res?.success) {
+          setLimitInfo({
+            maxTeams: res.max_teams || 2,
+            currentTeams: res.count ?? (res.teams?.length || 0),
+            passName: res.pass_name || 'Tournament Pass',
+            daysLeft: res.days_left,
+          });
+        }
+      })
+      .catch(() => {});
+  }, [token, matchId]);
+
+  const handleCreateXI = (e: React.MouseEvent, targetUrl: string) => {
+    e.preventDefault();
+    if (limitInfo.currentTeams >= limitInfo.maxTeams && limitInfo.maxTeams > 0) {
+      setShowLimitModal(true);
+      return;
+    }
+    router.push(targetUrl);
+  };
 
   const fetchWinProbability = async () => {
     if (!token) return;
@@ -666,13 +705,13 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               <span>Squads Locked (Match In-Play)</span>
             </button>
           ) : (
-            <Link
-              href={`/team-builder/${matchId}`}
-              className="prime-btn-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"
+            <button
+              onClick={(e) => handleCreateXI(e, `/team-builder/${matchId}`)}
+              className="prime-btn-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5 cursor-pointer"
             >
               <Shield className="w-4 h-4" />
               <span>Create My XI</span>
-            </Link>
+            </button>
           )}
 
           <Link
@@ -804,7 +843,11 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                   key={c.id}
                   onClick={() => {
                     if (!contestLocked && !contestFull) {
-                      router.push(targetUrl);
+                      if (limitInfo.currentTeams >= limitInfo.maxTeams && limitInfo.maxTeams > 0) {
+                        setShowLimitModal(true);
+                      } else {
+                        router.push(targetUrl);
+                      }
                     }
                   }}
                   className={`contest-card-3d p-5 flex flex-col justify-between group transition-all ${
@@ -989,6 +1032,17 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         onClose={() => { setBreakupContest(null); setBreakupData(null); }}
         contest={breakupContest}
         breakupData={breakupData}
+      />
+
+      {/* Standard English Team Creation Limit Quota Modal */}
+      <TeamLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        maxTeams={limitInfo.maxTeams}
+        currentTeams={limitInfo.currentTeams}
+        passName={limitInfo.passName}
+        daysLeft={limitInfo.daysLeft}
+        matchTitle={match?.title}
       />
 
     </div>

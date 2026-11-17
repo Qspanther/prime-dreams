@@ -64,12 +64,9 @@ function AdminCricketMatchesContent() {
   });
 
   const [contests, setContests] = useState<any[]>([
-    { type: 'mega', title: 'Mega Grand Contest ₹1,00,000', prize_pool: 100000, entry_fee: 49, total_spots: 10000, bot_spots: 10000 },
-    { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 99, total_spots: 25, bot_spots: 7 },
-    { type: 'mini', title: 'Mini Quick Contest ₹1,000', prize_pool: 1000, entry_fee: 25, total_spots: 100, bot_spots: 25 },
-    { type: 'practice', title: 'Practice Contest (Free)', prize_pool: 0, entry_fee: 0, total_spots: 50, bot_spots: 10 },
-    { type: 'private', title: 'Private Friends Contest', prize_pool: 500, entry_fee: 25, total_spots: 20, bot_spots: 0 },
-    { type: 'h2h', title: 'H2H Custom Duel', prize_pool: 0, entry_fee: 0, total_spots: 2, bot_spots: 0 },
+    { type: 'mega', title: 'Mega Grand Contest', prize_pool: 100000, entry_fee: 0, total_spots: 10000, bot_spots: 10000 },
+    { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 0, total_spots: 25, bot_spots: 7 },
+    { type: 'mini', title: 'Mini Quick Contest', prize_pool: 1000, entry_fee: 0, total_spots: 100, bot_spots: 25 },
   ]);
 
   // 🏆 Custom Prize Table Modal State (Position-by-position configuration)
@@ -281,9 +278,9 @@ function AdminCricketMatchesContent() {
       setPlayers(list);
     }
     setContests([
-      { type: 'standard', title: 'Mega Grand Contest ₹1,00,000', prize_pool: 100000, entry_fee: 49, total_spots: 2500 },
-      { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 99, total_spots: 25 },
-      { type: 'h2h', title: 'H2H Custom Duel', prize_pool: 0, entry_fee: 0, total_spots: 2 },
+      { type: 'mega', title: 'Mega Grand Contest', prize_pool: 100000, entry_fee: 0, total_spots: 10000, bot_spots: 10000 },
+      { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 0, total_spots: 25, bot_spots: 7 },
+      { type: 'mini', title: 'Mini Quick Contest', prize_pool: 1000, entry_fee: 0, total_spots: 100, bot_spots: 25 },
     ]);
     setFieldErrors({});
     setSuccessMsg(null);
@@ -340,9 +337,9 @@ function AdminCricketMatchesContent() {
       })));
     } else {
       setContests([
-        { type: 'standard', title: 'Mega Grand Contest ₹1,00,000', prize_pool: 100000, entry_fee: 49, total_spots: 2500 },
-        { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 99, total_spots: 25 },
-        { type: 'h2h', title: 'H2H Custom Duel', prize_pool: 0, entry_fee: 0, total_spots: 2 },
+        { type: 'mega', title: 'Mega Grand Contest', prize_pool: 100000, entry_fee: 0, total_spots: 10000, bot_spots: 10000 },
+        { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 0, total_spots: 25, bot_spots: 7 },
+        { type: 'mini', title: 'Mini Quick Contest', prize_pool: 1000, entry_fee: 0, total_spots: 100, bot_spots: 25 },
       ]);
     }
 
@@ -1391,11 +1388,11 @@ function AdminCricketMatchesContent() {
                                   const updated = { ...item, type: newType };
                                   if (newType === 'mega') {
                                     if (!updated.title || updated.title.startsWith('Contest #') || updated.title.startsWith('Mega Contest #')) {
-                                      updated.title = 'Mega Grand Contest ₹1,00,000';
+                                      updated.title = 'Mega Grand Contest';
                                     }
                                     updated.total_spots = 10000;
                                     updated.bot_spots = 10000;
-                                    updated.entry_fee = 49;
+                                    updated.entry_fee = 0;
                                     updated.prize_pool = 100000;
                                     updated.is_private = false;
                                   } else if (newType === 'multi_battlefield') {
@@ -1405,46 +1402,20 @@ function AdminCricketMatchesContent() {
                                     updated.total_spots = 25;
                                     updated.spots_per_battlefield = 25;
                                     updated.bot_spots = 7;
-                                    updated.entry_fee = 99;
+                                    updated.entry_fee = 0;
                                     updated.prize_pool = 2500;
                                     updated.is_private = false;
                                   } else if (newType === 'mini') {
                                     if (!updated.title || updated.title.startsWith('Contest #') || updated.title.startsWith('Mega Contest #')) {
-                                      updated.title = 'Mini Quick Contest ₹1,000';
+                                      updated.title = 'Mini Quick Contest';
                                     }
                                     updated.total_spots = 100;
                                     updated.bot_spots = 25;
-                                    updated.entry_fee = 25;
+                                    updated.entry_fee = 0;
                                     updated.prize_pool = 2500;
                                     updated.is_private = false;
-                                  } else if (newType === 'practice') {
-                                    if (!updated.title || updated.title.startsWith('Contest #') || updated.title.startsWith('Mega Contest #')) {
-                                      updated.title = 'Practice Contest (Free)';
-                                    }
-                                    updated.total_spots = 50;
-                                    updated.bot_spots = 10;
-                                    updated.entry_fee = 0;
-                                    updated.prize_pool = 0;
-                                    updated.is_private = false;
-                                  } else if (newType === 'private') {
-                                    if (!updated.title || updated.title.startsWith('Contest #') || updated.title.startsWith('Mega Contest #')) {
-                                      updated.title = 'Private Friends Contest';
-                                    }
-                                    updated.total_spots = 20;
-                                    updated.bot_spots = 0;
-                                    updated.entry_fee = 25;
-                                    updated.prize_pool = 500;
-                                    updated.is_private = true;
-                                  } else if (newType === 'h2h') {
-                                    if (!updated.title || updated.title.startsWith('Contest #') || updated.title.startsWith('Mega Contest #')) {
-                                      updated.title = 'H2H Custom Duel';
-                                    }
-                                    updated.total_spots = 2;
-                                    updated.bot_spots = 0;
-                                    updated.entry_fee = 0;
-                                    updated.prize_pool = 0;
-                                    updated.is_private = false;
                                   } else {
+                                    updated.entry_fee = 0;
                                     updated.is_private = false;
                                   }
                                   return updated;
@@ -1455,10 +1426,6 @@ function AdminCricketMatchesContent() {
                               <option value="mega">🏆 Mega Grand Contest (Up to 10,000 Teams)</option>
                               <option value="multi_battlefield">⚔️ PUBG Battlefield (25 spots, Room Auto-Clone)</option>
                               <option value="mini">🎯 Mini Contest (10 - 100 spots)</option>
-                              <option value="practice">🆓 Practice Contest (Free Entry)</option>
-                              <option value="private">🔒 Private Contest (Invite Only, 0 Bots)</option>
-                              <option value="h2h">🥊 Head-to-Head Duel (1v1, 0 Bots)</option>
-                              <option value="standard">📊 Standard Public Contest</option>
                             </select>
                           </div>
 
@@ -1468,28 +1435,20 @@ function AdminCricketMatchesContent() {
                               type="number"
                               min={2}
                               value={c.total_spots}
-                              disabled={c.type === 'h2h'}
                               onChange={(e) => {
                                 const val = parseInt(e.target.value, 10) || 0;
                                 setContests(prev => prev.map((item, i) => i === idx ? { ...item, total_spots: val } : item));
                               }}
-                              className="pd-input font-mono disabled:opacity-50"
+                              className="pd-input font-mono"
                             />
                           </div>
 
                           <div>
-                            <label className="pd-label">Entry Fee (₹)</label>
-                            <input
-                              type="number"
-                              min={0}
-                              value={c.entry_fee}
-                              disabled={c.type === 'h2h' || c.type === 'practice'}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value) || 0;
-                                setContests(prev => prev.map((item, i) => i === idx ? { ...item, entry_fee: val } : item));
-                              }}
-                              className="pd-input font-mono disabled:opacity-50"
-                            />
+                            <label className="pd-label">Contest Entry</label>
+                            <div className="h-10 px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-300 flex items-center gap-1.5 font-bold text-xs text-emerald-800">
+                              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                              <span>100% Free (Pass Only)</span>
+                            </div>
                           </div>
 
                           <div>
@@ -1498,12 +1457,11 @@ function AdminCricketMatchesContent() {
                               type="number"
                               min={0}
                               value={c.prize_pool}
-                              disabled={c.type === 'h2h' || c.type === 'practice'}
                               onChange={(e) => {
                                 const val = parseFloat(e.target.value) || 0;
-                                setContests(prev => prev.map((item, i) => i === idx ? { ...item, prize_pool: val } : item));
+                                setContests(prev => prev.map((item, i) => i === idx ? { ...item, prize_pool: val, entry_fee: 0 } : item));
                               }}
-                              className="pd-input font-mono disabled:opacity-50"
+                              className="pd-input font-mono"
                             />
                           </div>
 
