@@ -121,11 +121,9 @@ router.get('/player-photo', async (req, res) => {
 });
 
 const DEFAULT_CONTEST_TEMPLATES = [
-  { type: 'standard', title: 'Mega Contest (Grand League)', prize_pool: 10000, entry_fee: 49, total_spots: 250, filled_spots: 184, is_active: true, is_private: false },
-  { type: 'standard', title: 'Winner Takes All', prize_pool: 5000, entry_fee: 99, total_spots: 55, filled_spots: 41, is_active: true, is_private: false },
-  { type: 'h2h', title: 'Head-to-Head Duel', prize_pool: 90, entry_fee: 50, total_spots: 2, filled_spots: 1, is_active: true, is_private: false },
-  { type: 'practice', title: 'Practice Contest (Free)', prize_pool: 0, entry_fee: 0, total_spots: 100, filled_spots: 32, is_active: true, is_private: false },
-  { type: 'standard', title: 'Rookie Contest (Beginner Arena)', prize_pool: 1500, entry_fee: 19, total_spots: 100, filled_spots: 78, is_active: true, is_private: false },
+  { type: 'mega', title: 'Mega Grand League', prize_pool: 100000, entry_fee: 0, total_spots: 2500, filled_spots: 1840, bot_spots: 1840, is_active: true, is_private: false },
+  { type: 'multi_battlefield', title: 'Battleground Arena Room #1', prize_pool: 2500, entry_fee: 0, total_spots: 25, filled_spots: 18, spots_per_battlefield: 25, battlefield_number: 1, bot_spots: 18, is_active: true, is_private: false },
+  { type: 'mini', title: 'Mini League Contest', prize_pool: 5000, entry_fee: 0, total_spots: 100, filled_spots: 65, bot_spots: 65, is_active: true, is_private: false },
 ];
 
 async function ensureMatchSquad(match) {
@@ -474,10 +472,16 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
     const requestedContestId = req.query.contest_id || req.query.contestId;
     const playerRanks = new Map(playerLeaderboard.map(player => [player.id, player.rank]));
 
-    // Fetch all active contests for this match so users can browse teams across any contest
+    // Fetch only active Battleground, Mega, and Mini contests for this match
     const matchContests = await MatchContest.findAll({
-      where: { match_id: match.id, is_active: true },
-      order: [['entry_fee', 'DESC'], ['prize_pool', 'DESC']],
+      where: {
+        match_id: match.id,
+        is_active: true,
+        is_private: false,
+        h2h_challenge_id: null,
+        type: { [Op.in]: ['mega', 'multi_battlefield', 'mini'] },
+      },
+      order: [['total_spots', 'DESC']],
     });
 
     let selectedContest = null;
@@ -746,10 +750,17 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
 router.get('/matches/:id', async (req, res) => {
   res.set('Cache-Control', 'public, max-age=3, stale-while-revalidate=10');
   try {
+    const contestWhere = {
+      is_active: true,
+      is_private: false,
+      h2h_challenge_id: null,
+      type: { [Op.in]: ['mega', 'multi_battlefield', 'mini'] },
+    };
+
     let match = await CricketMatch.findByPk(req.params.id, {
       include: [
         { model: CricketPlayer, as: 'players' },
-        { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false, h2h_challenge_id: null }, required: false },
+        { model: MatchContest, as: 'contests', where: contestWhere, required: false },
       ],
     });
 
@@ -759,7 +770,7 @@ router.get('/matches/:id', async (req, res) => {
         where: { cricbuzz_id: req.params.id },
         include: [
           { model: CricketPlayer, as: 'players' },
-          { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false, h2h_challenge_id: null }, required: false },
+          { model: MatchContest, as: 'contests', where: contestWhere, required: false },
         ],
       });
     }
@@ -770,18 +781,18 @@ router.get('/matches/:id', async (req, res) => {
         where: { status: 'live' },
         include: [
           { model: CricketPlayer, as: 'players' },
-          { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false, h2h_challenge_id: null }, required: false },
+          { model: MatchContest, as: 'contests', where: contestWhere, required: false },
         ],
       }) || await CricketMatch.findOne({
         where: { status: 'upcoming' },
         include: [
           { model: CricketPlayer, as: 'players' },
-          { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false, h2h_challenge_id: null }, required: false },
+          { model: MatchContest, as: 'contests', where: contestWhere, required: false },
         ],
       }) || await CricketMatch.findOne({
         include: [
           { model: CricketPlayer, as: 'players' },
-          { model: MatchContest, as: 'contests', where: { is_active: true, is_private: false, h2h_challenge_id: null }, required: false },
+          { model: MatchContest, as: 'contests', where: contestWhere, required: false },
         ],
       });
     }
@@ -803,7 +814,7 @@ router.get('/matches/:id', async (req, res) => {
       currentPlayers = await ensureMatchSquad(match);
     }
 
-    // ─── Auto-seed contests if match has 0 contests ───
+    // ─── Auto-seed contests (Only Battleground, Mega, and Mini) ───
     let contests = match.contests || [];
     if (contests.length === 0) {
       try {
@@ -812,45 +823,67 @@ router.get('/matches/:id', async (req, res) => {
           match_id: match.id,
           status: isLocked ? 'locked' : 'open',
         })));
-        contests = await MatchContest.findAll({ where: { match_id: match.id, is_active: true, is_private: false, h2h_challenge_id: null } });
+        contests = await MatchContest.findAll({ where: { match_id: match.id, ...contestWhere } });
       } catch (err) { /* seeding is best-effort */ }
     } else {
-      // ─── Practice (free) contest: ensure one exists ───
-      if (!contests.some((c) => c.type === 'practice')) {
+      // Ensure Mega Contest exists
+      if (!contests.some(c => c.type === 'mega')) {
         try {
           await MatchContest.create({
             match_id: match.id,
-            type: 'practice',
-            title: 'Practice Contest (Free)',
-            prize_pool: 0,
+            type: 'mega',
+            title: `Mega Grand League (${match.category || 'T20'})`,
+            prize_pool: 100000,
             entry_fee: 0,
-            total_spots: 50,
-            filled_spots: 0,
+            total_spots: 2500,
+            filled_spots: 1840,
+            bot_spots: 1840,
             is_active: true,
             is_private: false,
-            status: 'open',
+            status: isLocked ? 'locked' : 'open',
           });
-          contests = await MatchContest.findAll({ where: { match_id: match.id, is_active: true, is_private: false, h2h_challenge_id: null } });
-        } catch (err) { /* seeding is best-effort */ }
+          contests = await MatchContest.findAll({ where: { match_id: match.id, ...contestWhere } });
+        } catch (_) {}
       }
-
-      // ─── Rookie (beginner) contest: ensure one exists ───
-      if (!contests.some((c) => /rookie/i.test(c.title || ''))) {
+      // Ensure Battleground Contest exists
+      if (!contests.some(c => c.type === 'multi_battlefield')) {
         try {
           await MatchContest.create({
             match_id: match.id,
-            type: 'standard',
-            title: 'Rookie Contest (Beginner)',
-            prize_pool: 1000,
-            entry_fee: 19,
-            total_spots: 100,
-            filled_spots: 0,
+            type: 'multi_battlefield',
+            title: `Battleground Arena Room #1 (${match.category || 'T20'})`,
+            prize_pool: 2500,
+            entry_fee: 0,
+            total_spots: 25,
+            filled_spots: 18,
+            spots_per_battlefield: 25,
+            battlefield_number: 1,
+            bot_spots: 18,
             is_active: true,
             is_private: false,
-            status: 'open',
+            status: isLocked ? 'locked' : 'open',
           });
-          contests = await MatchContest.findAll({ where: { match_id: match.id, is_active: true, is_private: false, h2h_challenge_id: null } });
-        } catch (err) { /* seeding is best-effort */ }
+          contests = await MatchContest.findAll({ where: { match_id: match.id, ...contestWhere } });
+        } catch (_) {}
+      }
+      // Ensure Mini Contest exists
+      if (!contests.some(c => c.type === 'mini')) {
+        try {
+          await MatchContest.create({
+            match_id: match.id,
+            type: 'mini',
+            title: `Mini League Contest (${match.category || 'T20'})`,
+            prize_pool: 5000,
+            entry_fee: 0,
+            total_spots: 100,
+            filled_spots: 65,
+            bot_spots: 65,
+            is_active: true,
+            is_private: false,
+            status: isLocked ? 'locked' : 'open',
+          });
+          contests = await MatchContest.findAll({ where: { match_id: match.id, ...contestWhere } });
+        } catch (_) {}
       }
     }
 

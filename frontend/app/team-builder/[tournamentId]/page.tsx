@@ -485,27 +485,6 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
         </div>
       )}
 
-      {/* Private Ground Contest Banner */}
-      {activeContest?.is_private && (
-        <div className="rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 p-4 flex flex-wrap items-center justify-between gap-3 text-blue-950 shadow-sm">
-          <div className="flex items-center gap-3">
-            <span className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center font-black text-xl shrink-0 shadow-md">🏟️</span>
-            <div>
-              <span className="text-[10px] font-black uppercase text-blue-700 tracking-wider block">Entering Private Ground</span>
-              <h3 className="font-black text-base text-blue-950">{activeContest.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim()}</h3>
-              <p className="text-xs text-blue-700 font-medium">
-                Contest ID: #{activeContest.contest_code || activeContest.id?.slice(0, 6)} • {activeContest.filled_spots || 1} Teams Joined
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="font-mono font-black text-sm text-[#059669] bg-[#ECFDF5] px-3 py-1.5 rounded-xl border border-[#A7F3D0] shadow-sm">
-              FREE (Pass)
-            </span>
-          </div>
-        </div>
-      )}
-
       {/* Squads Locked Banner */}
       {isLocked && (
         <div className="rounded-2xl bg-red-50 border-2 border-red-300 p-4 flex flex-wrap items-center justify-between gap-3 text-red-900 shadow-sm">
@@ -696,13 +675,12 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                 className="pd-input text-xs font-bold text-[#0F172A] bg-white border-blue-300 w-full"
               >
                 {(match?.contests || [])
-                  .filter((c: any) => c.is_active && !c.is_private)
+                  .filter((c: any) => c.is_active && !c.is_private && ['mega', 'multi_battlefield', 'mini'].includes(c.type))
                   .map((c: any) => (
                     <option key={c.id} value={c.id}>
                       Contest #{c.contest_code || 2011} • {c.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim()} • FREE (Pass)
                     </option>
                   ))}
-                <option value="practice_free">Practice Contest (Free)</option>
               </select>
             </div>
 

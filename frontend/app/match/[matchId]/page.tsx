@@ -30,7 +30,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
   const [match, setMatch] = useState<any>(null);
   const [telemetry, setTelemetry] = useState<any>(null);
   const [activeView, setActiveView] = useState<'contests' | 'squads' | 'commentary'>('contests');
-  const [selectedContestTab, setSelectedContestTab] = useState<'all' | 'standard' | 'multi_battlefield' | 'h2h' | 'private' | 'practice' | 'rookie' | 'guru'>('all');
+  const [selectedContestTab, setSelectedContestTab] = useState<'all' | 'mega' | 'battleground' | 'mini' | 'guru'>('all');
   const [loading, setLoading] = useState(true);
 
   // Win probability + prize breakup + Guru marketplace
@@ -98,128 +98,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
     }
   }, [token, match?.status, matchId]);
 
-  // Private Contests State
-  const [privateLoaded, setPrivateLoaded] = useState(false);
-  const [myCreatedPrivate, setMyCreatedPrivate] = useState<any[]>([]);
-  const [joinedPrivate, setJoinedPrivate] = useState<any[]>([]);
-  const [joinCode, setJoinCode] = useState('');
-  const [joinResult, setJoinResult] = useState<any>(null);
-  const [joinCodeError, setJoinCodeError] = useState<string | null>(null);
-  const [joinResolving, setJoinResolving] = useState(false);
-  const [showCreatePrivate, setShowCreatePrivate] = useState(false);
-  const [createForm, setCreateForm] = useState({ title: '', entry_fee: '100' });
-  const [createSubmitting, setCreateSubmitting] = useState(false);
-  const [createResult, setCreateResult] = useState<any>(null);
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  // Auto-load private contest if joinCode was passed in URL query param
-  useEffect(() => {
-    if (queryJoinCode) {
-      setSelectedContestTab('private');
-      setJoinCode(queryJoinCode.toUpperCase());
-      if (token) {
-        setJoinResolving(true);
-        apiGet(`/contests/private/${encodeURIComponent(queryJoinCode.toUpperCase())}`, token)
-          .then((res) => {
-            if (res?.success) setJoinResult(res);
-            else if (res?.error) setJoinCodeError(res.error);
-          })
-          .catch((err) => setJoinCodeError(err?.message || 'Invalid code'))
-          .finally(() => setJoinResolving(false));
-      }
-    }
-  }, [queryJoinCode, token]);
-
-  const fetchPrivateContests = async () => {
-    if (!token) return;
-    try {
-      const res = await apiGet(`/matches/${matchId}/private-contests`, token);
-      if (res?.success) {
-        setMyCreatedPrivate(res.created || []);
-        setJoinedPrivate(res.joined || []);
-      }
-    } catch (err) { /* silent */ }
-    finally { setPrivateLoaded(true); }
-  };
-
-  useEffect(() => {
-    if (selectedContestTab === 'private' && !privateLoaded && token) {
-      fetchPrivateContests();
-    }
-  }, [selectedContestTab, privateLoaded, token, matchId]);
-
-  const handleJoinByCode = async () => {
-    const code = joinCode.trim().toUpperCase();
-    if (!code) { setJoinCodeError('Invite code daalo'); return; }
-    setJoinResolving(true);
-    setJoinCodeError(null);
-    setJoinResult(null);
-    try {
-      const res = await apiGet(`/contests/private/${encodeURIComponent(code)}`, token!);
-      if (res?.success) {
-        setJoinResult(res);
-        fetchPrivateContests();
-      } else {
-        setJoinCodeError(res?.error || 'Invalid code');
-      }
-    } catch (err: any) {
-      setJoinCodeError(err?.message || 'Could not resolve invite code');
-    } finally {
-      setJoinResolving(false);
-    }
-  };
-
-  const handleCreatePrivate = async () => {
-    setCreateSubmitting(true);
-    setCreateError(null);
-    setCreateResult(null);
-    try {
-      const fee = Math.max(0, parseFloat(createForm.entry_fee) || 0);
-      const res = await apiPost(`/matches/${matchId}/private-contests`, {
-        title: createForm.title.trim() || 'My Cricket Ground',
-        entry_fee: fee,
-      }, token!);
-      if (res?.success) {
-        setCreateResult(res.contest);
-        setCreateForm({ title: '', entry_fee: '100' });
-        fetchPrivateContests();
-      } else {
-        setCreateError(res?.error || 'Failed to create private contest');
-      }
-    } catch (err: any) {
-      setCreateError(err?.message || 'Failed to create private contest');
-    } finally {
-      setCreateSubmitting(false);
-    }
-  };
-
-  const copyInviteCode = async (code: string) => {
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopiedCode(code);
-      setTimeout(() => setCopiedCode(null), 2000);
-    } catch (err) { /* clipboard unavailable */ }
-  };
-
-  const copyFieldDirectLink = async (code: string) => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const shareUrl = `${origin}/match/${matchId}?joinCode=${code}`;
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setCopiedCode(`link-${code}`);
-      setTimeout(() => setCopiedCode(null), 2500);
-    } catch (err) { /* clipboard unavailable */ }
-  };
-
-  const shareViaWhatsApp = (code: string, title?: string, fee?: number | string) => {
-    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    const shareUrl = `${origin}/match/${matchId}?joinCode=${code}`;
-    const text = `🏏 Join my private cricket ground "${title || 'Cricket Field'}" on Prime Dreems!\n🎟️ Entry: FREE with Tournament Pass\n🔑 Contest Code: ${code}\n👉 Join & Build XI: ${shareUrl}`;
-    if (typeof window !== 'undefined') {
-      window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
-    }
-  };
 
   const fetchMatchData = async () => {
     try {
@@ -384,11 +263,27 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
   const teamAPlayers = players.filter((p: any) => p.team_name === match.team_a);
   const teamBPlayers = players.filter((p: any) => p.team_name === match.team_b);
 
-  const filteredContests = (match.contests || []).filter((c: any) => {
+  // Only Battleground, Mega Contest, and Mini Contest (Strictly Exclude H2H and Private)
+  const allowedContests = (match.contests || []).filter((c: any) => {
+    if (c.is_private || c.type === 'private' || c.type === 'h2h') return false;
+    const title = String(c.title || '').toLowerCase();
+    if (/\b(h2h|head[\s-]*to[\s-]*head|duel|private)\b/i.test(title)) return false;
+    return true;
+  });
+
+  const filteredContests = allowedContests.filter((c: any) => {
     if (selectedContestTab === 'all') return true;
-    if (selectedContestTab === 'rookie') return /rookie/i.test(c.title || '') || (c.type === 'standard' && Number(c.entry_fee) <= 49);
-    if (selectedContestTab === 'guru') return false;
-    return c.type === selectedContestTab;
+    const title = String(c.title || '').toLowerCase();
+    if (selectedContestTab === 'mega') {
+      return c.type === 'mega' || title.includes('mega') || (c.total_spots || 0) >= 1000;
+    }
+    if (selectedContestTab === 'battleground') {
+      return c.type === 'multi_battlefield' || title.includes('battlefield') || title.includes('battleground');
+    }
+    if (selectedContestTab === 'mini') {
+      return c.type === 'mini' || title.includes('mini') || ((c.total_spots || 0) > 25 && (c.total_spots || 0) <= 250);
+    }
+    return true;
   });
 
   return (
@@ -764,25 +659,6 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
           {isLocked ? (
             <button
               disabled
-              title="Match is in progress / locked. H2H challenges are closed."
-              className="px-4 py-2 rounded-xl text-xs font-black bg-[#F1F5F9] text-[#94A3B8] border border-[#CBD5E1] cursor-not-allowed flex items-center gap-1.5 opacity-80"
-            >
-              <Lock className="w-4 h-4 text-[#94A3B8]" />
-              <span>H2H Locked</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => router.push(`/team-builder/${matchId}?h2h=1`)}
-              className="prime-btn-dark-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"
-            >
-              <Swords className="w-4 h-4 text-[#D97706]" />
-              <span>H2H Duel</span>
-            </button>
-          )}
-
-          {isLocked ? (
-            <button
-              disabled
               title="Match has started. Team creation is closed."
               className="px-4 py-2 rounded-xl text-xs font-black bg-[#F1F5F9] text-[#94A3B8] border border-[#CBD5E1] cursor-not-allowed flex items-center gap-1.5 opacity-80"
             >
@@ -812,22 +688,18 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
       {/* VIEW 1: CONTESTS LIST */}
       {activeView === 'contests' && (
         <div className="space-y-4">
-          {/* Sub tabs for contest types */}
+          {/* Sub tabs for contest types: Mega, Battleground, Mini */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1">
             {[
               { id: 'all', label: 'All Contests' },
-              { id: 'practice', label: 'Practice (Free)' },
-              { id: 'rookie', label: 'Rookie' },
-              { id: 'standard', label: 'Standard Pools' },
-              { id: 'multi_battlefield', label: 'PUBG Battlefield' },
-              { id: 'h2h', label: 'H2H Custom' },
-              { id: 'private', label: 'Private 🔒' },
-              { id: 'guru', label: 'Guru Experts' },
+              { id: 'mega', label: 'Mega Contest' },
+              { id: 'battleground', label: 'Battleground' },
+              { id: 'mini', label: 'Mini Contest' },
             ].map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => setSelectedContestTab(tab.id as any)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition ${
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-black uppercase tracking-wider transition ${
                   selectedContestTab === tab.id
                     ? 'bg-[#2563EB] text-white shadow-sm'
                     : 'bg-white text-[#475569] border border-[#CBD5E1] hover:bg-[#F1F5F9]'
@@ -917,231 +789,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
             </div>
           )}
 
-          {/* ─── PRIVATE CONTESTS (Invite Code) VIEW ─── */}
-          {selectedContestTab === 'private' && (
-            <div className="space-y-5">
-              {(isLive || match.is_locked) && (
-                <div className="rounded-xl bg-[#FEF2F2] border-2 border-[#FCA5A5] p-4 flex items-center gap-3 text-xs font-black text-[#991B1B]">
-                  <Lock className="w-5 h-5 shrink-0 text-[#DC2626]" />
-                  <span>🔒 Private contests cannot be created or joined after match lock / in-play (Official Fair Play Rules).</span>
-                </div>
-              )}
-
-              {/* Join by Code */}
-              <div className="prime-card-3d p-5 space-y-4">
-                <div className="flex items-center gap-2">
-                  <Swords className="w-4 h-4 text-[#2563EB]" />
-                  <h3 className="font-black text-sm uppercase text-[#0F172A]">Join Private Contest</h3>
-                </div>
-                <p className="text-xs text-[#64748B] font-bold">Get an invite code from a friend and enter it below.</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    value={joinCode}
-                    onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                    placeholder="e.g. AB7K2M9P"
-                    maxLength={12}
-                    disabled={isLive || match.is_locked}
-                    className="pd-input flex-1 min-w-[140px] font-mono font-black tracking-widest uppercase disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <button
-                    onClick={handleJoinByCode}
-                    disabled={joinResolving || !token || isLive || match.is_locked}
-                    className="prime-btn-3d !py-2.5 !px-4 !text-xs shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLive || match.is_locked ? 'Locked' : joinResolving ? 'Checking...' : 'Find Contest'}
-                  </button>
-                </div>
-                {joinCodeError && (
-                  <div className="pd-error"><AlertCircle className="w-4 h-4 shrink-0" /><span>{joinCodeError}</span></div>
-                )}
-                {joinResult?.contest && (
-                  <div className="rounded-xl bg-[#EFF6FF] border-2 border-[#93C5FD] p-4 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <h4 className="font-black text-sm text-[#0F172A] truncate">{joinResult.contest.title}</h4>
-                        <p className="text-xs text-[#475569] font-bold mt-0.5">{joinResult.match?.team_a} vs {joinResult.match?.team_b}</p>
-                      </div>
-                      <span className="font-mono font-black text-xs text-[#059669] bg-[#ECFDF5] px-2.5 py-1 rounded-lg border border-[#A7F3D0]">FREE (Pass)</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs font-bold text-[#475569]">
-                      <span>Contest ID: <span className="font-mono font-black text-[#2563EB]">#{joinResult.contest.contest_code || joinResult.contest.id?.slice(0,6)}</span></span>
-                      <span>{joinResult.contest.filled_spots}/{joinResult.contest.total_spots} joined</span>
-                    </div>
-                    <Link
-                      href={`/team-builder/${joinResult.match?.id || matchId}?contestId=${joinResult.contest.id}`}
-                      className="prime-btn-gold-3d w-full !py-2.5 !text-xs"
-                    >
-                      Join Contest (Free)
-                    </Link>
-                  </div>
-                )}
-              </div>
-
-              {/* Create Private Contest (Custom Field / Playground) */}
-              <div className="prime-card-3d p-5 space-y-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Users className="w-4 h-4 text-[#D97706] shrink-0" />
-                    <h3 className="font-black text-sm uppercase text-[#0F172A]">Create Private Playground / Field</h3>
-                  </div>
-                  <button
-                    onClick={() => setShowCreatePrivate(!showCreatePrivate)}
-                    disabled={isLocked}
-                    className="prime-btn-dark-3d !py-1.5 !px-3 !text-xs shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLocked ? '🔒 Contests Locked' : showCreatePrivate ? 'Close' : '+ Generate Field'}
-                  </button>
-                </div>
-
-                {showCreatePrivate && (
-                  <div className="space-y-3 rounded-xl bg-[#FFF7E6] border-2 border-[#FDE68A] p-4">
-                    <div>
-                      <label className="pd-label">Playground / Ground Name</label>
-                      <input
-                        value={createForm.title}
-                        onChange={(e) => setCreateForm({ ...createForm, title: e.target.value })}
-                        placeholder="e.g. Wankhede Friends Arena"
-                        maxLength={40}
-                        className="pd-input"
-                      />
-                    </div>
-                    <div className="p-3 rounded-lg bg-blue-100/70 border border-blue-300 text-xs text-[#1E3A8A] space-y-1">
-                      <p className="font-black">Private Contest Ground Rule:</p>
-                      <p className="leading-relaxed">
-                        Create your own private cricket ground to compete with friends. Lineup entries are free using your active Tournament Pass.
-                      </p>
-                    </div>
-                    {createError && (
-                      <div className="pd-error"><AlertCircle className="w-4 h-4 shrink-0" /><span>{createError}</span></div>
-                    )}
-                    <button
-                      onClick={handleCreatePrivate}
-                      disabled={createSubmitting || !token}
-                      className="prime-btn-gold-3d w-full !py-2.5 !text-xs"
-                    >
-                      {createSubmitting ? 'Generating Field...' : '🏟️ Generate Field & Get Share Link'}
-                    </button>
-                  </div>
-                )}
-
-                {createResult?.invite_code && (
-                  <div className="rounded-xl bg-[#ECFDF5] border-2 border-[#6EE7B7] p-4 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <span className="text-[10px] font-black uppercase text-[#047857] block">Ground Generated!</span>
-                        <h4 className="font-black text-sm text-[#065F46] truncate">🏟️ {createResult.title}</h4>
-                        <p className="text-xs text-[#047857] font-bold mt-0.5">Entry: FREE (Tournament Pass) • Private Field</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="pd-num flex-1 min-w-[120px] text-center font-mono font-black text-base tracking-[0.2em] text-[#065F46] bg-white rounded-xl border-2 border-[#6EE7B7] px-3 py-2 select-all">
-                        {createResult.invite_code}
-                      </span>
-                      <button
-                        onClick={() => copyFieldDirectLink(createResult.invite_code)}
-                        className="prime-btn-3d !py-2 !px-3 !text-xs shrink-0"
-                      >
-                        {copiedCode === `link-${createResult.invite_code}` ? 'Link Copied!' : 'Copy Link'}
-                      </button>
-                      <button
-                        onClick={() => shareViaWhatsApp(createResult.invite_code, createResult.title, 0)}
-                        className="bg-[#25D366] hover:bg-[#20BD5A] text-white font-black rounded-xl p-2 text-xs flex items-center gap-1 shadow-sm shrink-0"
-                        title="Share on WhatsApp"
-                      >
-                        <Share2 className="w-3.5 h-3.5" />
-                        <span>WhatsApp</span>
-                      </button>
-                    </div>
-                    <Link
-                      href={`/team-builder/${matchId}?contestId=${createResult.id}`}
-                      className="prime-btn-gold-3d w-full !py-2.5 !text-xs"
-                    >
-                      Build Your XI & Enter Private Field →
-                    </Link>
-                  </div>
-                )}
-              </div>
-
-              {/* My Created Private Contests */}
-              {myCreatedPrivate.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="font-black text-xs uppercase tracking-wider text-[#475569] flex items-center gap-2">
-                    <Shield className="w-3.5 h-3.5 text-[#2563EB]" /> Created by you ({myCreatedPrivate.length})
-                  </h4>
-                  {myCreatedPrivate.map((c: any) => (
-                    <div
-                      key={c.id}
-                      onClick={() => {
-                        if (!isLocked) {
-                          router.push(`/team-builder/${matchId}?contestId=${c.id}`);
-                        }
-                      }}
-                      className={`contest-card-3d p-4 flex flex-wrap items-center justify-between gap-3 group transition-all ${
-                        isLocked ? 'cursor-not-allowed opacity-90' : 'cursor-pointer hover:border-[#2563EB]'
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <h5 className="font-black text-sm text-[#0F172A] truncate">{c.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim()}</h5>
-                        <p className="text-xs text-[#64748B] font-bold">FREE Entry (Pass) • {c.filled_spots}/{c.total_spots} teams joined</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            copyInviteCode(c.invite_code);
-                          }}
-                          className="prime-btn-dark-3d !py-1.5 !px-2.5 !text-[10px] font-mono shrink-0 cursor-pointer"
-                          title={c.invite_code}
-                        >
-                          {copiedCode === c.invite_code ? 'Copied!' : c.invite_code}
-                        </button>
-                        {isLocked ? (
-                          <span className="rounded-lg border border-[#CBD5E1] bg-[#F1F5F9] px-2.5 py-1 text-[10px] font-black uppercase text-[#94A3B8]">
-                            Locked
-                          </span>
-                        ) : (
-                          <span className="text-xs font-black text-[#2563EB] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                            <span>Enter</span>
-                            <ChevronRight className="w-3.5 h-3.5" />
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Joined Private Contests */}
-              {joinedPrivate.length > 0 && (
-                <div className="space-y-3">
-                  <h4 className="font-black text-xs uppercase tracking-wider text-[#475569] flex items-center gap-2">
-                    <Trophy className="w-3.5 h-3.5 text-[#D97706]" /> Joined via code ({joinedPrivate.length})
-                  </h4>
-                  {joinedPrivate.map((c: any) => (
-                    <div key={c.id} className="contest-card-3d p-4 flex flex-wrap items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <h5 className="font-black text-sm text-[#0F172A] truncate">{c.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim()}</h5>
-                        <p className="text-xs text-[#64748B] font-bold">FREE Entry (Pass) • {c.filled_spots}/{c.total_spots} joined</p>
-                      </div>
-                      <span className="pd-num font-mono font-black text-xs text-[#065F46] bg-[#ECFDF5] px-2.5 py-1 rounded-lg border border-[#6EE7B7] shrink-0">
-                        Joined ✓
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {privateLoaded && myCreatedPrivate.length === 0 && joinedPrivate.length === 0 && !joinResult && (
-                <div className="text-center py-6 text-xs text-[#64748B] font-bold">
-                  No private contests yet — join with an invite code or create your own! 🔒
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ─── PUBLIC CONTESTS GRID ─── */}
-          {selectedContestTab !== 'private' && selectedContestTab !== 'guru' && (
+          {/* ─── PUBLIC CONTESTS GRID (Mega, Battleground, Mini) ─── */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredContests.map((c: any) => {
               const spotsLeft = Math.max(0, (c.total_spots || 100) - (c.filled_spots || 0));
@@ -1149,9 +797,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               const contestLocked = c.status !== 'open' || isLocked;
               const contestFull = spotsLeft === 0;
 
-              const firstPrize = Math.round(Number(c.prize_pool || 0) * (c.total_spots <= 2 ? 1 : 0.35));
-
-              const targetUrl = c.type === 'h2h' ? `/team-builder/${matchId}?h2h=1` : `/team-builder/${matchId}?contestId=${c.id}`;
+              const targetUrl = `/team-builder/${matchId}?contestId=${c.id}`;
 
               return (
                 <div
@@ -1241,7 +887,6 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               );
             })}
           </div>
-          )}
         </div>
       )}
 
