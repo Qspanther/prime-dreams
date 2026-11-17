@@ -400,36 +400,57 @@ class ManagerBot {
           });
         }
 
-        const CHUNK = 250;
+        const CHUNK = 500;
         for (let i = 0; i < allNewTeamPlayers.length; i += CHUNK) {
           await TeamPlayer.bulkCreate(allNewTeamPlayers.slice(i, i + CHUNK), { transaction: t });
         }
 
-        for (const tu of teamUpdates) {
-          await CricketTeam.update(
-            {
-              captain_id: tu.captain_id,
-              vice_captain_id: tu.vice_captain_id,
-              total_points: tu.total_points,
-              rank: tu.rank,
-              phase: tu.phase
-            },
-            { where: { id: tu.id }, transaction: t }
-          );
+        // High-Performance Bulk Updates for Bot Teams (O(1) roundtrips via SQL VALUES)
+        if (teamUpdates.length > 0) {
+          const CHUNK_TEAMS = 250;
+          for (let i = 0; i < teamUpdates.length; i += CHUNK_TEAMS) {
+            const chunk = teamUpdates.slice(i, i + CHUNK_TEAMS);
+            const values = chunk.map(tu => 
+              `('${tu.id}'::uuid, '${tu.captain_id}'::uuid, '${tu.vice_captain_id}'::uuid, ${tu.total_points}::float8, ${tu.rank}::int, ${tu.phase}::int)`
+            ).join(',');
+            await sequelize.query(`
+              UPDATE cricket_teams AS t
+              SET
+                captain_id = v.captain_id,
+                vice_captain_id = v.vice_captain_id,
+                total_points = v.total_points,
+                rank = v.rank,
+                phase = v.phase
+              FROM (VALUES ${values}) AS v(id, captain_id, vice_captain_id, total_points, rank, phase)
+              WHERE t.id = v.id
+            `, { transaction: t });
+          }
         }
 
-        for (const hu of humanUpdates) {
-          await CricketTeam.update(
-            { rank: hu.rank },
-            { where: { id: hu.id }, transaction: t }
-          );
+        // High-Performance Bulk Update for Human Teams
+        if (humanUpdates.length > 0) {
+          const values = humanUpdates.map(hu => `('${hu.id}'::uuid, ${hu.rank}::int)`).join(',');
+          await sequelize.query(`
+            UPDATE cricket_teams AS t
+            SET rank = v.rank
+            FROM (VALUES ${values}) AS v(id, rank)
+            WHERE t.id = v.id
+          `, { transaction: t });
         }
 
-        for (const pu of participantUpdates) {
-          await ContestParticipant.update(
-            { rank: pu.rank },
-            { where: { contest_id: pu.contest_id, team_id: pu.team_id }, transaction: t }
-          );
+        // High-Performance Bulk Update for Contest Participants
+        if (participantUpdates.length > 0) {
+          const CHUNK_PARTS = 250;
+          for (let i = 0; i < participantUpdates.length; i += CHUNK_PARTS) {
+            const chunk = participantUpdates.slice(i, i + CHUNK_PARTS);
+            const values = chunk.map(pu => `('${pu.team_id}'::uuid, ${pu.rank}::int)`).join(',');
+            await sequelize.query(`
+              UPDATE contest_participants AS p
+              SET rank = v.rank
+              FROM (VALUES ${values}) AS v(team_id, rank)
+              WHERE p.contest_id = '${contest.id}'::uuid AND p.team_id = v.team_id
+            `, { transaction: t });
+          }
         }
 
         // Record history for fair rotation across matches

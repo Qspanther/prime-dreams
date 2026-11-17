@@ -31,7 +31,7 @@ async function getCachedBots() {
     where: { is_bot: true },
     attributes: ['id', 'email', 'name', 'username'],
     order: [['created_at', 'ASC']],
-    limit: 1500,
+    limit: 10000,
     raw: true
   });
   cachedBots = bots;

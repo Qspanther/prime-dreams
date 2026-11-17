@@ -150,79 +150,81 @@ async function deployPreContestCricketBots(matchId, contestId = null, botCount =
       return Math.random() - 0.5;
     });
 
-    const botsToRegister = sortedBots.slice(0, countToDeploy);
+    const botsToRegister = [];
+    for (let i = 0; i < countToDeploy; i++) {
+      botsToRegister.push(sortedBots[i % sortedBots.length]);
+    }
     if (botsToRegister.length === 0) continue;
 
-    const newTeams = [];
-    const newTeamPlayers = [];
-    const newParticipants = [];
+    const BATCH_SIZE = 200;
+    let deployedForThisContest = 0;
 
-    for (let i = 0; i < botsToRegister.length; i++) {
-      const bot = botsToRegister[i];
-      const lineup = buildValidCricketLineup(matchPlayers);
-      const curBotCount = (botTeamCounts.get(bot.id) || 0) + 1;
-      botTeamCounts.set(bot.id, curBotCount);
-      const suffix = curBotCount > 1 ? ` (T${curBotCount})` : '';
-      const teamName = `${bot.name.split(' ')[0]}'s XI${suffix}`;
+    for (let startIdx = 0; startIdx < botsToRegister.length; startIdx += BATCH_SIZE) {
+      const batchBots = botsToRegister.slice(startIdx, startIdx + BATCH_SIZE);
+      const batchTeams = [];
+      const batchTeamPlayers = [];
+      const batchParticipants = [];
 
-      const teamId = uuidv4();
-      newTeams.push({
-        id: teamId,
-        user_id: bot.id,
-        match_id: matchId,
-        contest_id: contest.id,
-        team_name: teamName,
-        captain_id: lineup.captain.id,
-        vice_captain_id: lineup.viceCaptain.id,
-        total_points: 0,
-      });
+      for (let i = 0; i < batchBots.length; i++) {
+        const bot = batchBots[i];
+        const lineup = buildValidCricketLineup(matchPlayers);
+        const curBotCount = (botTeamCounts.get(bot.id) || 0) + 1;
+        botTeamCounts.set(bot.id, curBotCount);
+        const suffix = curBotCount > 1 ? ` (T${curBotCount})` : '';
+        const teamName = `${bot.name.split(' ')[0]}'s XI${suffix}`;
 
-      lineup.players.forEach(p => {
-        newTeamPlayers.push({
-          id: uuidv4(),
-          team_id: teamId,
-          player_id: p.id,
-          is_captain: p.id === lineup.captain.id,
-          is_vice_captain: p.id === lineup.viceCaptain.id,
-          points_earned: 0,
+        const teamId = uuidv4();
+        batchTeams.push({
+          id: teamId,
+          user_id: bot.id,
+          match_id: matchId,
+          contest_id: contest.id,
+          team_name: teamName,
+          captain_id: lineup.captain.id,
+          vice_captain_id: lineup.viceCaptain.id,
+          total_points: 0,
         });
-      });
 
-      newParticipants.push({
-        id: uuidv4(),
-        contest_id: contest.id,
-        team_id: teamId,
-        user_id: bot.id,
-        rank: null,
-        prize_won: 0,
-      });
+        lineup.players.forEach(p => {
+          batchTeamPlayers.push({
+            id: uuidv4(),
+            team_id: teamId,
+            player_id: p.id,
+            is_captain: p.id === lineup.captain.id,
+            is_vice_captain: p.id === lineup.viceCaptain.id,
+            points_earned: 0,
+          });
+        });
+
+        batchParticipants.push({
+          id: uuidv4(),
+          contest_id: contest.id,
+          team_id: teamId,
+          user_id: bot.id,
+          rank: null,
+          prize_won: 0,
+        });
+      }
+
+      await CricketTeam.bulkCreate(batchTeams);
+      await TeamPlayer.bulkCreate(batchTeamPlayers);
+      await ContestParticipant.bulkCreate(batchParticipants);
+      deployedForThisContest += batchTeams.length;
     }
 
-    // Bulk save in chunks of 200
-    const CHUNK = 200;
-    for (let i = 0; i < newTeams.length; i += CHUNK) {
-      await CricketTeam.bulkCreate(newTeams.slice(i, i + CHUNK));
-    }
-    for (let i = 0; i < newTeamPlayers.length; i += CHUNK) {
-      await TeamPlayer.bulkCreate(newTeamPlayers.slice(i, i + CHUNK));
-    }
-    for (let i = 0; i < newParticipants.length; i += CHUNK) {
-      await ContestParticipant.bulkCreate(newParticipants.slice(i, i + CHUNK));
-    }
-
-    const updatedFilled = contest.filled_spots + newTeams.length;
+    const updatedFilled = contest.filled_spots + deployedForThisContest;
     await contest.update({ filled_spots: updatedFilled });
 
     if (contest.type === 'multi_battlefield') {
       await handleBattlefieldFill(contest);
     }
 
-    totalDeployedAcrossContests += newTeams.length;
+    totalDeployedAcrossContests += deployedForThisContest;
     contestSummaries.push({
       contestId: contest.id,
       title: contest.title,
       type: contest.type,
-      deployed: newTeams.length,
+      deployed: deployedForThisContest,
       filledSpots: updatedFilled,
       totalSpots: contest.total_spots
     });

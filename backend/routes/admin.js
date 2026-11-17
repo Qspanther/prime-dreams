@@ -10,6 +10,7 @@ const {
 const config = require('../config');
 const sequelize = require('../db/index');
 const { deleteMatchPermanently } = require('../services/cricketDeleteHelper');
+const { deployPreContestCricketBots } = require('./bot-manager');
 
 const router = express.Router();
 
@@ -1157,9 +1158,14 @@ router.post('/cricket/matches/verify-and-create', async (req, res) => {
       });
     }
 
+    // Automatically trigger autonomous pre-contest bot deployment for eligible contests (Mega, Battlefield, Mini)
+    deployPreContestCricketBots(newMatch.id)
+      .then(res => console.log(`🤖 [Admin Auto-Bot] Successfully deployed ${res.registered} bots across ${res.contestsProcessed} contests for "${newMatch.title}"`))
+      .catch(botErr => console.warn(`⚠️ [Admin Auto-Bot Notice] ${botErr.message}`));
+
     res.json({
       success: true,
-      message: 'Match verified against live DB and created successfully!',
+      message: 'Match verified against live DB and created successfully with automated bot deployment!',
       match_id: newMatch.id,
     });
   } catch (error) {
@@ -1273,6 +1279,11 @@ router.put('/cricket/matches/:id', async (req, res) => {
       }
     }
 
+    // Automatically check and deploy bots for eligible contests if needed
+    deployPreContestCricketBots(match.id)
+      .then(res => console.log(`🤖 [Admin Auto-Bot Update] Checked/deployed ${res.registered} bots for "${match.title}"`))
+      .catch(botErr => console.warn(`⚠️ [Admin Auto-Bot Notice] ${botErr.message}`));
+
     res.json({
       success: true,
       message: `Match "${match.title}" and its contests have been successfully updated!`,
@@ -1280,6 +1291,40 @@ router.put('/cricket/matches/:id', async (req, res) => {
     });
   } catch (error) {
     console.error('Match edit error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /admin/cricket/matches/:id/deploy-bots (Manually trigger bot deployment or refill for a match)
+router.post('/cricket/matches/:id/deploy-bots', async (req, res) => {
+  try {
+    const { contest_id, bot_count } = req.body;
+    const match = await CricketMatch.findByPk(req.params.id);
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+
+    const result = await deployPreContestCricketBots(
+      match.id,
+      contest_id || null,
+      bot_count ? parseInt(bot_count, 10) : null
+    );
+    res.json(result);
+  } catch (error) {
+    console.error('Manual bot deployment error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /admin/cricket/matches/:id/rearrange-bots (Trigger tactical rearrangement anytime)
+router.post('/cricket/matches/:id/rearrange-bots', async (req, res) => {
+  try {
+    const { rearrangeBotsForEndGame } = require('../services/botScheduler');
+    const match = await CricketMatch.findByPk(req.params.id);
+    if (!match) return res.status(404).json({ error: 'Match not found' });
+
+    const result = await rearrangeBotsForEndGame(match.id);
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error('Manual rearrangement error:', error);
     res.status(500).json({ error: error.message });
   }
 });
