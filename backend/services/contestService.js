@@ -63,15 +63,35 @@ async function checkContestLocks() {
     });
 
     for (const match of lockableMatches) {
-      const lockTime = new Date(match.start_time.getTime() - (match.lock_time_minutes || 15) * 60000);
-      if (now >= lockTime || ['live', 'completed'].includes(match.status)) {
+      const lockMinutes = match.lock_time_minutes || 15;
+      const lockTime = new Date(match.start_time.getTime() - lockMinutes * 60000);
+      const isLocked = now >= lockTime || ['live', 'completed'].includes(match.status);
+
+      if (isLocked) {
         // Lock all open contests for this match
-        for (const contest of match.contests) {
+        for (const contest of (match.contests || [])) {
           if (contest.status === 'open') {
             await contest.update({ status: 'locked' });
-            console.log(`🔒 [LockEngine] Contest "${contest.title}" (${contest.id}) locked. Match starts at ${match.start_time}`);
+            console.log(`🔒 [LockEngine] Contest "${contest.title}" (${contest.id}) locked. Deadline reached (${lockMinutes}m before match).`);
           }
         }
+
+        // Auto-refund pending H2H challenges whose match has locked
+        try {
+          const expiredChallenges = await H2HChallenge.findAll({
+            where: { match_id: match.id, status: 'pending' },
+          });
+          for (const ch of expiredChallenges) {
+            await rejectH2HChallenge({ challengeId: ch.id, userId: ch.sender_id }).catch(() => {});
+            console.log(`↩️ [LockEngine] Expired H2H challenge ${ch.id} refunded on match lock.`);
+          }
+        } catch (_) {}
+      }
+
+      // Auto-transition upcoming -> live if match start time has arrived
+      if (match.status === 'upcoming' && now >= match.start_time) {
+        await match.update({ status: 'live' });
+        console.log(`⚡ [MatchLifecycle] Match "${match.title}" (${match.id}) transitioned to LIVE.`);
       }
     }
   } catch (err) {
