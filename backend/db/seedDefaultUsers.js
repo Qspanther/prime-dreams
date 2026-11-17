@@ -64,6 +64,9 @@ async function seedDefaultUsers() {
         otp_verified: true,
         kyc_status: acc.kyc_status,
         age: acc.age,
+        subscription_active_until: new Date(Date.now() + 365 * 24 * 3600 * 1000),
+        subscription_type: 'Prime VIP Pass',
+        subscription_max_teams: 6,
       });
       console.log('✅ Created User:', acc.email, 'Role:', acc.role);
     } else {
@@ -76,6 +79,9 @@ async function seedDefaultUsers() {
         otp_verified: true,
         kyc_status: acc.kyc_status,
         age: acc.age,
+        subscription_active_until: user.subscription_active_until || new Date(Date.now() + 365 * 24 * 3600 * 1000),
+        subscription_type: user.subscription_type && user.subscription_type !== 'none' ? user.subscription_type : 'Prime VIP Pass',
+        subscription_max_teams: user.subscription_max_teams || 6,
       });
       console.log('🔄 Updated User:', acc.email, 'Role:', acc.role);
     }

@@ -6,7 +6,7 @@ const { Op } = require('sequelize');
 const { 
   CricketMatch, CricketPlayer, MatchContest, 
   CricketTeam, TeamPlayer, H2HChallenge, User, Wallet,
-  Transaction, Notification
+  Transaction, Notification, SystemSetting
 } = require('../db/models');
 const sequelize = require('../db');
 const { authenticate, optionalAuthenticate, isAdmin } = require('../middleware/auth');
@@ -176,31 +176,29 @@ async function ensureContestTeamsInDB(match, contest, players) {
     if (!contest || !match || !players || players.length < 11) return;
 
     const existingCount = await CricketTeam.count({ where: { contest_id: contest.id } });
-    if (existingCount >= 20) return;
+    const targetTeams = Math.max(Number(contest.filled_spots) || 0, Number(contest.bot_spots) || 0, 10);
+    const needed = targetTeams - existingCount;
+    if (needed <= 0) return;
 
     let bots = await User.findAll({
       where: { is_bot: true },
       attributes: ['id', 'username', 'name'],
-      limit: 60,
+      limit: Math.min(Math.max(targetTeams, 100), 5000),
     });
 
-    if (bots.length < 20) {
+    if (bots.length === 0) {
       const { seedBots } = require('../services/seed-10000-bots');
-      await seedBots(50);
+      await seedBots(Math.min(targetTeams, 500));
       bots = await User.findAll({
         where: { is_bot: true },
         attributes: ['id', 'username', 'name'],
-        limit: 60,
+        limit: Math.min(Math.max(targetTeams, 100), 5000),
       });
     }
 
     if (bots.length === 0) return;
 
     const { buildValidCricketLineup } = require('../services/botScheduler');
-
-    const targetTeams = Math.min(Math.max(contest.filled_spots || 25, 25), 40);
-    const needed = targetTeams - existingCount;
-    if (needed <= 0) return;
 
     const newTeams = [];
     const newTeamPlayers = [];
@@ -211,7 +209,7 @@ async function ensureContestTeamsInDB(match, contest, players) {
       const teamId = uuidv4();
       const teamNumber = Math.floor((existingCount + i) / bots.length) + 1;
       const teamSuffix = teamNumber > 1 ? ` (T${teamNumber})` : '';
-      const botFirstName = (bot.name || 'Pro').split(' ')[0];
+      const botFirstName = (bot.name || bot.username || 'Pro').split(' ')[0];
       const teamName = `${botFirstName}'s XI${teamSuffix}`;
 
       let calculatedPoints = 0;
@@ -219,7 +217,7 @@ async function ensureContestTeamsInDB(match, contest, players) {
         let pts = Number(p.points) || 0;
         if (pts === 0) {
           const charCode = (p.name || 'P').charCodeAt(0);
-          pts = 20 + ((charCode * 19 + i * 11) % 65);
+          pts = 20 + ((charCode * 19 + (existingCount + i) * 11) % 65);
         }
         const mult = p.id === lineup.captain?.id ? 2.0 : p.id === lineup.viceCaptain?.id ? 1.5 : 1.0;
         const ptsEarned = Math.round(pts * mult * 10) / 10;
@@ -248,8 +246,14 @@ async function ensureContestTeamsInDB(match, contest, players) {
     }
 
     if (newTeams.length > 0) {
-      await CricketTeam.bulkCreate(newTeams);
-      await TeamPlayer.bulkCreate(newTeamPlayers);
+      const CHUNK_SIZE = 250;
+      for (let c = 0; c < newTeams.length; c += CHUNK_SIZE) {
+        await CricketTeam.bulkCreate(newTeams.slice(c, c + CHUNK_SIZE));
+      }
+      const TP_CHUNK_SIZE = 500;
+      for (let c = 0; c < newTeamPlayers.length; c += TP_CHUNK_SIZE) {
+        await TeamPlayer.bulkCreate(newTeamPlayers.slice(c, c + TP_CHUNK_SIZE));
+      }
     }
   } catch (err) {
     console.error('ensureContestTeamsInDB error:', err.message);
@@ -533,12 +537,13 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
 
     if (selectedContest) {
       batchPage = Math.max(1, parseInt(req.query.page, 10) || 1);
-      batchLimit = req.query.all === 'true' ? 5000 : Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 10));
+      batchLimit = req.query.all === 'true' ? 5000 : Math.max(1, Math.min(250, parseInt(req.query.limit, 10) || 10));
       const offset = (batchPage - 1) * batchLimit;
       const searchQuery = (req.query.search || req.query.q || '').trim();
 
       totalContestTeams = await CricketTeam.count({ where: { contest_id: selectedContest.id } });
-      if (totalContestTeams === 0) {
+      const requiredFilled = Math.max(Number(selectedContest.filled_spots) || 0, Number(selectedContest.bot_spots) || 0);
+      if (totalContestTeams === 0 || totalContestTeams < requiredFilled) {
         await ensureContestTeamsInDB(match, selectedContest, players);
         totalContestTeams = await CricketTeam.count({ where: { contest_id: selectedContest.id } });
       }
@@ -1276,7 +1281,7 @@ router.post('/matches/:id/teams', authenticate, async (req, res) => {
     if (req.user && !req.user.is_bot && req.user.role !== 'admin') {
       const userRecord = await User.findByPk(req.user.id, { transaction });
       const freeModeSetting = await SystemSetting.findOne({ where: { key: 'subscription_free_mode' }, transaction });
-      const isFreeMode = freeModeSetting && freeModeSetting.value === 'true';
+      const isFreeMode = freeModeSetting ? freeModeSetting.value === 'true' : true;
 
       const hasPaidSub = userRecord?.subscription_active_until && new Date(userRecord.subscription_active_until) > now;
       const hasReferralPass = userRecord?.referral_pass_valid_until && new Date(userRecord.referral_pass_valid_until) > now;
@@ -1494,7 +1499,7 @@ router.get('/matches/:id/my-teams', authenticate, async (req, res) => {
     const now = new Date();
     const userRecord = await User.findByPk(req.user.id);
     const freeModeSetting = await SystemSetting.findOne({ where: { key: 'subscription_free_mode' } });
-    const isFreeMode = freeModeSetting && freeModeSetting.value === 'true';
+    const isFreeMode = freeModeSetting ? freeModeSetting.value === 'true' : true;
 
     const hasPaidSub = userRecord?.subscription_active_until && new Date(userRecord.subscription_active_until) > now;
     const hasReferralPass = userRecord?.referral_pass_valid_until && new Date(userRecord.referral_pass_valid_until) > now;
@@ -1571,7 +1576,7 @@ router.post('/matches/:id/teams/:teamId/clone', authenticate, async (req, res) =
     if (req.user && !req.user.is_bot && req.user.role !== 'admin') {
       const userRecord = await User.findByPk(req.user.id);
       const freeModeSetting = await SystemSetting.findOne({ where: { key: 'subscription_free_mode' } });
-      const isFreeMode = freeModeSetting && freeModeSetting.value === 'true';
+      const isFreeMode = freeModeSetting ? freeModeSetting.value === 'true' : true;
 
       const hasPaidSub = userRecord?.subscription_active_until && new Date(userRecord.subscription_active_until) > now;
       const hasReferralPass = userRecord?.referral_pass_valid_until && new Date(userRecord.referral_pass_valid_until) > now;
