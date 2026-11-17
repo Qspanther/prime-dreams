@@ -11,6 +11,8 @@ export interface PitchPlayer {
   role: 'WK' | 'BAT' | 'AR' | 'BOWL' | string;
   credits: number;
   points?: number;
+  points_earned?: number;
+  rank?: number;
   photo_url?: string;
   is_captain?: boolean;
   is_vice_captain?: boolean;
@@ -21,6 +23,8 @@ interface CricketPitchViewProps {
   onClose: () => void;
   mode?: 'view' | 'select_cap';
   teamName?: string;
+  teamRank?: number | null;
+  teamTotalPoints?: number | null;
   onTeamNameChange?: (name: string) => void;
   players: PitchPlayer[];
   captainId?: string | null;
@@ -54,6 +58,8 @@ export default function CricketPitchView({
   onClose,
   mode = 'view',
   teamName = 'My Prime XI',
+  teamRank = null,
+  teamTotalPoints = null,
   onTeamNameChange,
   players,
   captainId,
@@ -170,8 +176,15 @@ export default function CricketPitchView({
           }`}>
             {displayName}
           </div>
-          <div className="text-[9px] sm:text-[10px] font-bold text-amber-200 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
-            {p.credits || 9.0} CR
+          <div className="flex flex-col items-center justify-center gap-0.5 mt-0.5">
+            <span className="text-[9px] sm:text-[10px] font-bold text-amber-200 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+              {p.credits || 9.0} CR
+            </span>
+            {mode === 'view' && (
+              <span className="text-[9px] sm:text-[10px] font-mono font-black text-emerald-300 bg-emerald-950/90 px-1.5 py-0.2 rounded border border-emerald-500/50 shadow-xs">
+                +{Number(p.points_earned ?? (isCap ? (p.points || 0) * 2 : isVC ? (p.points || 0) * 1.5 : (p.points || 0))).toFixed(1)} pts
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -196,13 +209,25 @@ export default function CricketPitchView({
                 />
               </div>
             ) : (
-              <h3 className="font-black text-white text-sm sm:text-base flex items-center gap-2 truncate">
-                <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
-                <span>{teamName}</span>
-                <span className="text-xs font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-black text-white text-sm sm:text-base flex items-center gap-1.5 truncate">
+                  <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{teamName}</span>
+                </h3>
+                {teamRank && (
+                  <span className="text-xs font-black px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/40 shrink-0 font-mono">
+                    Rank #{teamRank}
+                  </span>
+                )}
+                {teamTotalPoints !== undefined && teamTotalPoints !== null && (
+                  <span className="text-xs font-black px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 shrink-0 font-mono">
+                    ⚡ {Number(teamTotalPoints || 0).toFixed(1)} pts
+                  </span>
+                )}
+                <span className="text-xs font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 shrink-0">
                   {players.length}/11 Players
                 </span>
-              </h3>
+              </div>
             )}
           </div>
 

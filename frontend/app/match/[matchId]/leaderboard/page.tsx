@@ -547,10 +547,10 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                               <div className="flex items-center gap-1.5">
                                 <span className="font-black text-xs text-[#0F172A] truncate">{player.name}</span>
                                 {player.is_captain && (
-                                  <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[9px] font-black flex items-center justify-center shrink-0">C</span>
+                                  <span className="px-1.5 py-0.2 rounded bg-blue-600 text-white text-[9px] font-black shrink-0">C (2×)</span>
                                 )}
                                 {player.is_vice_captain && (
-                                  <span className="w-4 h-4 rounded-full bg-amber-600 text-white text-[9px] font-black flex items-center justify-center shrink-0">VC</span>
+                                  <span className="px-1.5 py-0.2 rounded bg-amber-600 text-white text-[9px] font-black shrink-0">VC (1.5×)</span>
                                 )}
                               </div>
                               <div className="flex items-center gap-1.5 text-[10px] text-[#64748B] font-semibold mt-0.5">
@@ -562,11 +562,16 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                               </div>
                             </div>
                             <div className="text-right shrink-0">
-                              <span className="font-mono text-xs font-black text-[#D97706] block">
-                                {Number(player.points_earned || player.points || 0).toFixed(1)} pts
+                              <span className="font-mono text-xs font-black text-emerald-600 block">
+                                +{Number(player.points_earned ?? (player.is_captain ? (player.points || 0) * 2 : player.is_vice_captain ? (player.points || 0) * 1.5 : (player.points || 0))).toFixed(1)} pts
                               </span>
+                              {(player.is_captain || player.is_vice_captain) && (
+                                <span className="text-[8px] font-semibold text-slate-500 block">
+                                  Base: {Number(player.points || 0).toFixed(1)}
+                                </span>
+                              )}
                               <span className="text-[9px] font-bold text-[#64748B]">
-                                #{player.rank || '—'}
+                                Rank #{player.rank || '—'}
                               </span>
                             </div>
                           </div>

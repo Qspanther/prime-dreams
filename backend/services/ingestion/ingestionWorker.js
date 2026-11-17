@@ -514,6 +514,7 @@ async function updatePlayerFantasyPoints(matchId, scoreData, eventId, playerSnap
 
       if (Math.abs(newPts - oldPts) >= 0.5) {
         await player.update({ points: newPts });
+        player.points = newPts;
         await auditPointsChange(matchId, player.id, player.name, 'stats_update', oldPts, newPts, eventId);
       }
     }

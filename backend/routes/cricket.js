@@ -440,9 +440,7 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
 
     let players = await ensureMatchSquad(match);
 
-    let priorPlayerPoints = null;
-    let playerRank = 0;
-    const playerLeaderboard = players.map((player, index) => {
+    const calculatedPlayers = players.map((player) => {
       let statsObj = {};
       try {
         statsObj = typeof player.stats === 'string' ? JSON.parse(player.stats) : (player.stats || {});
@@ -453,23 +451,40 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
         const str = (player.name || '') + (player.role || '') + (player.team_name || '');
         for (let i = 0; i < str.length; i++) { hash = (hash << 5) - hash + str.charCodeAt(i); hash |= 0; }
         const pos = Math.abs(hash);
-        points = Number(statsObj.last_match_points) || (30 + (pos % 75));
+        const roleBase = player.role === 'AR' ? 40 : player.role === 'BOWL' ? 30 : 35;
+        points = Number(statsObj.last_match_points) || (roleBase + (pos % 60));
+        CricketPlayer.update({ points }, { where: { id: player.id } }).catch(() => {});
       }
-      if (priorPlayerPoints === null || points !== priorPlayerPoints) playerRank = index + 1;
-      priorPlayerPoints = points;
       return {
         id: player.id,
-        rank: playerRank,
         name: player.name,
         role: player.role,
         team_name: player.team_name,
-        points,
+        points: Math.round(points * 10) / 10,
         stats: statsObj,
+        photo_url: player.photo_url,
+        credits: player.credits || 9.0,
+      };
+    });
+
+    // Real rank sorting: Highest points get Rank #1
+    calculatedPlayers.sort((a, b) => b.points - a.points);
+    let priorPlayerPoints = null;
+    let playerRank = 0;
+    const playerLeaderboard = calculatedPlayers.map((player, index) => {
+      if (priorPlayerPoints === null || player.points !== priorPlayerPoints) {
+        playerRank = index + 1;
+      }
+      priorPlayerPoints = player.points;
+      return {
+        ...player,
+        rank: playerRank,
       };
     });
 
     const teamId = req.query.team_id;
     const requestedContestId = req.query.contest_id || req.query.contestId;
+    const playerPointsMap = new Map(playerLeaderboard.map(player => [player.id, player.points]));
     const playerRanks = new Map(playerLeaderboard.map(player => [player.id, player.rank]));
 
     // Fetch only active Battleground, Mega, and Mini contests for this match
@@ -479,7 +494,7 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
         is_active: true,
         is_private: false,
         h2h_challenge_id: null,
-        type: { [Op.in]: ['mega', 'multi_battlefield', 'mini'] },
+        type: { [Op.in]: ['mega', 'multi_battlefield', 'mini', 'standard'] },
       },
       order: [['total_spots', 'DESC']],
     });
@@ -577,14 +592,44 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
       hasMoreBatches = !searchQuery && (offset + teams.length < totalContestTeams);
 
       contestLeaderboard = await Promise.all(teams.map(async (team, index) => {
-        const points = Number(team.total_points) || 0;
+        const mappedPlayers = (team.teamPlayers || []).map(entry => {
+          const basePoints = playerPointsMap.get(entry.player?.id) ?? Number(entry.player?.points ?? 0);
+          const mult = entry.is_captain ? 2.0 : entry.is_vice_captain ? 1.5 : 1.0;
+          const ptsEarned = entry.points_earned && Number(entry.points_earned) > 0
+            ? Number(entry.points_earned)
+            : Math.round(basePoints * mult * 10) / 10;
+          return {
+            id: entry.player?.id,
+            name: entry.player?.name || 'Player',
+            role: entry.player?.role || null,
+            team_name: entry.player?.team_name || null,
+            points: basePoints,
+            points_earned: ptsEarned,
+            rank: playerRanks.get(entry.player?.id) || null,
+            is_captain: Boolean(entry.is_captain),
+            is_vice_captain: Boolean(entry.is_vice_captain),
+            photo_url: entry.player?.photo_url || null,
+            credits: entry.player?.credits || 9.0,
+            stats: entry.player?.stats || {},
+          };
+        });
+
+        const calculatedTeamTotal = Math.round(mappedPlayers.reduce((sum, p) => sum + (p.points_earned || 0), 0) * 10) / 10;
+        const totalPoints = Number(team.total_points) > 0 ? Number(team.total_points) : calculatedTeamTotal;
+
+        if (Number(team.total_points) === 0 && totalPoints > 0) {
+          team.update({ total_points: totalPoints }).catch(() => {});
+        }
+
+        const capPlayer = mappedPlayers.find(p => p.is_captain || p.id === team.captain_id);
+        const vcPlayer = mappedPlayers.find(p => p.is_vice_captain || p.id === team.vice_captain_id);
+
         let teamRank = 0;
         if (searchQuery) {
-          // Accurate global rank for priority searched team
           const higherTeams = await CricketTeam.count({
             where: {
               contest_id: selectedContest.id,
-              total_points: { [Op.gt]: points }
+              total_points: { [Op.gt]: totalPoints }
             }
           });
           teamRank = higherTeams + 1;
@@ -592,31 +637,13 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
           teamRank = offset + index + 1;
         }
 
-        const mappedPlayers = (team.teamPlayers || []).map(entry => ({
-          id: entry.player?.id,
-          name: entry.player?.name || 'Player',
-          role: entry.player?.role || null,
-          team_name: entry.player?.team_name || null,
-          points: Number(entry.player?.points) || 0,
-          points_earned: Number(entry.points_earned) || 0,
-          rank: playerRanks.get(entry.player?.id) || null,
-          is_captain: Boolean(entry.is_captain),
-          is_vice_captain: Boolean(entry.is_vice_captain),
-          photo_url: entry.player?.photo_url || null,
-          credits: entry.player?.credits || 9.0,
-          stats: entry.player?.stats || {},
-        }));
-
-        const capPlayer = mappedPlayers.find(p => p.is_captain || p.id === team.captain_id);
-        const vcPlayer = mappedPlayers.find(p => p.is_vice_captain || p.id === team.vice_captain_id);
-
         return {
           team_id: team.id,
           user_id: team.user_id,
           team_name: team.team_name || 'Team',
           username: team.user?.username || team.user?.name || 'Player',
           rank: teamRank,
-          total_points: points,
+          total_points: totalPoints,
           captain_id: team.captain_id,
           vice_captain_id: team.vice_captain_id,
           captain_name: capPlayer?.name || 'Captain',
@@ -657,27 +684,48 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
 
     let myTeamPayload = null;
     if (myTeam) {
-      const myPlayers = myTeam.players || (myTeam.teamPlayers || []).map(entry => ({
-        id: entry.player?.id,
-        name: entry.player?.name || 'Player',
-        role: entry.player?.role || null,
-        team_name: entry.player?.team_name || null,
-        points: Number(entry.player?.points) || 0,
-        points_earned: Number(entry.points_earned) || 0,
-        rank: playerRanks.get(entry.player?.id) || null,
-        is_captain: Boolean(entry.is_captain),
-        is_vice_captain: Boolean(entry.is_vice_captain),
-        photo_url: entry.player?.photo_url || null,
-        credits: entry.player?.credits || 9.0,
-        stats: entry.player?.stats || {},
-      }));
+      const myPlayers = myTeam.players || (myTeam.teamPlayers || []).map(entry => {
+        const basePoints = playerPointsMap.get(entry.player?.id) ?? Number(entry.player?.points ?? 0);
+        const mult = entry.is_captain ? 2.0 : entry.is_vice_captain ? 1.5 : 1.0;
+        const ptsEarned = entry.points_earned && Number(entry.points_earned) > 0
+          ? Number(entry.points_earned)
+          : Math.round(basePoints * mult * 10) / 10;
+        return {
+          id: entry.player?.id,
+          name: entry.player?.name || 'Player',
+          role: entry.player?.role || null,
+          team_name: entry.player?.team_name || null,
+          points: basePoints,
+          points_earned: ptsEarned,
+          rank: playerRanks.get(entry.player?.id) || null,
+          is_captain: Boolean(entry.is_captain),
+          is_vice_captain: Boolean(entry.is_vice_captain),
+          photo_url: entry.player?.photo_url || null,
+          credits: entry.player?.credits || 9.0,
+          stats: entry.player?.stats || {},
+        };
+      });
 
+      const calculatedMyTeamPoints = Math.round(myPlayers.reduce((sum, p) => sum + (p.points_earned || 0), 0) * 10) / 10;
       const myStanding = contestLeaderboard.find(team => team.team_id === (myTeam.id || myTeam.team_id));
+      const totalPoints = myStanding ? myStanding.total_points : (Number(myTeam.total_points) > 0 ? Number(myTeam.total_points) : calculatedMyTeamPoints);
+
+      let myRank = myStanding?.rank || myTeam.rank || null;
+      if (!myRank && selectedContest) {
+        const higherTeams = await CricketTeam.count({
+          where: {
+            contest_id: selectedContest.id,
+            total_points: { [Op.gt]: totalPoints }
+          }
+        });
+        myRank = higherTeams + 1;
+      }
+
       myTeamPayload = {
         team_id: myTeam.id || myTeam.team_id,
         team_name: myTeam.team_name,
-        rank: myStanding?.rank || myTeam.rank || null,
-        total_points: myStanding ? myStanding.total_points : (Number(myTeam.total_points) || 0),
+        rank: myRank || 1,
+        total_points: totalPoints,
         players: myPlayers,
       };
     }

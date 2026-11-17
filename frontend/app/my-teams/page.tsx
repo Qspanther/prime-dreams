@@ -229,17 +229,26 @@ export default function MyTeamsPage() {
           isOpen={!!previewTeam}
           onClose={() => setPreviewTeam(null)}
           teamName={previewTeam.team_name}
-          players={(previewTeam.players || []).map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            team_name: p.team_name,
-            role: p.role,
-            credits: p.credits || 9.0,
-            points: p.points || 0,
-            photo_url: p.photo_url,
-            is_captain: p.id === previewTeam.captain_id || p.id === previewTeam.captain?.id,
-            is_vice_captain: p.id === previewTeam.vice_captain_id || p.id === previewTeam.viceCaptain?.id,
-          }))}
+          teamRank={previewTeam.rank}
+          teamTotalPoints={previewTeam.total_points}
+          players={(previewTeam.players || []).map((p: any) => {
+            const isCap = p.id === previewTeam.captain_id || p.id === previewTeam.captain?.id;
+            const isVC = p.id === previewTeam.vice_captain_id || p.id === previewTeam.viceCaptain?.id;
+            const basePts = Number(p.points || 0);
+            const earned = p.points_earned ? Number(p.points_earned) : Math.round((isCap ? basePts * 2 : isVC ? basePts * 1.5 : basePts) * 10) / 10;
+            return {
+              id: p.id,
+              name: p.name,
+              team_name: p.team_name,
+              role: p.role,
+              credits: p.credits || 9.0,
+              points: basePts,
+              points_earned: earned,
+              photo_url: p.photo_url,
+              is_captain: isCap,
+              is_vice_captain: isVC,
+            };
+          })}
           captainId={previewTeam.captain_id || previewTeam.captain?.id}
           viceCaptainId={previewTeam.vice_captain_id || previewTeam.viceCaptain?.id}
           teamA={previewTeam.match?.team_a}

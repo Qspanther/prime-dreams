@@ -52,6 +52,21 @@ export default function CompareTeamModal({
   const myPlayers = myTeam.players || [];
   const oppPlayers = opponentTeam.players || [];
 
+  const getEarned = (p?: ComparePlayer) => {
+    if (!p) return 0;
+    if (p.points_earned && Number(p.points_earned) > 0) return Number(p.points_earned);
+    const base = Number(p.points) || 0;
+    if (p.is_captain) return Math.round(base * 2 * 10) / 10;
+    if (p.is_vice_captain) return Math.round(base * 1.5 * 10) / 10;
+    return base;
+  };
+
+  const getTeamPoints = (team: any) => {
+    if (team.total_points && Number(team.total_points) > 0) return Number(team.total_points);
+    const players = team.players || [];
+    return Math.round(players.reduce((sum: number, p: any) => sum + getEarned(p), 0) * 10) / 10;
+  };
+
   const myCap = myPlayers.find(p => p.is_captain);
   const myVC = myPlayers.find(p => p.is_vice_captain);
   const oppCap = oppPlayers.find(p => p.is_captain);
@@ -104,7 +119,7 @@ export default function CompareTeamModal({
             <h4 className="font-black text-sm text-[#0F172A] truncate">{myTeam.team_name}</h4>
             <div className="mt-1 flex items-baseline justify-between">
               <span className="text-xl font-black text-blue-600 font-mono">
-                {Number(myTeam.total_points || 0).toFixed(1)} <span className="text-xs font-normal">pts</span>
+                {getTeamPoints(myTeam).toFixed(1)} <span className="text-xs font-normal">pts</span>
               </span>
               <span className="text-xs font-black text-slate-600">
                 {myTeam.rank ? `Rank #${myTeam.rank}` : '—'}
@@ -114,11 +129,11 @@ export default function CompareTeamModal({
 
           {/* Opponent Team */}
           <div className="p-3 rounded-xl bg-amber-50 border-2 border-amber-200 text-right">
-            <span className="text-[10px] font-black uppercase text-amber-700 block">Competitor</span>
+            <span className="text-[10px] font-black uppercase text-amber-700 block">{opponentTeamLabel || 'Competitor'}</span>
             <h4 className="font-black text-sm text-[#0F172A] truncate">{opponentTeam.team_name} (@{opponentTeam.username || 'user'})</h4>
             <div className="mt-1 flex items-baseline justify-between flex-row-reverse">
               <span className="text-xl font-black text-amber-600 font-mono">
-                {Number(opponentTeam.total_points || 0).toFixed(1)} <span className="text-xs font-normal">pts</span>
+                {getTeamPoints(opponentTeam).toFixed(1)} <span className="text-xs font-normal">pts</span>
               </span>
               <span className="text-xs font-black text-slate-600">
                 {opponentTeam.rank ? `Rank #${opponentTeam.rank}` : '—'}
@@ -142,20 +157,20 @@ export default function CompareTeamModal({
           <div className="p-2.5 rounded-lg border border-blue-200 bg-blue-50/50 space-y-1">
             <span className="text-[10px] font-black uppercase text-blue-600 block">Your Multipliers</span>
             <p className="truncate font-black text-[#0F172A]">
-              👑 C: {myCap?.name || '—'} <span className="text-blue-600 font-mono">({myCap?.points_earned || 0} pts)</span>
+              👑 C: {myCap?.name || '—'} <span className="text-blue-600 font-mono">({getEarned(myCap)} pts)</span>
             </p>
             <p className="truncate font-black text-[#0F172A]">
-              ⭐ VC: {myVC?.name || '—'} <span className="text-amber-600 font-mono">({myVC?.points_earned || 0} pts)</span>
+              ⭐ VC: {myVC?.name || '—'} <span className="text-amber-600 font-mono">({getEarned(myVC)} pts)</span>
             </p>
           </div>
 
           <div className="p-2.5 rounded-lg border border-amber-200 bg-amber-50/50 space-y-1 text-right">
             <span className="text-[10px] font-black uppercase text-amber-600 block">Competitor Multipliers</span>
             <p className="truncate font-black text-[#0F172A]">
-              👑 C: {oppCap?.name || '—'} <span className="text-blue-600 font-mono">({oppCap?.points_earned || 0} pts)</span>
+              👑 C: {oppCap?.name || '—'} <span className="text-blue-600 font-mono">({getEarned(oppCap)} pts)</span>
             </p>
             <p className="truncate font-black text-[#0F172A]">
-              ⭐ VC: {oppVC?.name || '—'} <span className="text-amber-600 font-mono">({oppVC?.points_earned || 0} pts)</span>
+              ⭐ VC: {oppVC?.name || '—'} <span className="text-amber-600 font-mono">({getEarned(oppVC)} pts)</span>
             </p>
           </div>
         </div>
@@ -186,7 +201,7 @@ export default function CompareTeamModal({
                       {pMy.is_vice_captain && <span className="text-[9px] font-black text-amber-700">VC</span>}
                     </div>
                     <span className="font-mono font-black text-[#2563EB] shrink-0 ml-1">
-                      {pMy.points_earned ?? pMy.points ?? 0}
+                      {getEarned(pMy)} pts
                     </span>
                   </div>
                 ) : (
@@ -198,7 +213,7 @@ export default function CompareTeamModal({
                   <div className={`p-2 rounded-lg border flex items-center justify-between min-w-0 ${isOppCommon ? 'bg-slate-50 border-slate-200' : 'bg-amber-50/80 border-amber-300 shadow-xs'
                     }`}>
                     <span className="font-mono font-black text-[#D97706] shrink-0 mr-1">
-                      {pOpp.points_earned ?? pOpp.points ?? 0}
+                      {getEarned(pOpp)} pts
                     </span>
                     <div className="min-w-0 flex items-center gap-1.5 text-right justify-end">
                       {pOpp.is_captain && <span className="text-[9px] font-black text-blue-700">C</span>}
