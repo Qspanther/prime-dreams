@@ -10,6 +10,7 @@ import {
   ArrowLeft, ArrowRight, AlertCircle, Zap, Calendar, MapPin, Share2, ShieldCheck, CheckCircle2, ChevronRight
 } from 'lucide-react';
 import { apiGet, apiPost, resolveImageUrl, getWebSocketUrl } from '../../lib/api';
+import { wsManager } from '@/lib/ws-manager';
 import { useAuth } from '../../lib/auth-context';
 import CategoryBadge from '../../components/ui/CategoryBadge';
 import PlayerPhoto from '../../components/ui/PlayerPhoto';
@@ -170,86 +171,52 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
   useEffect(() => {
     fetchMatchData();
 
-    // ⚡ Real-Time WebSocket Streaming Gateway with 0-3s Reconnection Jitter (Section 3)
-    let ws: WebSocket | null = null;
-    let reconnectTimeout: NodeJS.Timeout | null = null;
-    let isUnmounted = false;
-
-    const connectWebSocket = () => {
-      if (isUnmounted) return;
+    // ⚡ Real-Time WebSocket Streaming via Singleton wsManager
+    const unsubscribe = wsManager.subscribe(matchId, (data: any) => {
       try {
-        ws = new WebSocket(getWebSocketUrl());
-
-        ws.onopen = () => {
-          ws?.send(JSON.stringify({ action: 'subscribe', matchId }));
-        };
-
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'BALL_DELTA' && data.match_id === matchId) {
-              setMatch((prev: any) => {
-                if (!prev) return prev;
-                return {
-                  ...prev,
-                  status: 'live',
-                  score_summary: data.score_summary || prev.score_summary,
-                  live_data: {
-                    ...(prev.live_data || {}),
-                    commentary: data.commentary ? [data.commentary, ...((prev.live_data?.commentary || []).slice(0, 9))] : (prev.live_data?.commentary || []),
-                    last_ball_time: new Date().toISOString(),
-                  }
-                };
-              });
-              setTelemetry((prev: any) => {
-                if (!prev) return prev;
-                return {
-                  ...prev,
-                  match: {
-                    ...(prev.match || {}),
-                    status: 'live',
-                    score_summary: data.score_summary || prev.match?.score_summary,
-                  }
-                };
-              });
-            } else if (data.type === 'MATCH_SNAPSHOT' && data.match_id === matchId && data.data) {
-              setMatch((prev: any) => ({
-                ...prev,
-                score_summary: data.data,
-              }));
-            } else if (data.type === 'RESYNC_REQUIRED') {
-              fetchMatchData();
-            }
-          } catch (e) {
-            // Ignore parse errors
-          }
-        };
-
-        ws.onclose = () => {
-          if (!isUnmounted) {
-            // Reconnection Jitter: 1s to 4s random backoff (Section 3.4)
-            const jitter = Math.floor(Math.random() * 3000) + 1000;
-            reconnectTimeout = setTimeout(connectWebSocket, jitter);
-          }
-        };
-
-        ws.onerror = () => {
-          ws?.close();
-        };
+        if (data.type === 'BALL_DELTA' && (data.match_id === matchId || !data.match_id)) {
+          setMatch((prev: any) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              status: 'live',
+              score_summary: data.score_summary || prev.score_summary,
+              live_data: {
+                ...(prev.live_data || {}),
+                commentary: data.commentary ? [data.commentary, ...((prev.live_data?.commentary || []).slice(0, 9))] : (prev.live_data?.commentary || []),
+                last_ball_time: new Date().toISOString(),
+              }
+            };
+          });
+          setTelemetry((prev: any) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              match: {
+                ...(prev.match || {}),
+                status: 'live',
+                score_summary: data.score_summary || prev.match?.score_summary,
+              }
+            };
+          });
+        } else if (data.type === 'MATCH_SNAPSHOT' && (data.match_id === matchId || !data.match_id) && data.data) {
+          setMatch((prev: any) => ({
+            ...prev,
+            score_summary: data.data,
+          }));
+        } else if (data.type === 'RESYNC_REQUIRED') {
+          fetchMatchData();
+        }
       } catch (e) {
-        // Fallback to REST polling if WebSocket fails
+        // Ignore parse errors
       }
-    };
-
-    connectWebSocket();
+    });
 
     // Background REST polling heartbeat every 20 seconds as fallback
     const interval = setInterval(fetchMatchData, 20000);
 
     return () => {
-      isUnmounted = true;
-      if (reconnectTimeout) clearTimeout(reconnectTimeout);
-      if (ws) ws.close();
+      unsubscribe();
       clearInterval(interval);
     };
   }, [matchId]);

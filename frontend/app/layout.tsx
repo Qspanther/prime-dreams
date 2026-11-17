@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Montserrat, Inter } from "next/font/google";
 import "./globals.css";
 import ClientLayout from "./client-layout";
+import WebSocketInitializer from "@/components/WebSocketInitializer";
 
 const montserrat = Montserrat({
   subsets: ["latin"],
@@ -55,6 +56,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-status-bar-style" content="default" />
       </head>
       <body className="antialiased overflow-hidden h-full w-full bg-[#F0F4F9] text-[#0F172A]" suppressHydrationWarning>
+        <WebSocketInitializer />
         <ClientLayout>{children}</ClientLayout>
       </body>
     </html>

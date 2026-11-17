@@ -9,6 +9,7 @@ import AdminSidebar from './components/layout/AdminSidebar';
 import TopBar from './components/layout/TopBar';
 import MobileBottomNav from './components/layout/MobileBottomNav';
 import NetworkStatus from './components/ui/NetworkStatus';
+import { wsManager } from '@/lib/ws-manager';
 
 const H2HChallengePopup = dynamic(() => import('./components/ui/H2HChallengePopup'), { ssr: false });
 
@@ -24,6 +25,10 @@ function AppShell({ children }: { children: ReactNode }) {
   const isAuthPage = authOnlyPaths.includes(pathname || '');
   const isAdminRoute = pathname?.startsWith('/admin');
   const isTeamBuilder = pathname?.startsWith('/team-builder');
+
+  useEffect(() => {
+    wsManager.connect();
+  }, []);
 
   // Register Service Worker for offline caching + Web Push (FCM-style) notifications.
   // Proactively check for SW updates and purge stale PWA caches on mobile devices

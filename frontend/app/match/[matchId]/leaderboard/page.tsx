@@ -7,6 +7,7 @@ import { useSearchParams } from 'next/navigation';
 import { ArrowLeft, Radio, RefreshCw, Search, Trophy, X, Swords, TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { apiGet, getWebSocketUrl } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth-context';
+import { wsManager } from '@/lib/ws-manager';
 
 const CompareTeamModal = dynamic(() => import('../../../components/ui/CompareTeamModal'), { ssr: false });
 
@@ -60,8 +61,8 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
       setCompareTeamA(activeMyTeam);
       setCompareTeamB(team);
     } else {
-      const rankOneTeam = displayedTeams.find(t => t.rank === 1 && t.team_id !== team.team_id) || 
-                          (displayedTeams[0]?.team_id !== team.team_id ? displayedTeams[0] : displayedTeams[1]);
+      const rankOneTeam = displayedTeams.find(t => t.rank === 1 && t.team_id !== team.team_id) ||
+        (displayedTeams[0]?.team_id !== team.team_id ? displayedTeams[0] : displayedTeams[1]);
       if (rankOneTeam) {
         setCompareTeamA(rankOneTeam);
         setCompareTeamB(team);
@@ -216,10 +217,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
 
   useEffect(() => {
     let active = true;
-    let socket: WebSocket | null = null;
-    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
-    let stopped = false;
     const safeRefresh = async () => { if (active) await refresh(); };
     void safeRefresh();
 
@@ -227,35 +225,23 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
       if (refreshTimer) clearTimeout(refreshTimer);
       refreshTimer = setTimeout(() => { void safeRefresh(); }, 250);
     };
-    const connect = () => {
-      if (stopped) return;
+
+    // ⚡ Real-Time WebSocket Streaming via Singleton wsManager
+    const unsubscribe = wsManager.subscribe(matchId, (message: any) => {
       try {
-        socket = new WebSocket(getWebSocketUrl());
-        socket.onopen = () => socket?.send(JSON.stringify({ action: 'subscribe', matchId }));
-        socket.onmessage = (event) => {
-          try {
-            const message = JSON.parse(event.data);
-            if ((message.type === 'BALL_DELTA' || message.type === 'MATCH_SNAPSHOT' || message.type === 'RESYNC_REQUIRED') && message.match_id === matchId) {
-              scheduleRefresh();
-            }
-          } catch { /* keep REST fallback active */ }
-        };
-        socket.onclose = () => {
-          if (!stopped) reconnectTimer = setTimeout(connect, 2000);
-        };
-        socket.onerror = () => socket?.close();
-      } catch { /* REST refresh remains available */ }
-    };
-    connect();
+        if ((message.type === 'BALL_DELTA' || message.type === 'MATCH_SNAPSHOT' || message.type === 'RESYNC_REQUIRED') && (message.match_id === matchId || !message.match_id)) {
+          scheduleRefresh();
+        }
+      } catch { /* keep REST fallback active */ }
+    });
+
     const fallbackPoll = setInterval(() => { void safeRefresh(); }, 12000);
 
     return () => {
       active = false;
-      stopped = true;
       if (refreshTimer) clearTimeout(refreshTimer);
-      if (reconnectTimer) clearTimeout(reconnectTimer);
       clearInterval(fallbackPoll);
-      socket?.close();
+      unsubscribe();
     };
   }, [matchId, refresh]);
 
@@ -330,11 +316,10 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                     setCurrentBatch(1);
                     setHasMoreBatches(false);
                   }}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-black shrink-0 transition cursor-pointer flex items-center gap-2 border ${
-                    isSelected
-                      ? 'prime-btn-3d border-[#2563EB]'
-                      : 'bg-white text-[#475569] border-[#CBD5E1] hover:border-[#93C5FD] hover:text-[#2563EB]'
-                  }`}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-black shrink-0 transition cursor-pointer flex items-center gap-2 border ${isSelected
+                    ? 'prime-btn-3d border-[#2563EB]'
+                    : 'bg-white text-[#475569] border-[#CBD5E1] hover:border-[#93C5FD] hover:text-[#2563EB]'
+                    }`}
                 >
                   <span>{c.contest_code ? `Contest #${c.contest_code} • ` : ''}{c.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim()}</span>
                   <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-700'}`}>
@@ -360,11 +345,10 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
       <div className="flex items-center gap-2 border-b border-[#CBD5E1] pb-2">
         <button
           onClick={() => setActiveLeaderboardTab('contest_teams')}
-          className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer transition flex items-center gap-2 ${
-            activeLeaderboardTab === 'contest_teams'
-              ? 'prime-btn-3d'
-              : 'bg-white border border-[#CBD5E1] text-[#64748B] hover:text-[#0F172A]'
-          }`}
+          className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer transition flex items-center gap-2 ${activeLeaderboardTab === 'contest_teams'
+            ? 'prime-btn-3d'
+            : 'bg-white border border-[#CBD5E1] text-[#64748B] hover:text-[#0F172A]'
+            }`}
         >
           <Trophy className="w-4 h-4 text-[#D97706]" />
           <span>All Contest Teams ({totalContestTeams || displayedTeams.length})</span>
@@ -372,11 +356,10 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
 
         <button
           onClick={() => setActiveLeaderboardTab('match_players')}
-          className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer transition flex items-center gap-2 ${
-            activeLeaderboardTab === 'match_players'
-              ? 'prime-btn-3d'
-              : 'bg-white border border-[#CBD5E1] text-[#64748B] hover:text-[#0F172A]'
-          }`}
+          className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider cursor-pointer transition flex items-center gap-2 ${activeLeaderboardTab === 'match_players'
+            ? 'prime-btn-3d'
+            : 'bg-white border border-[#CBD5E1] text-[#64748B] hover:text-[#0F172A]'
+            }`}
         >
           <Radio className="w-4 h-4 text-[#2563EB]" />
           <span>Match Players ({data?.player_leaderboard?.length || 0})</span>
@@ -480,23 +463,21 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                 return (
                   <details
                     key={team.team_id}
-                    className={`overflow-hidden rounded-2xl border transition shadow-sm ${
-                      isMyTeam
-                        ? 'border-emerald-300 bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/40 shadow-[0_0_16px_rgba(16,185,129,0.15)]'
-                        : 'border-blue-200 bg-gradient-to-br from-blue-50/50 via-white to-blue-50/30'
-                    }`}
+                    className={`overflow-hidden rounded-2xl border transition shadow-sm ${isMyTeam
+                      ? 'border-emerald-300 bg-gradient-to-br from-emerald-50/70 via-white to-emerald-50/40 shadow-[0_0_16px_rgba(16,185,129,0.15)]'
+                      : 'border-blue-200 bg-gradient-to-br from-blue-50/50 via-white to-blue-50/30'
+                      }`}
                   >
                     <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4 transition hover:bg-blue-50/50">
                       <div className="flex min-w-0 items-center gap-3">
-                        <span className={`flex h-10 min-w-10 items-center justify-center rounded-xl font-black text-sm border shadow-xs ${
-                          team.rank === 1
-                            ? 'bg-amber-100 text-amber-900 border-amber-300'
-                            : team.rank === 2
+                        <span className={`flex h-10 min-w-10 items-center justify-center rounded-xl font-black text-sm border shadow-xs ${team.rank === 1
+                          ? 'bg-amber-100 text-amber-900 border-amber-300'
+                          : team.rank === 2
                             ? 'bg-slate-200 text-slate-800 border-slate-300'
                             : team.rank === 3
-                            ? 'bg-amber-50 text-amber-800 border-amber-200'
-                            : 'bg-white text-blue-700 border-blue-200'
-                        }`}>
+                              ? 'bg-amber-50 text-amber-800 border-amber-200'
+                              : 'bg-white text-blue-700 border-blue-200'
+                          }`}>
                           #{team.rank}
                         </span>
 
@@ -555,13 +536,12 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                         {(team.players || []).map((player: any) => (
                           <div
                             key={`${team.team_id}-${player.id}`}
-                            className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${
-                              player.is_captain
-                                ? 'bg-blue-50/90 border-blue-300 shadow-xs'
-                                : player.is_vice_captain
+                            className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 ${player.is_captain
+                              ? 'bg-blue-50/90 border-blue-300 shadow-xs'
+                              : player.is_vice_captain
                                 ? 'bg-amber-50/90 border-amber-300 shadow-xs'
                                 : 'bg-[#F8FAFC] border-slate-200'
-                            }`}
+                              }`}
                           >
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5">

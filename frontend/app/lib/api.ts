@@ -12,6 +12,7 @@ export function getApiBase() {
 }
 
 export function getWebSocketUrl(): string {
+  if (process.env.NEXT_PUBLIC_WS_URL) return process.env.NEXT_PUBLIC_WS_URL;
   if (process.env.NEXT_PUBLIC_WEBSOCKET_URL) return process.env.NEXT_PUBLIC_WEBSOCKET_URL;
   if (process.env.NEXT_PUBLIC_API_URL?.startsWith('http')) {
     try {
