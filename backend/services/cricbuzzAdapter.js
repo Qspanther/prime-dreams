@@ -450,6 +450,7 @@ function getCricbuzzLiveFeed() {
  */
 async function importCricbuzzMatchToDatabase(cricbuzzId) {
   const { CricketMatch, CricketPlayer, MatchContest } = require('../db/models');
+  const { DEFAULT_CONTESTS } = require('../config/defaultContests');
   const { isMatchBlacklisted } = require('./deletedMatchesRegistry');
 
   const matchData = [...cricbuzzLiveFeed, ...cricbuzzUpcomingFeed].find(m => m.cricbuzz_id === cricbuzzId);
@@ -528,45 +529,29 @@ async function importCricbuzzMatchToDatabase(cricbuzzId) {
     });
   }
 
-  // Create standard contests for this match
-  await MatchContest.create({
-    match_id: newMatch.id,
-    type: 'standard',
-    title: 'Mega Grand Contest ₹1,00,000',
-    prize_pool: 100000,
-    entry_fee: 49,
-    total_spots: 2500,
-    filled_spots: 12,
-    is_active: true,
-  });
-
-  await MatchContest.create({
-    match_id: newMatch.id,
-    type: 'multi_battlefield',
-    title: 'PUBG Auto-Clone Room #1',
-    prize_pool: 2500,
-    entry_fee: 99,
-    total_spots: 25,
-    spots_per_battlefield: 25,
-    filled_spots: 5,
-    is_active: true,
-  });
-
-  await MatchContest.create({
-    match_id: newMatch.id,
-    type: 'h2h',
-    title: 'H2H Duel',
-    prize_pool: 0,
-    entry_fee: 0,
-    total_spots: 2,
-    filled_spots: 0,
-    is_active: true,
-  });
+  // Create 8 canonical default contests for this match
+  for (const c of DEFAULT_CONTESTS) {
+    await MatchContest.create({
+      match_id: newMatch.id,
+      type: c.type,
+      title: c.title,
+      prize_pool: c.prize_pool,
+      entry_fee: c.entry_fee || 0,
+      total_spots: c.total_spots,
+      filled_spots: c.filled_spots || 0,
+      bot_spots: c.bot_spots || 0,
+      spots_per_battlefield: c.spots_per_battlefield || null,
+      battlefield_number: c.battlefield_number || null,
+      prize_breakup: typeof c.prize_breakup === 'object' ? JSON.stringify(c.prize_breakup) : c.prize_breakup,
+      is_active: true,
+      status: 'open',
+    });
+  }
 
   return {
     success: true,
     already_exists: false,
-    message: `Successfully imported "${matchData.title}" into Prime Dreams with 30 squad players, team logos, and 3 active contests!`,
+    message: `Successfully imported "${matchData.title}" into Prime Dreams with 30 squad players, team logos, and 8 default contests!`,
     matchId: newMatch.id
   };
 }

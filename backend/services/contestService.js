@@ -5,6 +5,7 @@ const { MatchContest, CricketMatch, H2HChallenge, Wallet, Transaction, Notificat
 const CricketTeam = require('../db/models/CricketTeam');
 const sequelize = require('../db');
 const { Op } = require('sequelize');
+const { isContestCloneable, getContestBaseTitle } = require('../config/defaultContests');
 
 async function chargeWalletEntry(userId, amount, description, transaction) {
   const fee = Math.round((Number(amount) || 0) * 100) / 100;
@@ -100,45 +101,49 @@ async function checkContestLocks() {
 }
 
 /**
- * Multi-Battlefield Auto-Clone Engine (Section 7 Type 2)
- * When battlefield fills -> hides (deactivates from public list) -> auto-clones new open battlefield
+ * Room Auto-Clone Engine for Cloneable Contests (Contests 3, 4, 5, 6, 7, 8)
+ * When a room fills up -> locks -> auto-clones a new open room with identical prizes and specs
+ * User is NEVER shown "Full" in these contests.
  */
 async function handleBattlefieldFill(contest) {
-  if (contest.type !== 'multi_battlefield') return;
-  const spotsPerRoom = contest.spots_per_battlefield || 20;
+  if (!isContestCloneable(contest)) return null;
+  const spotsPerRoom = contest.spots_per_battlefield || contest.total_spots || 20;
 
   if (contest.filled_spots >= spotsPerRoom) {
-    // Hide filled battlefield
+    // Lock filled room
     await contest.update({ is_active: false, status: 'locked' });
 
-    // Auto-create next battlefield
+    // Auto-create next room
     const nextNumber = (contest.battlefield_number || 1) + 1;
+    const baseTitle = getContestBaseTitle(contest.title);
+    const newTitle = `${baseTitle} Room #${nextNumber}`;
+
     const newBattlefield = await MatchContest.create({
       match_id: contest.match_id,
-      type: 'multi_battlefield',
-      title: `${contest.title.replace(/Room #\d+/, '').trim()} Room #${nextNumber}`,
+      type: contest.type || 'multi_battlefield',
+      title: newTitle,
       prize_pool: contest.prize_pool,
-      entry_fee: contest.entry_fee,
+      entry_fee: contest.entry_fee || 0,
       total_spots: spotsPerRoom,
       filled_spots: 0,
       spots_per_battlefield: spotsPerRoom,
       battlefield_number: nextNumber,
-      bot_spots: contest.bot_spots || (spotsPerRoom === 25 ? 7 : Math.max(7, Math.floor(spotsPerRoom * 0.28))),
+      bot_spots: contest.bot_spots || 0,
       prize_breakup: contest.prize_breakup,
       is_active: true,
       status: 'open',
     });
 
-    console.log(`🎮 [Battlefield] Room #${contest.battlefield_number} filled! Auto-created Room #${nextNumber} (${newBattlefield.id})`);
+    console.log(`🎮 [RoomClone] "${baseTitle}" Room #${contest.battlefield_number || 1} filled! Auto-created Room #${nextNumber} (${newBattlefield.id})`);
 
     // Auto-deploy target bots into cloned room immediately
     try {
       const { deployPreContestCricketBots } = require('../routes/bot-manager');
       deployPreContestCricketBots(contest.match_id, newBattlefield.id)
-        .then(res => console.log(`🤖 [Battlefield Auto-Bot] Deployed ${res.registered} bots into cloned Room #${nextNumber}`))
-        .catch(err => console.warn(`⚠️ [Battlefield Auto-Bot Notice] ${err.message}`));
+        .then(res => console.log(`🤖 [RoomClone Auto-Bot] Deployed ${res.registered} bots into cloned Room #${nextNumber}`))
+        .catch(err => console.warn(`⚠️ [RoomClone Auto-Bot Notice] ${err.message}`));
     } catch (bErr) {
-      console.warn('⚠️ [Battlefield Bot Auto-Deploy Error]:', bErr.message);
+      console.warn('⚠️ [RoomClone Bot Auto-Deploy Error]:', bErr.message);
     }
 
     return newBattlefield;
@@ -321,5 +326,7 @@ module.exports = {
   acceptH2HChallenge,
   rejectH2HChallenge,
   chargeWalletEntry,
+  isContestCloneable,
+  getContestBaseTitle,
 };
 

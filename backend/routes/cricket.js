@@ -12,7 +12,8 @@ const sequelize = require('../db');
 const { authenticate, optionalAuthenticate, isAdmin } = require('../middleware/auth');
 const config = require('../config');
 const { syncLiveMatch, getCachedMatchLive } = require('../services/cricbuzzService');
-const { createH2HChallenge, acceptH2HChallenge, rejectH2HChallenge, handleBattlefieldFill, chargeWalletEntry } = require('../services/contestService');
+const { createH2HChallenge, acceptH2HChallenge, rejectH2HChallenge, handleBattlefieldFill, chargeWalletEntry, isContestCloneable, getContestBaseTitle } = require('../services/contestService');
+const { DEFAULT_CONTESTS } = require('../config/defaultContests');
 const { deleteMatchPermanently } = require('../services/cricketDeleteHelper');
 const dns = require('dns').promises;
 
@@ -120,11 +121,20 @@ router.get('/player-photo', async (req, res) => {
   }
 });
 
-const DEFAULT_CONTEST_TEMPLATES = [
-  { type: 'mega', title: 'Mega Grand League', prize_pool: 100000, entry_fee: 0, total_spots: 2500, filled_spots: 1840, bot_spots: 1840, is_active: true, is_private: false },
-  { type: 'multi_battlefield', title: 'Battleground Arena Room #1', prize_pool: 2500, entry_fee: 0, total_spots: 25, filled_spots: 18, spots_per_battlefield: 25, battlefield_number: 1, bot_spots: 18, is_active: true, is_private: false },
-  { type: 'mini', title: 'Mini League Contest', prize_pool: 5000, entry_fee: 0, total_spots: 100, filled_spots: 65, bot_spots: 65, is_active: true, is_private: false },
-];
+const DEFAULT_CONTEST_TEMPLATES = DEFAULT_CONTESTS.map(c => ({
+  type: c.type,
+  title: c.title,
+  prize_pool: c.prize_pool,
+  entry_fee: c.entry_fee || 0,
+  total_spots: c.total_spots,
+  filled_spots: c.filled_spots || 0,
+  bot_spots: c.bot_spots || 0,
+  spots_per_battlefield: c.spots_per_battlefield || null,
+  battlefield_number: c.battlefield_number || null,
+  prize_breakup: typeof c.prize_breakup === 'object' ? JSON.stringify(c.prize_breakup) : c.prize_breakup,
+  is_active: true,
+  is_private: false,
+}));
 
 async function ensureMatchSquad(match) {
   let players = await CricketPlayer.findAll({
@@ -889,7 +899,7 @@ router.get('/matches/:id', async (req, res) => {
       currentPlayers = await ensureMatchSquad(match);
     }
 
-    // ─── Auto-seed contests (Only Battleground, Mega, and Mini) ───
+    // ─── Auto-seed contests (All 8 Canonical Default Contests) ───
     let contests = match.contests || [];
     if (contests.length === 0) {
       try {
@@ -901,65 +911,24 @@ router.get('/matches/:id', async (req, res) => {
         contests = await MatchContest.findAll({ where: { match_id: match.id, ...contestWhere } });
       } catch (err) { /* seeding is best-effort */ }
     } else {
-      // Ensure Mega Contest exists
-      if (!contests.some(c => c.type === 'mega')) {
-        try {
-          await MatchContest.create({
-            match_id: match.id,
-            type: 'mega',
-            title: `Mega Grand League (${match.category || 'T20'})`,
-            prize_pool: 100000,
-            entry_fee: 0,
-            total_spots: 2500,
-            filled_spots: 1840,
-            bot_spots: 1840,
-            is_active: true,
-            is_private: false,
-            status: isLocked ? 'locked' : 'open',
-          });
-          contests = await MatchContest.findAll({ where: { match_id: match.id, ...contestWhere } });
-        } catch (_) {}
+      // Ensure all canonical default contests exist
+      for (const tmpl of DEFAULT_CONTEST_TEMPLATES) {
+        const baseTitle = getContestBaseTitle(tmpl.title);
+        const exists = contests.some(c => {
+          const cBase = getContestBaseTitle(c.title);
+          return cBase.toLowerCase() === baseTitle.toLowerCase() || (tmpl.type === 'mega' && c.type === 'mega' && c.title.toLowerCase().includes(baseTitle.toLowerCase()));
+        });
+        if (!exists) {
+          try {
+            await MatchContest.create({
+              ...tmpl,
+              match_id: match.id,
+              status: isLocked ? 'locked' : 'open',
+            });
+          } catch (_) {}
+        }
       }
-      // Ensure Battleground Contest exists
-      if (!contests.some(c => c.type === 'multi_battlefield')) {
-        try {
-          await MatchContest.create({
-            match_id: match.id,
-            type: 'multi_battlefield',
-            title: `Battleground Arena Room #1 (${match.category || 'T20'})`,
-            prize_pool: 2500,
-            entry_fee: 0,
-            total_spots: 25,
-            filled_spots: 18,
-            spots_per_battlefield: 25,
-            battlefield_number: 1,
-            bot_spots: 18,
-            is_active: true,
-            is_private: false,
-            status: isLocked ? 'locked' : 'open',
-          });
-          contests = await MatchContest.findAll({ where: { match_id: match.id, ...contestWhere } });
-        } catch (_) {}
-      }
-      // Ensure Mini Contest exists
-      if (!contests.some(c => c.type === 'mini')) {
-        try {
-          await MatchContest.create({
-            match_id: match.id,
-            type: 'mini',
-            title: `Mini League Contest (${match.category || 'T20'})`,
-            prize_pool: 5000,
-            entry_fee: 0,
-            total_spots: 100,
-            filled_spots: 65,
-            bot_spots: 65,
-            is_active: true,
-            is_private: false,
-            status: isLocked ? 'locked' : 'open',
-          });
-          contests = await MatchContest.findAll({ where: { match_id: match.id, ...contestWhere } });
-        } catch (_) {}
-      }
+      contests = await MatchContest.findAll({ where: { match_id: match.id, ...contestWhere } });
     }
 
     // ─── Player stats: "Selected by X%", last match & avg points, form ───
@@ -1374,8 +1343,46 @@ router.post('/matches/:id/teams', authenticate, async (req, res) => {
         return res.status(400).json({ error: `Contest is ${contest.status}.` });
       }
       if (contest.filled_spots >= contest.total_spots) {
-        await transaction.rollback();
-        return res.status(400).json({ error: 'Contest is full.' });
+        if (isContestCloneable(contest)) {
+          // Auto-route to open room or auto-clone next room seamlessly so user never sees "Contest is full"
+          const baseTitle = getContestBaseTitle(contest.title);
+          let openRoom = await MatchContest.findOne({
+            where: {
+              match_id: match.id,
+              is_active: true,
+              status: 'open',
+              title: { [Op.like]: `${baseTitle}%` },
+              filled_spots: { [Op.lt]: sequelize.col('total_spots') },
+            },
+            transaction,
+            lock: transaction.LOCK.UPDATE,
+          });
+
+          if (!openRoom) {
+            const nextNumber = (contest.battlefield_number || 1) + 1;
+            openRoom = await MatchContest.create({
+              match_id: contest.match_id,
+              type: contest.type || 'multi_battlefield',
+              title: `${baseTitle} Room #${nextNumber}`,
+              prize_pool: contest.prize_pool,
+              entry_fee: contest.entry_fee || 0,
+              total_spots: contest.spots_per_battlefield || contest.total_spots || 20,
+              filled_spots: 0,
+              spots_per_battlefield: contest.spots_per_battlefield || contest.total_spots || 20,
+              battlefield_number: nextNumber,
+              bot_spots: contest.bot_spots || 0,
+              prize_breakup: contest.prize_breakup,
+              is_active: true,
+              status: 'open',
+            }, { transaction });
+          }
+          contest = openRoom;
+        } else if (contest.type === 'mega' || (contest.total_spots || 0) >= 1000000 || String(contest.title).toLowerCase().includes('prime mega arena')) {
+          await contest.update({ total_spots: Math.max(contest.total_spots, contest.filled_spots + 10000) }, { transaction });
+        } else {
+          await transaction.rollback();
+          return res.status(400).json({ error: 'Contest is full.' });
+        }
       }
 
       if (contest.type === 'h2h') {
@@ -1393,7 +1400,7 @@ router.post('/matches/:id/teams', authenticate, async (req, res) => {
     const newTeam = await CricketTeam.create({
       user_id: req.user.id,
       match_id: match.id,
-      contest_id: contest_id || null,
+      contest_id: contest ? contest.id : (contest_id || null),
       team_name: team_name || 'My Prime XI',
       captain_id,
       vice_captain_id,
@@ -1461,7 +1468,7 @@ router.post('/matches/:id/teams', authenticate, async (req, res) => {
           }, { transaction }).catch(() => {});
         }
       }
-      if (contest.type === 'multi_battlefield' && isFull) filledContest = contest;
+      if (isContestCloneable(contest) && isFull) filledContest = contest;
     }
 
     await transaction.commit();

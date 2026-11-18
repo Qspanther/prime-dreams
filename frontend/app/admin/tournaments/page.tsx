@@ -12,6 +12,119 @@ import {
 import CategoryFilterTabs from '../../components/ui/CategoryFilterTabs';
 import CategoryBadge from '../../components/ui/CategoryBadge';
 
+const ADMIN_DEFAULT_CONTESTS = [
+  {
+    type: 'mega',
+    title: 'Prime Mega Arena',
+    total_spots: 10000000,
+    bot_spots: 15000,
+    prize_pool: 12125000,
+    entry_fee: 0,
+    prize_breakup: [
+      { rank_from: 1, rank_to: 1, prize: 1500000 },
+      { rank_from: 2, rank_to: 1000, prize: 10000 },
+      { rank_from: 1001, rank_to: 2000, prize: 500 },
+      { rank_from: 2001, rank_to: 2500, prize: 100 },
+      { rank_from: 2501, rank_to: 3000, prize: 50 },
+      { rank_from: 3001, rank_to: 5000, prize: 30 },
+    ],
+  },
+  {
+    type: 'mega',
+    title: 'Royal Mega League',
+    total_spots: 100000,
+    bot_spots: 5000,
+    prize_pool: 2852500,
+    entry_fee: 0,
+    prize_breakup: [
+      { rank_from: 1, rank_to: 1, prize: 500000 },
+      { rank_from: 2, rank_to: 100, prize: 10000 },
+      { rank_from: 101, rank_to: 500, prize: 3000 },
+      { rank_from: 501, rank_to: 1000, prize: 250 },
+      { rank_from: 1001, rank_to: 1500, prize: 50 },
+      { rank_from: 1501, rank_to: 2000, prize: 25 },
+    ],
+  },
+  {
+    type: 'multi_battlefield',
+    title: 'Mini Contest Room #1',
+    total_spots: 5000,
+    bot_spots: 2000,
+    prize_pool: 17500,
+    entry_fee: 0,
+    prize_breakup: [
+      { rank_from: 1, rank_to: 1, prize: 10000 },
+      { rank_from: 2, rank_to: 5, prize: 1000 },
+      { rank_from: 6, rank_to: 10, prize: 500 },
+      { rank_from: 11, rank_to: 20, prize: 100 },
+    ],
+  },
+  {
+    type: 'multi_battlefield',
+    title: 'Mini Emerald Room #1',
+    total_spots: 1000,
+    bot_spots: 70,
+    prize_pool: 2050,
+    entry_fee: 0,
+    prize_breakup: [
+      { rank_from: 1, rank_to: 1, prize: 500 },
+      { rank_from: 2, rank_to: 5, prize: 300 },
+      { rank_from: 6, rank_to: 10, prize: 50 },
+      { rank_from: 11, rank_to: 15, prize: 20 },
+    ],
+  },
+  {
+    type: 'multi_battlefield',
+    title: 'Prime Quick Play Room #1',
+    total_spots: 600,
+    bot_spots: 50,
+    prize_pool: 1250,
+    entry_fee: 0,
+    prize_breakup: [
+      { rank_from: 1, rank_to: 1, prize: 500 },
+      { rank_from: 2, rank_to: 5, prize: 100 },
+      { rank_from: 6, rank_to: 15, prize: 30 },
+      { rank_from: 16, rank_to: 20, prize: 10 },
+    ],
+  },
+  {
+    type: 'multi_battlefield',
+    title: 'Royal Battlefield Arena Room #1',
+    total_spots: 100,
+    bot_spots: 30,
+    prize_pool: 750,
+    entry_fee: 0,
+    prize_breakup: [
+      { rank_from: 1, rank_to: 1, prize: 500 },
+      { rank_from: 2, rank_to: 2, prize: 200 },
+      { rank_from: 3, rank_to: 3, prize: 50 },
+    ],
+  },
+  {
+    type: 'multi_battlefield',
+    title: 'Prime Battlefield Rush Room #1',
+    total_spots: 50,
+    bot_spots: 10,
+    prize_pool: 600,
+    entry_fee: 0,
+    prize_breakup: [
+      { rank_from: 1, rank_to: 1, prize: 500 },
+      { rank_from: 2, rank_to: 2, prize: 100 },
+    ],
+  },
+  {
+    type: 'multi_battlefield',
+    title: 'Amber Battlefield Blitz Room #1',
+    total_spots: 15,
+    bot_spots: 5,
+    prize_pool: 200,
+    entry_fee: 0,
+    prize_breakup: [
+      { rank_from: 1, rank_to: 1, prize: 200 },
+    ],
+  },
+];
+
 function AdminCricketMatchesContent() {
   const { token } = useAuth();
   const searchParams = useSearchParams();
@@ -63,11 +176,7 @@ function AdminCricketMatchesContent() {
     return list;
   });
 
-  const [contests, setContests] = useState<any[]>([
-    { type: 'mega', title: 'Mega Grand Contest', prize_pool: 100000, entry_fee: 0, total_spots: 10000, bot_spots: 10000 },
-    { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 0, total_spots: 25, bot_spots: 7 },
-    { type: 'mini', title: 'Mini Quick Contest', prize_pool: 1000, entry_fee: 0, total_spots: 100, bot_spots: 25 },
-  ]);
+  const [contests, setContests] = useState<any[]>(() => ADMIN_DEFAULT_CONTESTS.map(c => ({ ...c })));
 
   // 🏆 Custom Prize Table Modal State (Position-by-position configuration)
   const [prizeModalContestIdx, setPrizeModalContestIdx] = useState<number | null>(null);
@@ -277,11 +386,7 @@ function AdminCricketMatchesContent() {
       }
       setPlayers(list);
     }
-    setContests([
-      { type: 'mega', title: 'Mega Grand Contest', prize_pool: 100000, entry_fee: 0, total_spots: 10000, bot_spots: 10000 },
-      { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 0, total_spots: 25, bot_spots: 7 },
-      { type: 'mini', title: 'Mini Quick Contest', prize_pool: 1000, entry_fee: 0, total_spots: 100, bot_spots: 25 },
-    ]);
+    setContests(ADMIN_DEFAULT_CONTESTS.map(c => ({ ...c })));
     setFieldErrors({});
     setSuccessMsg(null);
     setCurrentStep(1);
@@ -336,11 +441,7 @@ function AdminCricketMatchesContent() {
           : (c.prize_breakup || null),
       })));
     } else {
-      setContests([
-        { type: 'mega', title: 'Mega Grand Contest', prize_pool: 100000, entry_fee: 0, total_spots: 10000, bot_spots: 10000 },
-        { type: 'multi_battlefield', title: 'PUBG Battlefield Room #1', prize_pool: 2500, entry_fee: 0, total_spots: 25, bot_spots: 7 },
-        { type: 'mini', title: 'Mini Quick Contest', prize_pool: 1000, entry_fee: 0, total_spots: 100, bot_spots: 25 },
-      ]);
+      setContests(ADMIN_DEFAULT_CONTESTS.map(c => ({ ...c })));
     }
 
     setFieldErrors({});

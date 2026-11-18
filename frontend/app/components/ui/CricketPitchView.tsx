@@ -193,7 +193,7 @@ export default function CricketPitchView({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-slate-950 rounded-2xl overflow-hidden shadow-2xl border-2 border-emerald-500/50 flex flex-col max-h-[96vh]">
+      <div className="relative w-full max-w-2xl bg-slate-950 rounded-2xl overflow-hidden shadow-2xl border-2 border-emerald-500/50 flex flex-col h-[94vh] max-h-[720px]">
         {/* Top Header Bar */}
         <div className="px-4 py-2.5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 border-b border-emerald-500/30 flex items-center justify-between z-10 shrink-0">
           <div className="flex-1 min-w-0 pr-3">
@@ -231,14 +231,27 @@ export default function CricketPitchView({
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            {isSelectMode && (
+              <button
+                type="button"
+                onClick={onSubmitTeam}
+                disabled={submitting || !captainId || !viceCaptainId}
+                className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wide shadow flex items-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition border border-emerald-300"
+              >
+                <Check className="w-3.5 h-3.5 stroke-[3]" />
+                <span>{submitting ? 'Saving...' : 'Register Team'}</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition cursor-pointer shrink-0"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
         </div>
 
         {/* ─── PROMINENT CAPTAIN & VICE-CAPTAIN SELECTION BAR (ALWAYS VISIBLE AT TOP) ─── */}
@@ -296,8 +309,8 @@ export default function CricketPitchView({
           </div>
         )}
 
-        {/* Stadium Grass Pitch Ground Canvas — Clean, without distracting role headings */}
-        <div className="relative flex-1 p-3 sm:p-4 overflow-y-auto bg-gradient-to-b from-[#14532d] via-[#166534] to-[#0f3e22] flex flex-col justify-around min-h-[460px] sm:min-h-[520px]">
+        {/* Stadium Grass Pitch Ground Canvas — Clean, responsive, never overflow outside viewport */}
+        <div className="relative flex-1 min-h-0 p-2 sm:p-4 overflow-y-auto bg-gradient-to-b from-[#14532d] via-[#166534] to-[#0f3e22] flex flex-col justify-around">
           {/* Grass Turf Stripes Background Overlay */}
           <div className="absolute inset-0 pointer-events-none opacity-20 bg-[repeating-linear-gradient(0deg,#000_0px,#000_28px,transparent_28px,transparent_56px)]" />
 
@@ -313,7 +326,7 @@ export default function CricketPitchView({
 
           {/* ROW 1: WICKET-KEEPERS (Top) — No text headings */}
           <div className="relative z-10 text-center py-0.5">
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-6 min-h-[70px]">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-6 min-h-[60px]">
               {wks.length > 0 ? (
                 wks.map(renderPlayerNode)
               ) : (
@@ -324,7 +337,7 @@ export default function CricketPitchView({
 
           {/* ROW 2: BATTERS (Upper Middle) — No text headings */}
           <div className="relative z-10 text-center py-0.5">
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-6 min-h-[70px]">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-6 min-h-[60px]">
               {bats.length > 0 ? (
                 bats.map(renderPlayerNode)
               ) : (
@@ -335,7 +348,7 @@ export default function CricketPitchView({
 
           {/* ROW 3: ALL-ROUNDERS (Lower Middle) — No text headings */}
           <div className="relative z-10 text-center py-0.5">
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-6 min-h-[70px]">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-6 min-h-[60px]">
               {ars.length > 0 ? (
                 ars.map(renderPlayerNode)
               ) : (
@@ -346,7 +359,7 @@ export default function CricketPitchView({
 
           {/* ROW 4: BOWLERS (Bottom) — No text headings */}
           <div className="relative z-10 text-center py-0.5">
-            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-6 min-h-[70px]">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-6 min-h-[60px]">
               {bowls.length > 0 ? (
                 bowls.map(renderPlayerNode)
               ) : (
@@ -356,13 +369,13 @@ export default function CricketPitchView({
           </div>
         </div>
 
-        {/* Bottom Bar: Back to XI + Submit/Update Team Button */}
+        {/* Bottom Bar: Back to XI + Register/Update Team Button (Always Sticky & Prominent) */}
         {isSelectMode ? (
-          <div className="p-3 bg-slate-900 border-t border-emerald-500/30 flex items-center justify-between gap-3 shrink-0 z-20">
+          <div className="p-3 sm:p-4 bg-slate-900 border-t border-emerald-500/40 flex items-center justify-between gap-3 shrink-0 z-30 sticky bottom-0 shadow-2xl">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 cursor-pointer"
+              className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold border border-slate-700 cursor-pointer shrink-0"
             >
               ← Back to XI
             </button>
@@ -371,17 +384,20 @@ export default function CricketPitchView({
               type="button"
               onClick={onSubmitTeam}
               disabled={submitting || !captainId || !viceCaptainId}
-              className="flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all border border-emerald-300 flex items-center justify-center gap-1.5"
+              className="flex-1 sm:flex-initial px-6 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider shadow-lg disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all border border-emerald-300 flex items-center justify-center gap-2"
             >
-              {submitting
-                ? 'Saving Team...'
-                : isEditing
-                ? 'Update Team (Free)'
-                : isLowBalance
-                ? `+ Add Funds (Need ₹${entryFee - (walletBalance || 0)})`
-                : entryFee > 0
-                ? `Pay ₹${entryFee} & Save Team`
-                : 'Submit Team (Free)'}
+              <Check className="w-4 h-4 stroke-[3]" />
+              <span>
+                {submitting
+                  ? 'Saving Team...'
+                  : isEditing
+                  ? 'Update Team (Free)'
+                  : isLowBalance
+                  ? `+ Add Funds (Need ₹${entryFee - (walletBalance || 0)})`
+                  : entryFee > 0
+                  ? `Pay ₹${entryFee} & Register Team`
+                  : 'Register Team (Free)'}
+              </span>
             </button>
           </div>
         ) : (

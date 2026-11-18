@@ -798,10 +798,13 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
           {/* ─── PUBLIC CONTESTS GRID (Mega, Battleground, Mini) ─── */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {filteredContests.map((c: any) => {
-              const spotsLeft = Math.max(0, (c.total_spots || 100) - (c.filled_spots || 0));
-              const percentFilled = Math.min(100, Math.round(((c.filled_spots || 0) / (c.total_spots || 100)) * 100));
+              const isUnlimited = Boolean(c.is_unlimited || (c.total_spots || 0) >= 1000000 || String(c.title || '').toLowerCase().includes('prime mega arena'));
+              const isCloneable = !isUnlimited && (c.type === 'multi_battlefield' || ['mini contest', 'mini emerald', 'prime quick play', 'royal battlefield arena', 'prime battlefield rush', 'amber battlefield blitz'].some(t => String(c.title || '').toLowerCase().includes(t)));
+              const spotsLeft = isUnlimited ? 999999 : Math.max(0, (c.total_spots || 100) - (c.filled_spots || 0));
+              const percentFilled = isUnlimited ? 0 : Math.min(100, Math.round(((c.filled_spots || 0) / (c.total_spots || 100)) * 100));
               const contestLocked = c.status !== 'open' || isLocked;
-              const contestFull = spotsLeft === 0;
+              // Unlimited or cloneable rooms NEVER show "Full" to user
+              const contestFull = !isUnlimited && !isCloneable && spotsLeft === 0;
 
               const targetUrl = `/team-builder/${matchId}?contestId=${c.id}`;
 
@@ -849,18 +852,25 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                       )}
                     </div>
 
-                    <div className="mt-4 space-y-1.5">
-                      <div className="flex items-center justify-between text-xs font-bold">
-                        <span className="text-[#2563EB] font-black">{spotsLeft} spots left</span>
-                        <span className="text-[#64748B]">{percentFilled}% filled • {c.total_spots} total</span>
+                    {isUnlimited ? (
+                      <div className="mt-4 py-2.5 px-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/60 rounded-xl flex items-center justify-between">
+                        <span className="text-[#2563EB] font-black text-xs uppercase tracking-wider">Unlimited Spots</span>
+                        <span className="text-[11px] font-mono font-bold text-slate-500">Open Arena</span>
                       </div>
-                      <div className="h-2 w-full bg-[#E2E8F0] rounded-full overflow-hidden border border-[#CBD5E1]">
-                        <div
-                          className="h-full bg-gradient-to-r from-[#2563EB] via-[#38BDF8] to-[#0284C7] rounded-full transition-all"
-                          style={{ width: `${percentFilled}%` }}
-                        />
+                    ) : (
+                      <div className="mt-4 space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-bold">
+                          <span className="text-[#2563EB] font-black">{spotsLeft} spots left</span>
+                          <span className="text-[#64748B]">{percentFilled}% filled • {c.total_spots} total</span>
+                        </div>
+                        <div className="h-2 w-full bg-[#E2E8F0] rounded-full overflow-hidden border border-[#CBD5E1]">
+                          <div
+                            className="h-full bg-gradient-to-r from-[#2563EB] via-[#38BDF8] to-[#0284C7] rounded-full transition-all"
+                            style={{ width: `${percentFilled}%` }}
+                          />
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
 
                   <div className="mt-5 pt-3 border-t border-[#E2E8F0] space-y-2">

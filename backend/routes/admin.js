@@ -11,6 +11,7 @@ const config = require('../config');
 const sequelize = require('../db/index');
 const { deleteMatchPermanently } = require('../services/cricketDeleteHelper');
 const { deployPreContestCricketBots } = require('./bot-manager');
+const { DEFAULT_CONTESTS } = require('../config/defaultContests');
 
 const router = express.Router();
 
@@ -1118,44 +1119,25 @@ router.post('/cricket/matches/verify-and-create', async (req, res) => {
         });
       }
     } else {
-      // Default standard contests if none supplied
-      await MatchContest.create({
-        match_id: newMatch.id,
-        type: 'mega',
-        title: `Mega Grand Contest (${category})`,
-        prize_pool: 100000,
-        entry_fee: 0,
-        total_spots: 10000,
-        filled_spots: 0,
-        bot_spots: 10000,
-        is_private: false,
-        status: 'open',
-      });
-      await MatchContest.create({
-        match_id: newMatch.id,
-        type: 'multi_battlefield',
-        title: `PUBG Battlefield Room #1 (${category})`,
-        prize_pool: 2500,
-        entry_fee: 0,
-        total_spots: 25,
-        spots_per_battlefield: 25,
-        battlefield_number: 1,
-        bot_spots: 7,
-        is_private: false,
-        status: 'open',
-      });
-      await MatchContest.create({
-        match_id: newMatch.id,
-        type: 'mini',
-        title: `Mini Contest (${category})`,
-        prize_pool: 1000,
-        entry_fee: 0,
-        total_spots: 100,
-        filled_spots: 0,
-        bot_spots: 25,
-        is_private: false,
-        status: 'open',
-      });
+      // Default 8 canonical contests if none supplied
+      for (const dc of DEFAULT_CONTESTS) {
+        await MatchContest.create({
+          match_id: newMatch.id,
+          type: dc.type,
+          title: dc.title,
+          prize_pool: dc.prize_pool,
+          entry_fee: dc.entry_fee || 0,
+          total_spots: dc.total_spots,
+          filled_spots: 0,
+          spots_per_battlefield: dc.spots_per_battlefield || null,
+          battlefield_number: dc.battlefield_number || null,
+          bot_spots: dc.bot_spots || 0,
+          is_private: false,
+          prize_breakup: typeof dc.prize_breakup === 'object' ? JSON.stringify(dc.prize_breakup) : dc.prize_breakup,
+          is_active: true,
+          status: 'open',
+        });
+      }
     }
 
     // Automatically trigger autonomous pre-contest bot deployment for eligible contests (Mega, Battlefield, Mini)
