@@ -22,7 +22,7 @@ type LeaderboardData = {
   batch_limit?: number;
   has_more?: boolean;
   contest_lineups_hidden?: boolean;
-  my_team?: { team_id: string; team_name: string; rank: number | null; total_points: number; players?: any[] } | null;
+  my_team?: { team_id: string; team_name: string; contest_id?: string; rank: number | null; total_points: number; players?: any[] } | null;
 };
 
 export default function MatchLeaderboardPage({ params }: { params: Promise<{ matchId: string }> }) {
@@ -57,18 +57,20 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
   const [compareTeamA, setCompareTeamA] = useState<any>(null);
   const [compareTeamB, setCompareTeamB] = useState<any>(null);
 
+  const isUpcoming = data?.match?.status === 'upcoming';
+  const activeMyTeam = data?.my_team || null;
+  const userHasTeamInThisContest = Boolean(
+    activeMyTeam &&
+    activeMyTeam.team_id &&
+    (!activeMyTeam.contest_id || !selectedContestId || String(activeMyTeam.contest_id) === String(selectedContestId) || String(activeMyTeam.contest_id) === String(data?.contest?.id))
+  );
+
   const handleOpenCompare = (team: any) => {
-    if (activeMyTeam) {
-      setCompareTeamA(activeMyTeam);
-      setCompareTeamB(team);
-    } else {
-      const rankOneTeam = displayedTeams.find(t => t.rank === 1 && t.team_id !== team.team_id) ||
-        (displayedTeams[0]?.team_id !== team.team_id ? displayedTeams[0] : displayedTeams[1]);
-      if (rankOneTeam) {
-        setCompareTeamA(rankOneTeam);
-        setCompareTeamB(team);
-      }
+    if (!userHasTeamInThisContest || !activeMyTeam) {
+      return;
     }
+    setCompareTeamA(activeMyTeam);
+    setCompareTeamB(team);
   };
 
   const autoLoadLoop = useCallback(async (startPage: number, contestId: string) => {
@@ -263,7 +265,6 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
 
   const match = data?.match;
   const matchTitle = match?.title || [match?.team_a, match?.team_b].filter(Boolean).join(' vs ') || 'Match Leaderboard';
-  const activeMyTeam = data?.my_team || null;
 
   return (
     <main className="max-w-6xl mx-auto px-3 sm:px-6 py-6 space-y-5 text-[#0F172A]">
@@ -349,12 +350,12 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
         </section>
       )}
 
-      {/* Your Team Quick Summary */}
-      {data?.my_team && (
+      {/* Your Team Quick Summary (Only when user has a team in this specific contest) */}
+      {userHasTeamInThisContest && activeMyTeam && (
         <section className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="prime-card-3d p-4"><p className="text-xs font-bold text-[#64748B]">Your Contest Rank</p><p className="mt-1 text-2xl font-black text-[#2563EB]">{data.my_team.rank ? `#${data.my_team.rank}` : '—'}</p></div>
-          <div className="prime-card-3d p-4"><p className="text-xs font-bold text-[#64748B]">Your Fantasy Points</p><p className="mt-1 text-2xl font-black text-[#D97706]">{Number(data.my_team.total_points || 0).toFixed(1)}</p></div>
-          <div className="prime-card-3d p-4 col-span-2 sm:col-span-1"><p className="text-xs font-bold text-[#64748B]">Current Contest</p><p className="mt-1 truncate text-base font-black">{data.contest?.contest_code ? `Contest #${data.contest.contest_code} • ` : ''}{data.contest?.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim() || 'Contest'}</p></div>
+          <div className="prime-card-3d p-4"><p className="text-xs font-bold text-[#64748B]">Your Contest Rank</p><p className="mt-1 text-2xl font-black text-[#2563EB]">{isUpcoming ? '—' : (activeMyTeam.rank ? `#${activeMyTeam.rank}` : '—')}</p></div>
+          <div className="prime-card-3d p-4"><p className="text-xs font-bold text-[#64748B]">Your Fantasy Points</p><p className="mt-1 text-2xl font-black text-[#D97706]">{isUpcoming ? '0.0' : Number(activeMyTeam.total_points || 0).toFixed(1)}</p></div>
+          <div className="prime-card-3d p-4 col-span-2 sm:col-span-1"><p className="text-xs font-bold text-[#64748B]">Current Contest</p><p className="mt-1 truncate text-base font-black">{data?.contest?.contest_code ? `Contest #${data.contest.contest_code} • ` : ''}{data?.contest?.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim() || 'Contest'}</p></div>
         </section>
       )}
 
@@ -403,13 +404,13 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
             </div>
           </div>
 
-          {/* Informational Banner for user without team */}
-          {!activeMyTeam && (
+          {/* Informational Banner for user without team in this contest */}
+          {!userHasTeamInThisContest && (
             <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 flex flex-wrap items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-2">
                 <span className="text-base">🏏</span>
                 <p className="font-bold text-blue-950">
-                  <span className="font-black text-[#2563EB]">Browsing all participant teams:</span> Tap any team to inspect its 11 players, or click <strong className="text-amber-700">Compare XI</strong> to compare lineups side-by-side!
+                  <span className="font-black text-[#2563EB]">Browsing participant teams:</span> Tap any team to inspect its 11 players. Register a team in this contest to unlock Compare XI!
                 </p>
               </div>
               <Link
@@ -487,7 +488,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                   >
                     <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 p-4 transition hover:bg-blue-50/50">
                       <div className="flex min-w-0 items-center gap-3">
-                        <span className={`flex h-10 min-w-10 items-center justify-center rounded-xl font-black text-sm border shadow-xs ${team.rank === 1
+                        <span className={`flex h-10 min-w-10 items-center justify-center rounded-xl font-black text-sm border shadow-xs ${isUpcoming ? 'bg-slate-100 text-slate-600 border-slate-200' : team.rank === 1
                           ? 'bg-amber-100 text-amber-900 border-amber-300'
                           : team.rank === 2
                             ? 'bg-slate-200 text-slate-800 border-slate-300'
@@ -495,7 +496,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                               ? 'bg-amber-50 text-amber-800 border-amber-200'
                               : 'bg-white text-blue-700 border-blue-200'
                           }`}>
-                          #{team.rank}
+                          {isUpcoming ? '—' : `#${team.rank}`}
                         </span>
 
                         <div className="min-w-0">
@@ -519,11 +520,11 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
 
                       <div className="flex items-center gap-3">
                         <div className="text-right">
-                          <p className="font-mono text-lg font-black text-[#D97706]">{Number(team.total_points || 0).toFixed(1)} pts</p>
+                          <p className="font-mono text-lg font-black text-[#D97706]">{isUpcoming ? '0.0' : Number(team.total_points || 0).toFixed(1)} pts</p>
                           <span className="text-[10px] font-bold text-blue-600 underline">Tap to view XI ▾</span>
                         </div>
 
-                        {!isMyTeam && (
+                        {userHasTeamInThisContest && !isMyTeam && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -532,7 +533,7 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                               handleOpenCompare(team);
                             }}
                             className="prime-btn-dark-3d !py-1.5 !px-3 text-xs font-black flex items-center gap-1.5 cursor-pointer hover:border-[#2563EB]"
-                            title="Side-by-side compare with your team or leader"
+                            title="Side-by-side compare with your team"
                           >
                             <Swords className="w-3.5 h-3.5 text-amber-500" />
                             <span>Compare XI</span>
@@ -580,16 +581,18 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
                             </div>
                             <div className="text-right shrink-0">
                               <span className="font-mono text-xs font-black text-emerald-600 block">
-                                +{Number(player.points_earned ?? (player.is_captain ? (player.points || 0) * 2 : player.is_vice_captain ? (player.points || 0) * 1.5 : (player.points || 0))).toFixed(1)} pts
+                                +{Number(isUpcoming ? 0 : (player.points_earned ?? (player.is_captain ? (player.points || 0) * 2 : player.is_vice_captain ? (player.points || 0) * 1.5 : (player.points || 0)))).toFixed(1)} pts
                               </span>
                               {(player.is_captain || player.is_vice_captain) && (
                                 <span className="text-[8px] font-semibold text-slate-500 block">
-                                  Base: {Number(player.points || 0).toFixed(1)}
+                                  Base: {Number(isUpcoming ? 0 : (player.points || 0)).toFixed(1)}
                                 </span>
                               )}
-                              <span className="text-[9px] font-bold text-[#64748B]">
-                                Rank #{player.rank || '—'}
-                              </span>
+                              {!isUpcoming && player.rank && (
+                                <span className="text-[9px] font-bold text-[#64748B]">
+                                  Rank #{player.rank}
+                                </span>
+                              )}
                             </div>
                           </div>
                         ))}
@@ -659,13 +662,13 @@ export default function MatchLeaderboardPage({ params }: { params: Promise<{ mat
 
       {/* Head-to-Head Compare XI Modal */}
       <CompareTeamModal
-        isOpen={Boolean(compareTeamA && compareTeamB)}
+        isOpen={Boolean(compareTeamA && compareTeamB && userHasTeamInThisContest)}
         onClose={() => { setCompareTeamA(null); setCompareTeamB(null); }}
         myTeam={compareTeamA}
         opponentTeam={compareTeamB}
-        myTeamLabel={activeMyTeam && compareTeamA?.team_id === activeMyTeam.team_id ? 'Your Team' : `Leader (Rank #${compareTeamA?.rank || 1})`}
-        opponentTeamLabel={activeMyTeam && compareTeamA?.team_id === activeMyTeam.team_id ? `Competitor (@${compareTeamB?.username || 'user'})` : `Team #${compareTeamB?.rank || '—'} (@${compareTeamB?.username || 'user'})`}
-        buildTeamLink={!activeMyTeam ? `/team-builder/${matchId}?contestId=${selectedContestId}` : undefined}
+        myTeamLabel="Your Team"
+        opponentTeamLabel={`Competitor (@${compareTeamB?.username || 'user'})`}
+        matchStatus={match?.status}
       />
     </main>
   );

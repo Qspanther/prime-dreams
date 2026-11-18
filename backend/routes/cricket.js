@@ -444,13 +444,17 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
 
     let players = await ensureMatchSquad(match);
 
+    const isUpcoming = match.status === 'upcoming';
+
     const calculatedPlayers = players.map((player) => {
       let statsObj = {};
       try {
         statsObj = typeof player.stats === 'string' ? JSON.parse(player.stats) : (player.stats || {});
       } catch (_) { statsObj = {}; }
       let points = Number(player.points) || 0;
-      if (points === 0 && (match.status === 'live' || match.status === 'completed')) {
+      if (isUpcoming) {
+        points = 0;
+      } else if (points === 0 && (match.status === 'live' || match.status === 'completed')) {
         let hash = 0;
         const str = (player.name || '') + (player.role || '') + (player.team_name || '');
         for (let i = 0; i < str.length; i++) { hash = (hash << 5) - hash + str.charCodeAt(i); hash |= 0; }
@@ -598,11 +602,13 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
 
       contestLeaderboard = await Promise.all(teams.map(async (team, index) => {
         const mappedPlayers = (team.teamPlayers || []).map(entry => {
-          const basePoints = playerPointsMap.get(entry.player?.id) ?? Number(entry.player?.points ?? 0);
+          const basePoints = isUpcoming ? 0 : (playerPointsMap.get(entry.player?.id) ?? Number(entry.player?.points ?? 0));
           const mult = entry.is_captain ? 2.0 : entry.is_vice_captain ? 1.5 : 1.0;
-          const ptsEarned = entry.points_earned && Number(entry.points_earned) > 0
-            ? Number(entry.points_earned)
-            : Math.round(basePoints * mult * 10) / 10;
+          const ptsEarned = isUpcoming
+            ? 0
+            : (entry.points_earned && Number(entry.points_earned) > 0
+                ? Number(entry.points_earned)
+                : Math.round(basePoints * mult * 10) / 10);
           return {
             id: entry.player?.id,
             name: entry.player?.name || 'Player',
@@ -610,7 +616,7 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
             team_name: entry.player?.team_name || null,
             points: basePoints,
             points_earned: ptsEarned,
-            rank: playerRanks.get(entry.player?.id) || null,
+            rank: isUpcoming ? null : (playerRanks.get(entry.player?.id) || null),
             is_captain: Boolean(entry.is_captain),
             is_vice_captain: Boolean(entry.is_vice_captain),
             photo_url: entry.player?.photo_url || null,
@@ -619,10 +625,10 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
           };
         });
 
-        const calculatedTeamTotal = Math.round(mappedPlayers.reduce((sum, p) => sum + (p.points_earned || 0), 0) * 10) / 10;
-        const totalPoints = Number(team.total_points) > 0 ? Number(team.total_points) : calculatedTeamTotal;
+        const calculatedTeamTotal = isUpcoming ? 0 : Math.round(mappedPlayers.reduce((sum, p) => sum + (p.points_earned || 0), 0) * 10) / 10;
+        const totalPoints = isUpcoming ? 0 : (Number(team.total_points) > 0 ? Number(team.total_points) : calculatedTeamTotal);
 
-        if (Number(team.total_points) === 0 && totalPoints > 0) {
+        if (!isUpcoming && Number(team.total_points) === 0 && totalPoints > 0) {
           team.update({ total_points: totalPoints }).catch(() => {});
         }
 
@@ -658,30 +664,42 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
         };
       }));
 
-      // If user is logged in and didn't specify teamId, look up their team in this contest or match
-      if (req.user && !myTeam) {
-        const userContestTeam = contestLeaderboard.find(t => t.user_id === req.user.id);
-        if (userContestTeam) {
-          myTeam = {
-            id: userContestTeam.team_id,
-            team_id: userContestTeam.team_id,
-            team_name: userContestTeam.team_name,
-            rank: userContestTeam.rank,
-            total_points: userContestTeam.total_points,
-            players: userContestTeam.players,
-          };
-        } else {
-          const anyUserTeam = await CricketTeam.findOne({
-            where: { match_id: match.id, user_id: req.user.id },
-            include: [{
-              model: TeamPlayer,
-              as: 'teamPlayers',
-              attributes: ['is_captain', 'is_vice_captain', 'points_earned'],
-              include: [{ model: CricketPlayer, as: 'player', attributes: ['id', 'name', 'role', 'team_name', 'points', 'stats', 'photo_url', 'credits'] }],
-            }],
-          });
-          if (anyUserTeam) {
-            myTeam = anyUserTeam;
+      // Strictly contest-scoped myTeam: User must have registered a team specifically in this contest!
+      if (req.user) {
+        // If myTeam was already found via teamId, verify it belongs to this selectedContest
+        if (myTeam && myTeam.contest_id && String(myTeam.contest_id) !== String(selectedContest.id)) {
+          myTeam = null;
+        }
+
+        if (!myTeam) {
+          const userContestTeam = contestLeaderboard.find(t => t.user_id === req.user.id);
+          if (userContestTeam) {
+            myTeam = {
+              id: userContestTeam.team_id,
+              team_id: userContestTeam.team_id,
+              contest_id: selectedContest.id,
+              team_name: userContestTeam.team_name,
+              rank: userContestTeam.rank,
+              total_points: userContestTeam.total_points,
+              players: userContestTeam.players,
+            };
+          } else {
+            // Check direct database record for this user in THIS selected contest only
+            const dbContestTeam = await CricketTeam.findOne({
+              where: { contest_id: selectedContest.id, user_id: req.user.id },
+              include: [{
+                model: TeamPlayer,
+                as: 'teamPlayers',
+                attributes: ['is_captain', 'is_vice_captain', 'points_earned'],
+                include: [{ model: CricketPlayer, as: 'player', attributes: ['id', 'name', 'role', 'team_name', 'points', 'stats', 'photo_url', 'credits'] }],
+              }],
+            });
+            if (dbContestTeam) {
+              myTeam = dbContestTeam;
+            } else {
+              // User has NO team registered in this specific contest!
+              myTeam = null;
+            }
           }
         }
       }
@@ -689,34 +707,37 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
 
     let myTeamPayload = null;
     if (myTeam) {
-      const myPlayers = myTeam.players || (myTeam.teamPlayers || []).map(entry => {
-        const basePoints = playerPointsMap.get(entry.player?.id) ?? Number(entry.player?.points ?? 0);
+      const myPlayers = (myTeam.players || (myTeam.teamPlayers || [])).map(entry => {
+        const pObj = entry.player || entry;
+        const basePoints = isUpcoming ? 0 : (playerPointsMap.get(pObj?.id) ?? Number(pObj?.points ?? 0));
         const mult = entry.is_captain ? 2.0 : entry.is_vice_captain ? 1.5 : 1.0;
-        const ptsEarned = entry.points_earned && Number(entry.points_earned) > 0
-          ? Number(entry.points_earned)
-          : Math.round(basePoints * mult * 10) / 10;
+        const ptsEarned = isUpcoming
+          ? 0
+          : (entry.points_earned && Number(entry.points_earned) > 0
+              ? Number(entry.points_earned)
+              : Math.round(basePoints * mult * 10) / 10);
         return {
-          id: entry.player?.id,
-          name: entry.player?.name || 'Player',
-          role: entry.player?.role || null,
-          team_name: entry.player?.team_name || null,
+          id: pObj?.id,
+          name: pObj?.name || 'Player',
+          role: pObj?.role || null,
+          team_name: pObj?.team_name || null,
           points: basePoints,
           points_earned: ptsEarned,
-          rank: playerRanks.get(entry.player?.id) || null,
+          rank: isUpcoming ? null : (playerRanks.get(pObj?.id) || null),
           is_captain: Boolean(entry.is_captain),
           is_vice_captain: Boolean(entry.is_vice_captain),
-          photo_url: entry.player?.photo_url || null,
-          credits: entry.player?.credits || 9.0,
-          stats: entry.player?.stats || {},
+          photo_url: pObj?.photo_url || null,
+          credits: pObj?.credits || 9.0,
+          stats: pObj?.stats || {},
         };
       });
 
-      const calculatedMyTeamPoints = Math.round(myPlayers.reduce((sum, p) => sum + (p.points_earned || 0), 0) * 10) / 10;
+      const calculatedMyTeamPoints = isUpcoming ? 0 : Math.round(myPlayers.reduce((sum, p) => sum + (p.points_earned || 0), 0) * 10) / 10;
       const myStanding = contestLeaderboard.find(team => team.team_id === (myTeam.id || myTeam.team_id));
-      const totalPoints = myStanding ? myStanding.total_points : (Number(myTeam.total_points) > 0 ? Number(myTeam.total_points) : calculatedMyTeamPoints);
+      const totalPoints = isUpcoming ? 0 : (myStanding ? myStanding.total_points : (Number(myTeam.total_points) > 0 ? Number(myTeam.total_points) : calculatedMyTeamPoints));
 
-      let myRank = myStanding?.rank || myTeam.rank || null;
-      if (!myRank && selectedContest) {
+      let myRank = isUpcoming ? null : (myStanding?.rank || myTeam.rank || null);
+      if (!myRank && selectedContest && !isUpcoming) {
         const higherTeams = await CricketTeam.count({
           where: {
             contest_id: selectedContest.id,
@@ -728,6 +749,7 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
 
       myTeamPayload = {
         team_id: myTeam.id || myTeam.team_id,
+        contest_id: myTeam.contest_id || selectedContest?.id,
         team_name: myTeam.team_name,
         rank: myRank || 1,
         total_points: totalPoints,

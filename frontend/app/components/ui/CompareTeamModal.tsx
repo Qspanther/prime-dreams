@@ -36,6 +36,7 @@ interface CompareTeamModalProps {
   myTeamLabel?: string;
   opponentTeamLabel?: string;
   buildTeamLink?: string;
+  matchStatus?: string;
 }
 
 export default function CompareTeamModal({
@@ -46,14 +47,16 @@ export default function CompareTeamModal({
   myTeamLabel,
   opponentTeamLabel,
   buildTeamLink,
+  matchStatus,
 }: CompareTeamModalProps) {
   if (!isOpen || !myTeam || !opponentTeam) return null;
 
+  const isUpcoming = matchStatus === 'upcoming';
   const myPlayers = myTeam.players || [];
   const oppPlayers = opponentTeam.players || [];
 
   const getEarned = (p?: ComparePlayer) => {
-    if (!p) return 0;
+    if (!p || isUpcoming) return 0;
     if (p.points_earned && Number(p.points_earned) > 0) return Number(p.points_earned);
     const base = Number(p.points) || 0;
     if (p.is_captain) return Math.round(base * 2 * 10) / 10;
@@ -62,6 +65,7 @@ export default function CompareTeamModal({
   };
 
   const getTeamPoints = (team: any) => {
+    if (isUpcoming) return 0;
     if (team.total_points && Number(team.total_points) > 0) return Number(team.total_points);
     const players = team.players || [];
     return Math.round(players.reduce((sum: number, p: any) => sum + getEarned(p), 0) * 10) / 10;
@@ -122,7 +126,7 @@ export default function CompareTeamModal({
                 {getTeamPoints(myTeam).toFixed(1)} <span className="text-xs font-normal">pts</span>
               </span>
               <span className="text-xs font-black text-slate-600">
-                {myTeam.rank ? `Rank #${myTeam.rank}` : '—'}
+                {!isUpcoming && myTeam.rank ? `Rank #${myTeam.rank}` : '—'}
               </span>
             </div>
           </div>
@@ -136,7 +140,7 @@ export default function CompareTeamModal({
                 {getTeamPoints(opponentTeam).toFixed(1)} <span className="text-xs font-normal">pts</span>
               </span>
               <span className="text-xs font-black text-slate-600">
-                {opponentTeam.rank ? `Rank #${opponentTeam.rank}` : '—'}
+                {!isUpcoming && opponentTeam.rank ? `Rank #${opponentTeam.rank}` : '—'}
               </span>
             </div>
           </div>

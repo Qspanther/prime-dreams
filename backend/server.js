@@ -244,11 +244,12 @@ async function start() {
     console.warn('⚠️ Default users seed notice:', defaultUserErr.message);
   }
 
-  // Ensure default sample matches exist if database is empty
+  // Ensure default sample matches exist only if database is completely fresh and never seeded
   try {
-    const { CricketMatch } = require('./db/models');
+    const { CricketMatch, SystemSetting } = require('./db/models');
+    const seedDone = await SystemSetting.findOne({ where: { key: 'cricket_initial_seed_done' } }).catch(() => null);
     const matchCount = await CricketMatch.count().catch(() => 0);
-    if (matchCount === 0) {
+    if (!seedDone && matchCount === 0) {
       await seedCricketMatches();
     }
   } catch (seedErr) {

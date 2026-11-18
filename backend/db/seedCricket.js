@@ -239,9 +239,21 @@ const MATCH_SQUADS = [
 ];
 
 async function seedCricketMatches() {
+  const { SystemSetting } = require('./models');
+  try {
+    const seedFlag = await SystemSetting.findOne({ where: { key: 'cricket_initial_seed_done' } });
+    if (seedFlag) {
+      console.log('🛡️ [Seed] Initial cricket seed has already run in the past. Skipping to respect admin deletions.');
+      return;
+    }
+  } catch (_) {}
+
   const matchCount = await CricketMatch.count();
   if (matchCount > 0) {
     console.log(`🏏 Cricket database already has ${matchCount} matches.`);
+    try {
+      await SystemSetting.findOrCreate({ where: { key: 'cricket_initial_seed_done' }, defaults: { key: 'cricket_initial_seed_done', value: 'true' } });
+    } catch (_) {}
     return;
   }
 
@@ -350,6 +362,10 @@ async function seedCricketMatches() {
 
     console.log(`   ✅ Seeded: ${match.title} [${match.category}] with 30 players & 3 contest types`);
   }
+
+  try {
+    await SystemSetting.findOrCreate({ where: { key: 'cricket_initial_seed_done' }, defaults: { key: 'cricket_initial_seed_done', value: 'true' } });
+  } catch (_) {}
 
   console.log('🏆 Prime Dreems cricket database seeding completed successfully!');
 }

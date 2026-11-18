@@ -452,14 +452,9 @@ async function processLiveIngestionTick() {
       }
     }
 
-    // Import only source-confirmed live fixtures that the dashboard does not know yet.
-    // This does not seed sample data or alter existing users, wallets, or contests.
-    for (const feedMatch of liveMatchesFeed) {
-      if (feedMatch.status !== 'live' || matchedFeedIds.has(feedMatch.cricbuzz_id)) continue;
-      if (isMatchBlacklisted(feedMatch)) continue;
-      const existing = await CricketMatch.findOne({ where: { cricbuzz_id: feedMatch.cricbuzz_id } });
-      if (!existing) await createDiscoveredLiveMatch(feedMatch);
-    }
+    // NOTE: Auto-discovery/creation of new matches and contests from Cricbuzz feed
+    // has been disabled per admin specification. Matches and contests must ONLY be
+    // imported or generated manually by an Administrator via the Admin Panel.
   } catch (err) {
     console.error('❌ [Ingestion Worker] Error in tick:', err);
     hotStore.metrics.worker_status = 'ERROR';
