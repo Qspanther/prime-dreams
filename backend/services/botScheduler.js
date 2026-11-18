@@ -22,21 +22,45 @@ const config = require('../config');
 let cachedBots = null;
 let cachedBotsTime = 0;
 
-async function getCachedBots() {
+function clearCachedBots() {
+  cachedBots = null;
+  cachedBotsTime = 0;
+}
+
+async function getCachedBots(forceRefresh = false) {
   const now = Date.now();
-  if (cachedBots && (now - cachedBotsTime < 300000)) {
+  if (!forceRefresh && cachedBots && Array.isArray(cachedBots) && cachedBots.length > 0 && (now - cachedBotsTime < 300000)) {
     return cachedBots;
   }
-  const bots = await User.findAll({
+  let bots = await User.findAll({
     where: { is_bot: true },
     attributes: ['id', 'email', 'name', 'username'],
     order: [['created_at', 'ASC']],
     limit: 10000,
     raw: true
   });
-  cachedBots = bots;
+
+  // Auto-seed bots if DB is completely empty
+  if (!bots || bots.length === 0) {
+    try {
+      const { seedBots } = require('./seed-10000-bots');
+      console.log('🤖 [BotScheduler] No bots found in DB. Auto-seeding 10,000 bots...');
+      await seedBots(10000);
+      bots = await User.findAll({
+        where: { is_bot: true },
+        attributes: ['id', 'email', 'name', 'username'],
+        order: [['created_at', 'ASC']],
+        limit: 10000,
+        raw: true
+      });
+    } catch (e) {
+      console.warn('⚠️ Auto-seed bots notice in getCachedBots:', e.message);
+    }
+  }
+
+  cachedBots = (bots && bots.length > 0) ? bots : null;
   cachedBotsTime = now;
-  return cachedBots;
+  return cachedBots || [];
 }
 
 /**
@@ -659,9 +683,12 @@ class BotScheduler {
         });
       }
 
-      // Bulk create teams, players, participants
+      // Bulk create teams, players, participants with safe chunking
       await CricketTeam.bulkCreate(newTeams);
-      await TeamPlayer.bulkCreate(newTeamPlayers);
+      const CHUNK_PLAYERS = 100;
+      for (let p = 0; p < newTeamPlayers.length; p += CHUNK_PLAYERS) {
+        await TeamPlayer.bulkCreate(newTeamPlayers.slice(p, p + CHUNK_PLAYERS));
+      }
       await ContestParticipant.bulkCreate(newParticipants);
 
       const updatedFilled = currentFilled + newTeams.length;
@@ -722,6 +749,7 @@ module.exports = {
   isContestEligibleForBots,
   buildValidCricketLineup,
   getCachedBots,
+  clearCachedBots,
   getBallsRemaining,
   checkIsEndGame,
   rearrangeBotsForEndGame,

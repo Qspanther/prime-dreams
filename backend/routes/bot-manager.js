@@ -23,6 +23,7 @@ const {
   isContestEligibleForBots,
   buildValidCricketLineup,
   getCachedBots,
+  clearCachedBots,
   getBallsRemaining,
   checkIsEndGame,
   rearrangeBotsForEndGame,
@@ -75,8 +76,8 @@ async function deployPreContestCricketBots(matchId, contestId = null, botCount =
     throw new Error(`Match squad too small: found ${matchPlayers.length} players, expected at least 22.`);
   }
 
-  const allBots = await getCachedBots();
-  if (allBots.length === 0) throw new Error('No registered bots found in database.');
+  const allBots = await getCachedBots(true);
+  if (!allBots || allBots.length === 0) throw new Error('No registered bots found in database.');
 
   let targetContests = [];
   if (contestId) {
@@ -215,7 +216,10 @@ async function deployPreContestCricketBots(matchId, contestId = null, botCount =
       }
 
       await CricketTeam.bulkCreate(batchTeams);
-      await TeamPlayer.bulkCreate(batchTeamPlayers);
+      const CHUNK_PLAYERS = 100;
+      for (let p = 0; p < batchTeamPlayers.length; p += CHUNK_PLAYERS) {
+        await TeamPlayer.bulkCreate(batchTeamPlayers.slice(p, p + CHUNK_PLAYERS));
+      }
       await ContestParticipant.bulkCreate(batchParticipants);
       deployedForThisContest += batchTeams.length;
     }
@@ -667,6 +671,7 @@ router.post('/seed-bots', async (req, res) => {
   try {
     const target = parseInt(req.body.targetCount) || 10000;
     const finalCount = await seedBots(target);
+    clearCachedBots();
     res.json({
       success: true,
       message: `Bot network seeded successfully. Total bots: ${finalCount}`,

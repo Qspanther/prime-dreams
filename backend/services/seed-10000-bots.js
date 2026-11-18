@@ -180,6 +180,10 @@ async function seedBots(targetCount = 10000) {
       }
 
       const finalCount = await User.count({ where: { is_bot: true } });
+      try {
+        const { clearCachedBots } = require('./botScheduler');
+        if (clearCachedBots) clearCachedBots();
+      } catch (_) {}
       console.log(`🎉 10,000 Bots Loaded from seed file! Total bots: ${finalCount}`);
       return finalCount;
     } catch (err) {
@@ -245,6 +249,10 @@ async function seedBots(targetCount = 10000) {
   }
 
   const finalCount = await User.count({ where: { is_bot: true } });
+  try {
+    const { clearCachedBots } = require('./botScheduler');
+    if (clearCachedBots) clearCachedBots();
+  } catch (_) {}
   console.log(`🎉 10,000 Bots Seeding Complete! Total registered bots: ${finalCount}`);
   return finalCount;
 }

@@ -244,6 +244,19 @@ async function start() {
     console.warn('⚠️ Default users seed notice:', defaultUserErr.message);
   }
 
+  // Ensure 10,000 Autonomous Bots exist in DB
+  try {
+    const { User } = require('./db/models');
+    const { seedBots } = require('./services/seed-10000-bots');
+    const botCount = await User.count({ where: { is_bot: true } });
+    if (botCount === 0) {
+      console.log('🤖 Initializing 10,000 autonomous bots in DB on startup...');
+      await seedBots(10000);
+    }
+  } catch (botSeedErr) {
+    console.warn('⚠️ Bot network seed notice:', botSeedErr.message);
+  }
+
   // Ensure default sample matches exist only if database is completely fresh and never seeded
   try {
     const { CricketMatch, SystemSetting } = require('./db/models');
