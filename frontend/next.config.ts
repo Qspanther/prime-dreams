@@ -13,7 +13,6 @@ if (!rawBackendUrl) {
 const backendUrl = rawBackendUrl.replace(/\/+$/, '');
 
 const nextConfig: NextConfig = {
-  output: 'standalone',
   turbopack: {
     root: __dirname,
   },
@@ -22,9 +21,6 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   compiler: {
     removeConsole: process.env.NODE_ENV === 'production' ? { exclude: ['error', 'warn'] } : false,
-  },
-  experimental: {
-    optimizePackageImports: ['lucide-react', 'framer-motion'],
   },
   images: {
     formats: ['image/avif', 'image/webp'],

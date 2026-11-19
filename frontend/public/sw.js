@@ -1,6 +1,6 @@
 // ─── Prime Dreams Progressive Web App Service Worker ───
 // Network-first for navigation, ensure mobile devices always fetch the latest live release.
-const CACHE_NAME = 'prime-dreams-v5';
+const CACHE_NAME = 'prime-dreams-v11';
 
 self.addEventListener('install', (event) => {
   // Activate immediately without waiting for existing tabs to close
@@ -25,12 +25,13 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // 1. Bypass all non-GET, API, backend proxy, socket, and telemetry requests
+  // 1. Bypass all non-GET, API, backend proxy, socket, and Next.js internal script/chunk requests
   if (
     event.request.method !== 'GET' ||
     url.pathname.startsWith('/api') ||
     url.pathname.startsWith('/api-backend') ||
-    url.pathname.startsWith('/socket.io')
+    url.pathname.startsWith('/socket.io') ||
+    url.pathname.startsWith('/_next/')
   ) {
     return;
   }

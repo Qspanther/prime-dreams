@@ -488,14 +488,14 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
   const roleFilteredPlayers = players.filter((p) => normalizeRole(p.role) === selectedRole);
 
   return (
-    <div className="px-3 sm:px-6 py-6 max-w-4xl mx-auto w-full space-y-6 bg-transparent text-[#0F172A]">
+    <div className="px-2 sm:px-6 pt-1.5 pb-28 sm:pb-32 max-w-4xl mx-auto w-full space-y-2 sm:space-y-4 bg-transparent text-[#0F172A]">
       {/* Top Header */}
       <div className="flex items-center justify-between">
         <Link
           href={`/match/${matchId}`}
-          className="inline-flex items-center gap-2 text-xs font-black text-[#475569] hover:text-[#2563EB] transition group"
+          className="inline-flex items-center gap-1.5 text-xs font-black text-[#475569] hover:text-[#2563EB] transition group"
         >
-          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+          <ArrowLeft className="w-3.5 h-3.5 group-hover:-translate-x-1 transition-transform" />
           <span>Exit Builder</span>
         </Link>
         {match && <CategoryBadge category={match.category} size="xs" />}
@@ -503,38 +503,38 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
 
       {/* Target Contest Banner - Prominent Contest Identifier */}
       {activeContest && (
-        <div className="rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 p-4 sm:p-5 text-white shadow-lg border-2 border-amber-400 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl font-black shrink-0 border border-white/30 shadow-inner">
+        <div className="rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 p-2.5 sm:p-4 text-white shadow-md border-2 border-amber-400 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg bg-white/20 backdrop-blur-md flex items-center justify-center text-lg sm:text-xl font-black shrink-0 border border-white/30 shadow-inner">
               🏆
             </div>
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md bg-white text-amber-900 shadow-xs">
-                  CONTEST IDENTIFIER
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.2 rounded bg-white text-amber-900 shadow-xs">
+                  CONTEST
                 </span>
-                <span className="text-base sm:text-xl font-black font-mono tracking-tight bg-black/35 px-3 py-0.5 rounded-lg border border-white/30 text-yellow-300">
-                  CONTEST #{activeContest.contest_code || activeContest.id?.slice(0, 8)}
+                <span className="text-xs sm:text-base font-black font-mono tracking-tight bg-black/35 px-2 py-0.5 rounded-lg border border-white/30 text-yellow-300">
+                  #{activeContest.contest_code || activeContest.id?.slice(0, 8)}
                 </span>
               </div>
-              <h2 className="text-sm sm:text-lg font-black text-white mt-1">
+              <h2 className="text-xs sm:text-base font-black text-white mt-0.5">
                 {activeContest.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').trim() || 'Official Contest'}
               </h2>
-              <p className="text-xs text-amber-100 font-semibold">
-                {activeContest.filled_spots || 1} Total Teams Competing • Results &amp; Rankings strictly scoped to this contest
+              <p className="text-[10px] sm:text-xs text-amber-100 font-semibold">
+                {activeContest.filled_spots || 1} Total Teams Competing
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="font-black text-xs px-3 py-1.5 rounded-xl bg-emerald-500 text-white border border-emerald-300 shadow-md">
-              FREE (Pass Entry)
+            <span className="font-black text-[11px] sm:text-xs px-2.5 py-1 rounded-lg bg-emerald-500 text-white border border-emerald-300 shadow-sm">
+              FREE (Pass)
             </span>
           </div>
         </div>
       )}
 
       {editingTeamId && (
-        <div className={`p-3.5 rounded-xl border-2 text-xs font-black flex items-center gap-2 ${isLocked
+        <div className={`p-2.5 rounded-xl border-2 text-xs font-black flex items-center gap-2 ${isLocked
             ? 'bg-red-50 border-red-300 text-red-700'
             : 'bg-green-50 border-green-300 text-green-700'
           }`}>
@@ -549,104 +549,104 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
 
       {/* Squads Locked Banner */}
       {isLocked && (
-        <div className="rounded-2xl bg-red-50 border-2 border-red-300 p-4 flex flex-wrap items-center justify-between gap-3 text-red-900 shadow-sm">
-          <div className="flex items-center gap-3">
-            <span className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-md">🔒</span>
+        <div className="rounded-xl bg-red-50 border-2 border-red-300 p-3 flex flex-wrap items-center justify-between gap-2.5 text-red-900 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="w-8 h-8 rounded-lg bg-red-600 text-white flex items-center justify-center font-black text-xs shrink-0 shadow-sm">🔒</span>
             <div>
-              <h3 className="font-black text-sm text-red-950">Squads Locked (Match In-Play)</h3>
-              <p className="text-xs text-red-700 font-medium">Match has started. Per official rules, teams cannot be created or edited once the match is in-play.</p>
+              <h3 className="font-black text-xs sm:text-sm text-red-950">Squads Locked (Match In-Play)</h3>
+              <p className="text-[11px] text-red-700 font-medium">Match has started. Per official rules, teams cannot be edited once in-play.</p>
             </div>
           </div>
-          <Link href={`/match/${matchId}`} className="prime-btn-dark-3d !py-2 !px-3 text-xs shrink-0">
-            Live Score &amp; Leaderboard →
+          <Link href={`/match/${matchId}`} className="prime-btn-dark-3d !py-1.5 !px-2.5 text-[11px] shrink-0">
+            Live Score →
           </Link>
         </div>
       )}
 
       {/* Match & Squad Meter Card */}
       {match && (
-        <div className="prime-card-3d p-5 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#E2E8F0]">
-            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+        <div className="prime-card-3d p-3 sm:p-4 space-y-2.5 sm:space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-[#E2E8F0]">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
               {/* Team A Logo */}
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border border-[#93C5FD] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border border-[#93C5FD] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
                 {resolveImageUrl(match.team_a_logo) ? (
-                  <Image src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} width={40} height={40} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                  <Image src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} width={36} height={36} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                 ) : (match.team_a_code || match.team_a?.slice(0, 3).toUpperCase())}
               </div>
 
               <div className="min-w-0 flex-1">
-                <h2 className="font-black text-[#0F172A] text-sm sm:text-xl truncate">
+                <h2 className="font-black text-[#0F172A] text-xs sm:text-lg truncate">
                   {match.team_a} vs {match.team_b}
                 </h2>
-                <p className="text-[11px] sm:text-xs text-[#64748B] font-bold">Max 7 players from any single team</p>
+                <p className="text-[10px] sm:text-xs text-[#64748B] font-bold">Max 7 players from one team</p>
               </div>
 
               {/* Team B Logo */}
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-[#FDE68A] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-[#FDE68A] flex items-center justify-center font-black text-xs text-white overflow-hidden shrink-0">
                 {resolveImageUrl(match.team_b_logo) ? (
-                  <Image src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} width={40} height={40} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                  <Image src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} width={36} height={36} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                 ) : (match.team_b_code || match.team_b?.slice(0, 3).toUpperCase())}
               </div>
             </div>
 
-            <div className="flex items-center justify-between sm:justify-end gap-2 bg-[#F8FAFC] sm:bg-transparent p-2 sm:p-0 rounded-xl border sm:border-0 border-[#CBD5E1] shrink-0">
-              <span className="text-[10px] uppercase font-black tracking-wider text-[#64748B]">Credits Left</span>
-              <span className={`text-base sm:text-xl font-black font-mono ${creditsLeft < 9 ? 'text-[#DC2626]' : 'text-[#D97706] drop-shadow-[0_0_8px_rgba(245,158,11,0.4)]'}`}>
+            <div className="flex items-center justify-between sm:justify-end gap-2 bg-[#F8FAFC] sm:bg-transparent p-1.5 sm:p-0 rounded-lg border sm:border-0 border-[#CBD5E1] shrink-0">
+              <span className="text-[9px] uppercase font-black tracking-wider text-[#64748B]">Credits Left</span>
+              <span className={`text-sm sm:text-lg font-black font-mono ${creditsLeft < 9 ? 'text-[#DC2626]' : 'text-[#D97706]'}`}>
                 {creditsLeft} / {TOTAL_CREDITS}
               </span>
             </div>
           </div>
 
           {/* 11 Players Count Meter */}
-          <div className="grid grid-cols-4 gap-1.5 sm:gap-2 pt-1 text-center">
-            <div className="p-2 sm:p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1] flex flex-col justify-center">
-              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-[#64748B] tracking-wider truncate">
+          <div className="grid grid-cols-4 gap-1 sm:gap-2 text-center">
+            <div className="p-1.5 sm:p-2 rounded-lg bg-[#F1F5F9] border border-[#CBD5E1] flex flex-col justify-center">
+              <span className="block text-[8px] sm:text-[9px] font-black uppercase text-[#64748B] tracking-wider truncate">
                 Selected
               </span>
-              <span className="block text-xs sm:text-base font-black font-mono text-[#2563EB] whitespace-nowrap mt-0.5">
+              <span className="block text-[11px] sm:text-sm font-black font-mono text-[#2563EB] whitespace-nowrap mt-0.5">
                 {selectedPlayerIds.length}/11
               </span>
             </div>
-            <div className="p-2 sm:p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1] flex flex-col justify-center">
-              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-[#64748B] tracking-wider truncate" title={match.team_a}>
+            <div className="p-1.5 sm:p-2 rounded-lg bg-[#F1F5F9] border border-[#CBD5E1] flex flex-col justify-center">
+              <span className="block text-[8px] sm:text-[9px] font-black uppercase text-[#64748B] tracking-wider truncate" title={match.team_a}>
                 {match.team_a_code || match.team_a?.slice(0, 5).toUpperCase()}
               </span>
-              <span className="block text-xs sm:text-base font-black font-mono text-[#0F172A] whitespace-nowrap mt-0.5">
+              <span className="block text-[11px] sm:text-sm font-black font-mono text-[#0F172A] whitespace-nowrap mt-0.5">
                 {teamCounts[match.team_a] || 0}/7
               </span>
             </div>
-            <div className="p-2 sm:p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1] flex flex-col justify-center">
-              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-[#64748B] tracking-wider truncate" title={match.team_b}>
+            <div className="p-1.5 sm:p-2 rounded-lg bg-[#F1F5F9] border border-[#CBD5E1] flex flex-col justify-center">
+              <span className="block text-[8px] sm:text-[9px] font-black uppercase text-[#64748B] tracking-wider truncate" title={match.team_b}>
                 {match.team_b_code || match.team_b?.slice(0, 5).toUpperCase()}
               </span>
-              <span className="block text-xs sm:text-base font-black font-mono text-[#0F172A] whitespace-nowrap mt-0.5">
+              <span className="block text-[11px] sm:text-sm font-black font-mono text-[#0F172A] whitespace-nowrap mt-0.5">
                 {teamCounts[match.team_b] || 0}/7
               </span>
             </div>
-            <div className="p-2 sm:p-2.5 rounded-xl bg-[#F1F5F9] border border-[#CBD5E1] flex flex-col justify-center">
-              <span className="block text-[9px] sm:text-[10px] font-black uppercase text-[#64748B] tracking-wider truncate">
+            <div className="p-1.5 sm:p-2 rounded-lg bg-[#F1F5F9] border border-[#CBD5E1] flex flex-col justify-center">
+              <span className="block text-[8px] sm:text-[9px] font-black uppercase text-[#64748B] tracking-wider truncate">
                 Squad
               </span>
-              <span className="block text-xs sm:text-base font-black font-mono text-[#0F172A] whitespace-nowrap mt-0.5">
+              <span className="block text-[11px] sm:text-sm font-black font-mono text-[#0F172A] whitespace-nowrap mt-0.5">
                 {players.length || 22} Total
               </span>
             </div>
           </div>
 
           {/* Stadium Pitch & Pitch Insights Bar */}
-          <div className="rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] p-3 shadow-xs">
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="rounded-lg border border-[#CBD5E1] bg-[#F8FAFC] p-2 sm:p-2.5 shadow-xs">
+            <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px]">
               <div className="flex items-center gap-1.5 font-black text-[#0F172A]">
-                <MapPin className="w-4 h-4 text-[#2563EB]" />
-                <span>{match.venue || 'Wankhede Stadium, Mumbai'}</span>
+                <MapPin className="w-3.5 h-3.5 text-[#2563EB]" />
+                <span className="truncate">{match.venue || 'Wankhede Stadium, Mumbai'}</span>
               </div>
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[11px] font-bold text-[#475569]">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5 text-[10px] sm:text-[11px] font-bold text-[#475569]">
                 <span>Pitch: <strong className="text-[#0F172A]">Batting Friendly</strong></span>
                 <span>•</span>
-                <span>Good for: <strong className="text-[#2563EB]">Pacers (64%)</strong></span>
+                <span>Pacers: <strong className="text-[#2563EB]">64%</strong></span>
                 <span>•</span>
-                <span>Avg 1st Inn: <strong className="text-[#D97706] font-mono">168</strong></span>
+                <span>Avg: <strong className="text-[#D97706] font-mono">168</strong></span>
               </div>
             </div>
           </div>
@@ -655,29 +655,29 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
 
       {/* My Teams — up to 6 per match: select, clone, or start new */}
       {token && (
-        <div className="prime-card-3d p-4 space-y-3">
+        <div className="prime-card-3d p-2.5 sm:p-3.5 space-y-2">
           <div className="flex items-center justify-between">
             <h3 className="font-black text-xs uppercase text-[#0F172A]">My Teams ({myTeams.length}/6)</h3>
             <button
               onClick={startNewTeam}
               disabled={myTeams.length >= 6 || isLocked}
-              className="prime-btn-3d !py-1.5 !px-3 text-[11px] font-black uppercase disabled:opacity-40"
+              className="prime-btn-3d !py-1 !px-2.5 text-[10px] sm:text-[11px] font-black uppercase disabled:opacity-40"
             >
               + New Team
             </button>
           </div>
           {myTeams.length === 0 ? (
-            <p className="text-xs text-[#64748B] font-bold">No saved teams yet. Build your first XI below.</p>
+            <p className="text-[11px] text-[#64748B] font-bold">No saved teams yet. Build your first XI below.</p>
           ) : (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {myTeams.map((t) => (
                 <div
                   key={t.id}
-                  className={`flex items-center gap-1.5 rounded-lg border-2 px-2.5 py-1.5 ${editingTeamId === t.id ? 'border-[#2563EB] bg-[#EFF6FF]' : 'border-[#CBD5E1] bg-white'}`}
+                  className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 ${editingTeamId === t.id ? 'border-[#2563EB] bg-[#EFF6FF]' : 'border-[#CBD5E1] bg-white'}`}
                 >
                   <button
                     onClick={() => handleSelectExistingTeam(t)}
-                    className="text-[11px] font-black text-[#0F172A] hover:text-[#2563EB]"
+                    className="text-[10px] sm:text-[11px] font-black text-[#0F172A] hover:text-[#2563EB]"
                     title="Edit this team"
                   >
                     {t.team_name || 'Team'}
@@ -685,7 +685,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                   <button
                     onClick={() => handleCloneTeam(t)}
                     disabled={myTeams.length >= 6 || isLocked}
-                    className="text-[10px] font-black text-[#D97706] hover:text-[#B45309] disabled:opacity-40"
+                    className="text-[9px] font-black text-[#D97706] hover:text-[#B45309] disabled:opacity-40"
                     title="Duplicate this team"
                   >
                     Clone
@@ -695,13 +695,13 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
             </div>
           )}
           {editingTeamId && !isLocked && (match?.contests || []).length > 0 && (
-            <div className="pt-2 border-t border-[#E2E8F0] space-y-2">
-              <label className="pd-label">Switch this team to another contest</label>
-              <div className="flex flex-wrap gap-2">
+            <div className="pt-2 border-t border-[#E2E8F0] space-y-1.5">
+              <label className="pd-label text-[10px]">Switch this team to another contest</label>
+              <div className="flex flex-wrap gap-1.5">
                 <select
                   value={switchContestId}
                   onChange={(e) => setSwitchContestId(e.target.value)}
-                  className="pd-input flex-1 min-w-[160px] text-xs font-bold"
+                  className="pd-input flex-1 min-w-[140px] text-xs font-bold py-1"
                 >
                   <option value="">Select contest...</option>
                   {(match.contests || [])
@@ -713,9 +713,9 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                 <button
                   onClick={handleSwitchContest}
                   disabled={switching || !switchContestId}
-                  className="prime-btn-gold-3d !py-2 !px-4 text-[11px] font-black uppercase disabled:opacity-40"
+                  className="prime-btn-gold-3d !py-1.5 !px-3 text-[10px] font-black uppercase disabled:opacity-40"
                 >
-                  {switching ? 'Switching...' : 'Switch Contest'}
+                  {switching ? '...' : 'Switch'}
                 </button>
               </div>
             </div>
@@ -725,16 +725,16 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
 
       {/* Contest Selection & Free Access Mode Bar */}
       {!h2hFlow && (
-        <div className="prime-card-3d p-4 bg-gradient-to-r from-blue-50/70 via-amber-50/50 to-slate-50 border-2 border-blue-200/90 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="prime-card-3d p-2.5 sm:p-3.5 bg-gradient-to-r from-blue-50/70 via-amber-50/50 to-slate-50 border border-blue-200/90 space-y-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <label className="pd-label !text-blue-900 text-[11px] font-black uppercase flex items-center gap-1.5 mb-1.5">
-                <Trophy className="w-3.5 h-3.5 text-[#D97706]" /> Target Contest
+              <label className="pd-label !text-blue-900 text-[10px] sm:text-[11px] font-black uppercase flex items-center gap-1 mb-1">
+                <Trophy className="w-3 h-3 text-[#D97706]" /> Target Contest
               </label>
               <select
                 value={selectedContestId}
                 onChange={(e) => setSelectedContestId(e.target.value)}
-                className="pd-input text-xs font-bold text-[#0F172A] bg-white border-blue-300 w-full"
+                className="pd-input text-xs font-bold text-[#0F172A] bg-white border-blue-300 w-full py-1"
               >
                 {(match?.contests || [])
                   .filter((c: any) => c.is_active && !c.is_private && ['mega', 'multi_battlefield', 'mini'].includes(c.type))
@@ -746,19 +746,19 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
               </select>
             </div>
 
-            <div className="flex items-center gap-3 shrink-0 pt-3 sm:pt-0">
+            <div className="flex items-center gap-2.5 shrink-0 pt-1 sm:pt-0">
               <div className="text-right">
-                <span className="text-[10px] text-[#64748B] font-bold block">Entry Fee</span>
-                <span className="font-mono text-sm font-black text-[#059669]">
+                <span className="text-[9px] text-[#64748B] font-bold block">Entry Fee</span>
+                <span className="font-mono text-xs font-black text-[#059669]">
                   FREE (Pass)
                 </span>
               </div>
 
-              <div className="h-8 w-px bg-slate-300" />
+              <div className="h-6 w-px bg-slate-300" />
 
               <div className="text-right">
-                <span className="text-[10px] text-[#64748B] font-bold block">Access Mode</span>
-                <span className="font-mono text-xs font-black text-[#2563EB]">
+                <span className="text-[9px] text-[#64748B] font-bold block">Access Mode</span>
+                <span className="font-mono text-[11px] font-black text-[#2563EB]">
                   Tournament Pass
                 </span>
               </div>
@@ -768,7 +768,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
       )}
 
       {/* Role Navigation Tabs with Limits */}
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-4 gap-1.5 sm:gap-2">
         {([
           { key: 'WK', label: 'WK', limit: '1-4' },
           { key: 'BAT', label: 'BAT', limit: '3-6' },
@@ -778,14 +778,14 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
           <button
             key={key}
             onClick={() => setSelectedRole(key)}
-            className={`py-2.5 px-2 rounded-xl border text-center transition cursor-pointer ${
+            className={`py-1.5 sm:py-2 px-1 rounded-xl border text-center transition cursor-pointer ${
               selectedRole === key
-                ? 'prime-btn-3d !py-2.5 !px-2'
+                ? 'prime-btn-3d !py-1.5 sm:!py-2 !px-1'
                 : 'bg-white border-[#CBD5E1] text-[#64748B] hover:border-[#93C5FD] hover:text-[#2563EB]'
             }`}
           >
             <div className="font-black text-xs sm:text-sm">{label} ({roleCounts[key]})</div>
-            <div className="text-[10px] font-bold opacity-80 mt-0.5">{limit}</div>
+            <div className="text-[9px] font-bold opacity-80 mt-0.5">{limit}</div>
           </button>
         ))}
       </div>
@@ -810,7 +810,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
       )}
 
       {/* Compact Rectangular Players Card Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-2.5 max-h-[38rem] overflow-y-auto pr-1">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-1.5 sm:gap-2.5 max-h-[38rem] overflow-y-auto pr-1">
         {roleFilteredPlayers.map((p) => {
           const isSelected = selectedPlayerIds.includes(p.id);
           const prevMatchPts = p.last_match_points != null ? p.last_match_points : (p.points || 0);
@@ -819,44 +819,44 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
             <div
               key={p.id}
               onClick={() => togglePlayer(p)}
-              className={`relative rounded-xl border-2 p-2 sm:p-2.5 flex flex-col items-center text-center cursor-pointer transition-all select-none ${
+              className={`relative rounded-xl border-2 p-1.5 sm:p-2 flex flex-col items-center text-center cursor-pointer transition-all select-none ${
                 isSelected
                   ? 'bg-[#EFF6FF] border-[#2563EB] shadow-[0_0_12px_rgba(37,99,235,0.25)]'
                   : 'bg-white border-[#CBD5E1] hover:border-[#93C5FD] hover:shadow-xs'
               }`}
             >
               {/* Card Top Header: Team Badge, Info Icon, & Checkbox/Plus */}
-              <div className="w-full flex items-center justify-between mb-1">
-                <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-[#0F172A] text-white border border-black/10">
+              <div className="w-full flex items-center justify-between mb-0.5">
+                <span className="text-[8px] sm:text-[9px] font-black uppercase px-1.5 py-0.2 rounded bg-[#0F172A] text-white border border-black/10">
                   {p.team_name?.slice(0, 3).toUpperCase()}
                 </span>
 
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1 sm:gap-1.5">
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       setDetailPlayer(p);
                     }}
-                    className="w-5 h-5 rounded-full bg-[#F1F5F9] hover:bg-[#E2E8F0] border border-[#CBD5E1] text-[#64748B] hover:text-[#2563EB] flex items-center justify-center transition cursor-pointer"
+                    className="w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full bg-[#F1F5F9] hover:bg-[#E2E8F0] border border-[#CBD5E1] text-[#64748B] hover:text-[#2563EB] flex items-center justify-center transition cursor-pointer"
                     title="View Player Stats & Recent 5 Matches"
                   >
-                    <Info className="w-3 h-3" />
+                    <Info className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
                   </button>
 
                   <span
-                    className={`w-5 h-5 rounded-full border flex items-center justify-center font-black text-xs transition-all ${
+                    className={`w-4.5 h-4.5 sm:w-5 sm:h-5 rounded-full border flex items-center justify-center font-black text-xs transition-all ${
                       isSelected
                         ? 'bg-[#2563EB] text-white border-[#2563EB] shadow-[0_0_6px_rgba(37,99,235,0.4)]'
                         : 'bg-[#F1F5F9] border-[#CBD5E1] text-[#64748B]'
                     }`}
                   >
-                    {isSelected ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : '+'}
+                    {isSelected ? <Check className="w-3 h-3 stroke-[3]" /> : '+'}
                   </span>
                 </div>
               </div>
 
-              {/* Player Photo — Compact Portrait Rectangle Frame (for uploaded photos) */}
+              {/* Player Photo — Compact Portrait Rectangle Frame (EXACT same frame preserved) */}
               <div className="relative w-20 h-24 sm:w-22 sm:h-26 rounded-lg overflow-hidden border border-[#CBD5E1] bg-[#F1F5F9] my-0.5 shadow-inner">
                 <PlayerPhoto
                   name={p.name}
@@ -866,40 +866,40 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
               </div>
 
               {/* Player Name */}
-              <span className="font-black text-xs sm:text-[13px] text-[#0F172A] truncate w-full mt-1">
+              <span className="font-black text-[11px] sm:text-xs text-[#0F172A] truncate w-full mt-0.5">
                 {p.name}
               </span>
 
               {/* Team & Role + Playing status */}
-              <div className="flex items-center gap-1 text-[10px] text-[#64748B] font-semibold">
+              <div className="flex items-center gap-1 text-[9px] text-[#64748B] font-semibold">
                 <span className="font-bold text-[#1E3A8A]">{p.role}</span>
                 <span>•</span>
                 <span>Sel {p.selected_by_pct != null ? `${Math.round(p.selected_by_pct)}%` : '—'}</span>
               </div>
               {p.is_playing_xi === false ? (
-                <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-amber-50 border border-amber-300 text-amber-800 mt-0.5">
-                  ● Bench / Unannounced
+                <span className="text-[7.5px] font-black uppercase px-1 py-0.2 rounded bg-amber-50 border border-amber-300 text-amber-800 mt-0.5">
+                  ● Bench
                 </span>
               ) : (
-                <span className="text-[8px] font-black uppercase px-1.5 py-0.2 rounded bg-emerald-50 border border-emerald-300 text-emerald-700 mt-0.5">
+                <span className="text-[7.5px] font-black uppercase px-1 py-0.2 rounded bg-emerald-50 border border-emerald-300 text-emerald-700 mt-0.5">
                   ● Playing XI
                 </span>
               )}
 
               {/* Compact Stats Badges: Prev Match Points & Credits */}
-              <div className="grid grid-cols-2 gap-1.5 w-full mt-2 pt-1.5 border-t border-[#E2E8F0]">
+              <div className="grid grid-cols-2 gap-1 w-full mt-1 pt-1 border-t border-[#E2E8F0]">
                 {/* Prev Points */}
-                <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded-md py-0.5 px-1 text-center">
-                  <span className="text-[8px] text-[#1D4ED8] block uppercase font-bold leading-tight">Prev Pts</span>
-                  <span className="font-mono font-black text-xs text-[#1E3A8A] leading-tight block">
+                <div className="bg-[#EFF6FF] border border-[#BFDBFE] rounded py-0.5 px-0.5 text-center">
+                  <span className="text-[7.5px] text-[#1D4ED8] block uppercase font-bold leading-tight">Prev Pts</span>
+                  <span className="font-mono font-black text-[11px] text-[#1E3A8A] leading-tight block">
                     {prevMatchPts}
                   </span>
                 </div>
 
                 {/* Credits */}
-                <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded-md py-0.5 px-1 text-center">
-                  <span className="text-[8px] text-[#B45309] block uppercase font-bold leading-tight">Credits</span>
-                  <span className="font-mono font-black text-xs text-[#B45309] leading-tight block">
+                <div className="bg-[#FFFBEB] border border-[#FDE68A] rounded py-0.5 px-0.5 text-center">
+                  <span className="text-[7.5px] text-[#B45309] block uppercase font-bold leading-tight">Credits</span>
+                  <span className="font-mono font-black text-[11px] text-[#B45309] leading-tight block">
                     {p.credits}
                   </span>
                 </div>
@@ -909,25 +909,27 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
         })}
       </div>
 
-      {/* Bottom Floating Bar */}
-      <div className="sticky bottom-2 sm:bottom-4 z-30 space-y-2">
+      {/* Bottom Fixed Action Bar — Fixed to Screen Bottom, Non-movable */}
+      <div className="fixed bottom-0 inset-x-0 lg:left-64 z-40 bg-white/98 backdrop-blur-2xl border-t-2 border-[#2563EB] shadow-[0_-6px_25px_rgba(37,99,235,0.16)] pd-safe-bottom">
         {error && !showPitchPreview && (
-          <div className="p-3 rounded-xl bg-red-50 border-2 border-red-400 text-red-700 text-xs font-bold flex items-center justify-between shadow-xl">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
-              <span>{error}</span>
+          <div className="max-w-4xl mx-auto px-2 sm:px-4 pt-2">
+            <div className="p-2 sm:p-2.5 rounded-xl bg-red-50 border-2 border-red-400 text-red-700 text-xs font-bold flex items-center justify-between shadow-md">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                <span>{error}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="text-red-700 hover:text-red-900 font-black text-sm px-1.5 cursor-pointer"
+              >
+                ✕
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setError(null)}
-              className="text-red-700 hover:text-red-900 font-black text-sm px-1.5 cursor-pointer"
-            >
-              ✕
-            </button>
           </div>
         )}
 
-        <div className="p-2.5 sm:p-4 bg-white/95 backdrop-blur-xl rounded-2xl border-2 border-[#CBD5E1] flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 shadow-[0_10px_30px_rgba(30,58,138,0.18)]">
+        <div className="max-w-4xl mx-auto px-2.5 sm:px-6 py-2 sm:py-2.5 flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
           <div className="flex items-center justify-between w-full sm:w-auto gap-2">
             <div className="flex items-center gap-1.5 sm:gap-2">
               <span className={`text-xs font-black ${selectedPlayerIds.length === 11 ? 'text-green-700' : 'text-[#0F172A]'}`}>
@@ -949,7 +951,7 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
                 setPitchMode('view');
                 setShowPitchPreview(true);
               }}
-              className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white !py-2.5 px-3 sm:px-4 text-xs font-black flex items-center justify-center gap-1.5 rounded-xl shadow-lg border-2 border-emerald-400 cursor-pointer transition-transform hover:scale-105"
+              className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white !py-2.5 px-3.5 sm:px-4 text-xs font-black flex items-center justify-center gap-1.5 rounded-xl shadow-[0_4px_14px_rgba(16,185,129,0.4)] border-2 border-emerald-400 cursor-pointer transition-all hover:scale-105 active:scale-95"
               title="View on Cricket Stadium Ground"
             >
               <Eye className="w-4 h-4 text-emerald-200" />
@@ -969,8 +971,8 @@ export default function CricketTeamBuilderPage({ params }: { params: Promise<{ t
               <button
                 type="button"
                 onClick={handleProceedToCaptain}
-                className={`flex-1 sm:flex-none prime-btn-3d !py-2.5 px-3 sm:px-6 text-xs font-black uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1 ${
-                  selectedPlayerIds.length === 11 ? 'shadow-[0_0_16px_rgba(37,99,235,0.6)]' : 'opacity-90'
+                className={`flex-1 sm:flex-none prime-btn-3d !py-2.5 px-3.5 sm:px-6 text-xs font-black uppercase tracking-wider cursor-pointer flex items-center justify-center gap-1 shadow-[0_4px_16px_rgba(37,99,235,0.45)] border-2 border-blue-400 rounded-xl transition-all hover:scale-105 active:scale-95 ${
+                  selectedPlayerIds.length === 11 ? 'ring-2 ring-blue-300' : 'opacity-90'
                 }`}
               >
                 <span>{isLowBalance ? `Add ₹${entryFee - (walletBalance || 0)}` : entryFee > 0 ? `Pay ₹${entryFee} • Next` : 'Choose C / VC →'}</span>

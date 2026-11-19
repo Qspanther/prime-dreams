@@ -111,15 +111,25 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
           setReferralOffer(res.referralOffer);
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [token]);
 
-  // Session-only dismiss for personalized welcome banner
+  // Auto-dismiss welcome banner after 10 seconds (or session dismiss)
   useEffect(() => {
     if (typeof sessionStorage !== 'undefined') {
       const dismissed = sessionStorage.getItem('prime_welcome_dismissed');
-      if (dismissed === 'true') setBannerDismissed(true);
+      if (dismissed === 'true') {
+        setBannerDismissed(true);
+        return;
+      }
     }
+    const timer = setTimeout(() => {
+      setBannerDismissed(true);
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('prime_welcome_dismissed', 'true');
+      }
+    }, 10000);
+    return () => clearTimeout(timer);
   }, []);
 
   const handleDismissBanner = () => {
@@ -329,13 +339,13 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
   const currentSlideData = bannerSlides[activeSlide] || bannerSlides[0];
 
   return (
-    <div className="w-full px-3 sm:px-6 lg:px-8 py-4 sm:py-6 max-w-7xl mx-auto space-y-6 sm:space-y-8 bg-transparent text-[#0F172A]">
+    <div className="w-full px-2 sm:px-6 lg:px-8 pt-1.5 pb-20 sm:py-6 max-w-7xl mx-auto space-y-2 sm:space-y-6 bg-transparent text-[#0F172A]">
       {/* Personalized Welcome Banner */}
       {!bannerDismissed && (
-        <div className="relative rounded-2xl prime-card-shiny-gold p-3.5 sm:p-5 flex items-center justify-between border-2 border-[#F59E0B] shadow-[0_10px_25px_rgba(245,158,11,0.18)]">
-          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl bg-gradient-to-b from-[#3B82F6] via-[#2563EB] to-[#1D4ED8] flex items-center justify-center shrink-0 shadow-[0_4px_14px_rgba(37,99,235,0.4)] border-2 border-white">
-              <span className="text-xl sm:text-2xl drop-shadow-md">🏏</span>
+        <div className="relative rounded-2xl prime-card-shiny-gold p-2.5 sm:p-5 flex items-center justify-between border-2 border-[#F59E0B] shadow-[0_10px_25px_rgba(245,158,11,0.18)]">
+          <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
+            <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-gradient-to-b from-[#3B82F6] via-[#2563EB] to-[#1D4ED8] flex items-center justify-center shrink-0 shadow-[0_4px_14px_rgba(37,99,235,0.4)] border-2 border-white">
+              <span className="text-base sm:text-2xl drop-shadow-md">🏏</span>
             </div>
             <div className="min-w-0">
               <h2 className="text-xs sm:text-lg font-black text-[#0F172A] flex items-center gap-1.5 sm:gap-2 truncate">
@@ -344,14 +354,14 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                   PRIME VIP
                 </span>
               </h2>
-              <p className="text-[11px] sm:text-sm text-[#475569] font-semibold mt-0.5 line-clamp-1 sm:line-clamp-none">
+              <p className="text-[10px] sm:text-sm text-[#475569] font-semibold mt-0.5 line-clamp-1 sm:line-clamp-none">
                 Ready to build your winning cricket fantasy XI &amp; conquer the Grand Colosseum?
               </p>
             </div>
           </div>
           <button
             onClick={handleDismissBanner}
-            className="text-[#64748B] hover:text-[#0F172A] p-1.5 sm:p-2 text-sm shrink-0 ml-1.5 rounded-lg hover:bg-black/5 transition cursor-pointer"
+            className="text-[#64748B] hover:text-[#0F172A] p-1 sm:p-2 text-xs sm:text-sm shrink-0 ml-1.5 rounded-lg hover:bg-black/5 transition cursor-pointer"
             title="Dismiss for this session"
           >
             ✕
@@ -363,9 +373,9 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
       {/* 🎪 DYNAMIC PROMOTIONAL & LIVE ADVERTISEMENT BANNER CAROUSEL */}
       {/* ======================================================== */}
       {bannerSlides.length > 0 && (
-        <div className="space-y-2.5">
+        <div>
           <div
-            className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-[0_16px_40px_rgba(15,23,42,0.20)] border-2 border-[#94A3B8] [touch-action:pan-y]"
+            className="relative w-full -mx-2 w-[calc(100%+1rem)] sm:mx-0 sm:w-full rounded-xl sm:rounded-3xl overflow-hidden shadow-[0_16px_40px_rgba(15,23,42,0.20)] border-2 border-[#94A3B8] [touch-action:pan-y]"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             onTouchStart={handleBannerTouchStart}
@@ -380,7 +390,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
               {bannerSlides.map((slide, slideIdx) => (
                 <div
                   key={slide.id}
-                  className={`w-full shrink-0 p-4 sm:p-7 md:p-8 bg-gradient-to-br ${slide.gradient} text-white min-h-[220px] sm:min-h-[260px] flex flex-col justify-between relative select-none`}
+                  className={`w-full shrink-0 p-3 sm:p-7 md:p-8 bg-gradient-to-br ${slide.gradient} text-white min-h-[145px] sm:min-h-[260px] flex flex-col justify-between relative select-none`}
                 >
                   {/* Ambient Lighting Beams */}
                   <div className="absolute -right-24 -top-24 w-[380px] h-[380px] rounded-full bg-blue-400/20 blur-[100px] pointer-events-none" />
@@ -389,36 +399,36 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
                   {/* ─── SLIDE TYPE 1: LIVE IN-PLAY MATCH BANNER ─── */}
                   {slide.type === 'live_match' && (
-                    <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center">
-                      <div className="lg:col-span-8 flex flex-col gap-2 sm:gap-3">
+                    <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-6 items-center">
+                      <div className="lg:col-span-8 flex flex-col gap-1.5 sm:gap-3">
                         <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                          <span className="neon-badge-red px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest flex items-center gap-1.5 shadow-lg">
-                            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                            LIVE MATCH ARENA
+                          <span className="neon-badge-red px-2 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 shadow-lg">
+                            <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-white animate-ping" />
+                            LIVE ARENA
                           </span>
                           <CategoryBadge category={slide.category} size="xs" />
-                          <span className="bg-white/15 backdrop-blur-md text-white px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold border border-white/20 truncate max-w-[200px] sm:max-w-none">
+                          <span className="bg-white/15 backdrop-blur-md text-white px-2 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-xs font-bold border border-white/20 truncate max-w-[160px] sm:max-w-none">
                             📍 {slide.venue}
                           </span>
                         </div>
 
                         <div>
-                          <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white drop-shadow-md font-['Montserrat'] tracking-tight leading-snug">
+                          <h2 className="text-sm sm:text-3xl lg:text-4xl font-black text-white drop-shadow-md font-['Montserrat'] tracking-tight leading-snug">
                             {slide.title}
                           </h2>
-                          <div className="flex items-center gap-2 sm:gap-3 mt-1 sm:mt-1.5 flex-wrap">
-                            <span className="text-base sm:text-2xl font-black font-mono text-[#FDE047] drop-shadow-sm">
+                          <div className="flex items-center gap-2 sm:gap-3 mt-0.5 sm:mt-1.5 flex-wrap">
+                            <span className="text-xs sm:text-2xl font-black font-mono text-[#FDE047] drop-shadow-sm">
                               {slide.scoreSummary}
                             </span>
                             <span className="hidden sm:inline text-white/50">•</span>
-                            <span className="text-[11px] sm:text-sm font-semibold text-emerald-300">
+                            <span className="text-[10px] sm:text-sm font-semibold text-emerald-300">
                               {slide.statusText}
                             </span>
                           </div>
                         </div>
 
                         {/* High-Converting Tournament Highlights */}
-                        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 pt-0.5 sm:pt-1">
+                        <div className="hidden sm:grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 pt-0.5 sm:pt-1">
                           <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
                             <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F59E0B] shrink-0" />
                             <span className="text-[11px] sm:text-xs font-bold">Colosseum: <strong className="text-[#FDE047] text-xs sm:text-sm font-mono">Mega Tournament</strong></span>
@@ -427,16 +437,12 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                             <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400 shrink-0" />
                             <span className="text-[11px] sm:text-xs font-bold">Entry: <strong className="text-emerald-300 text-xs sm:text-sm font-mono">FREE (Pass)</strong></span>
                           </div>
-                          <div className="col-span-2 sm:col-span-1 bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
-                            <Activity className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-300 shrink-0" />
-                            <span className="text-[11px] sm:text-xs font-bold">Telemetry: <strong className="text-sky-300 text-[11px] sm:text-xs">Live Telemetry Gateway</strong></span>
-                          </div>
                         </div>
                       </div>
 
                       {/* Right Action Trigger */}
-                      <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-2 sm:gap-3">
-                        <div className="bg-black/30 backdrop-blur-md p-2.5 sm:p-4 rounded-2xl border border-white/20 text-center w-full lg:max-w-[280px]">
+                      <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-1.5 sm:gap-3">
+                        <div className="hidden sm:block bg-black/30 backdrop-blur-md p-2.5 sm:p-4 rounded-2xl border border-white/20 text-center w-full lg:max-w-[280px]">
                           <span className="text-[9px] sm:text-[10px] text-amber-300 uppercase tracking-widest font-black block">Grand Colosseum</span>
                           <span className="text-sm sm:text-lg font-black text-white block mt-0.5">Mega League Arena</span>
                           <span className="text-[9px] sm:text-[10px] text-white/70 block mt-0.5">Free Lineups with Tournament Pass</span>
@@ -444,10 +450,10 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
                         <Link
                           href={`/match/${slide.matchId}`}
-                          className="w-full lg:max-w-[280px] prime-btn-3d text-center text-xs sm:text-sm font-black uppercase tracking-wider py-2.5 sm:py-3 flex items-center justify-center gap-2 shadow-[0_10px_25px_rgba(37,99,235,0.5)] hover:scale-105 transition"
+                          className="w-full lg:max-w-[280px] prime-btn-3d text-center text-[11px] sm:text-sm font-black uppercase tracking-wider py-1.5 sm:py-3 flex items-center justify-center gap-2 shadow-[0_10px_25px_rgba(37,99,235,0.5)] hover:scale-105 transition"
                         >
                           <span>Enter Live Arena</span>
-                          <ArrowRight className="w-4 h-4" />
+                          <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </Link>
                       </div>
                     </div>
@@ -455,55 +461,55 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
                   {/* ─── SLIDE TYPE 2: FEATURED UPCOMING MEGA MATCH ─── */}
                   {slide.type === 'upcoming_match' && (
-                    <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center">
-                      <div className="lg:col-span-8 flex flex-col gap-2 sm:gap-3">
-                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                          <span className="neon-badge-gold px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider sm:tracking-widest flex items-center gap-1.5 shadow-lg">
-                            <Flame className="w-3.5 h-3.5 fill-white" />
-                            FEATURED MEGA CONTEST
+                    <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-6 items-center">
+                      <div className="lg:col-span-8 flex flex-col gap-1 sm:gap-3">
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                          <span className="neon-badge-gold px-2 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-xs font-black uppercase tracking-wider flex items-center gap-1 shadow-lg">
+                            <Flame className="w-3 h-3 sm:w-3.5 sm:h-3.5 fill-white" />
+                            FEATURED CONTEST
                           </span>
                           <CategoryBadge category={slide.category} size="xs" />
-                          <span className="bg-white/15 backdrop-blur-md text-white px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-bold border border-white/20 truncate">
+                          <span className="bg-white/15 backdrop-blur-md text-white px-2 py-0.5 sm:py-1 rounded-full text-[9px] sm:text-xs font-bold border border-white/20 truncate">
                             📅 {slide.matchDate} • ⏰ {slide.matchTime}
                           </span>
                         </div>
 
                         <div>
-                          <h2 className="text-lg sm:text-3xl lg:text-4xl font-black text-white drop-shadow-md font-['Montserrat'] tracking-tight leading-snug">
+                          <h2 className="text-sm sm:text-3xl lg:text-4xl font-black text-white drop-shadow-md font-['Montserrat'] tracking-tight leading-snug">
                             {slide.title}
                           </h2>
-                          <p className="text-xs sm:text-sm text-white/80 font-semibold mt-1 line-clamp-2 sm:line-clamp-none">
+                          <p className="hidden sm:block text-xs sm:text-sm text-white/80 font-semibold mt-1">
                             Pick your 11 cricket champions &amp; assign Captain (2.0×) and Vice-Captain (1.5×) on the stadium pitch.
                           </p>
                         </div>
 
-                        <div className="flex items-center gap-2.5 sm:gap-4 flex-wrap pt-0.5 sm:pt-1">
-                          <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
-                            <Trophy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#F59E0B]" />
-                            <span className="text-[11px] sm:text-xs font-bold">Colosseum: <strong className="text-[#FDE047] text-xs sm:text-sm font-mono">Mega Tournament</strong></span>
+                        <div className="flex items-center gap-2 sm:gap-4 flex-wrap pt-0.5">
+                          <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2 sm:px-3.5 py-0.5 sm:py-1.5 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2">
+                            <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-[#F59E0B]" />
+                            <span className="text-[10px] sm:text-xs font-bold">Colosseum: <strong className="text-[#FDE047] text-[10px] sm:text-sm font-mono">Mega Tournament</strong></span>
                           </div>
-                          <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-xl flex items-center gap-1.5 sm:gap-2">
-                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-sky-300" />
-                            <span className="text-[11px] sm:text-xs font-bold">10,000 Teams Pool</span>
+                          <div className="bg-white/10 backdrop-blur-md border border-white/20 px-2 sm:px-3.5 py-0.5 sm:py-1.5 rounded-lg sm:rounded-xl flex items-center gap-1 sm:gap-2">
+                            <Users className="w-3 h-3 sm:w-4 sm:h-4 text-sky-300" />
+                            <span className="text-[10px] sm:text-xs font-bold">10,000 Pool</span>
                           </div>
                         </div>
                       </div>
 
-                      <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-2.5 sm:gap-3">
+                      <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-1.5 sm:gap-3">
                         <div className="grid grid-cols-2 gap-2 sm:gap-2.5 w-full lg:max-w-[280px]">
                           <Link
                             href={`/team-builder/${slide.matchId}`}
-                            className="prime-btn-dark-3d text-center text-xs font-black uppercase tracking-wider py-2.5 flex items-center justify-center gap-1.5"
+                            className="prime-btn-dark-3d text-center text-[11px] sm:text-xs font-black uppercase tracking-wider py-1.5 sm:py-2.5 flex items-center justify-center gap-1.5"
                           >
-                            <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#2563EB]" />
+                            <Users className="w-3 h-3 sm:w-4 sm:h-4 text-[#2563EB]" />
                             <span>Create XI</span>
                           </Link>
                           <Link
                             href={`/match/${slide.matchId}`}
-                            className="prime-btn-3d text-center text-xs font-black uppercase tracking-wider py-2.5 flex items-center justify-center gap-1.5"
+                            className="prime-btn-3d text-center text-[11px] sm:text-xs font-black uppercase tracking-wider py-1.5 sm:py-2.5 flex items-center justify-center gap-1.5"
                           >
                             <span>Join Now</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
+                            <ArrowRight className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                           </Link>
                         </div>
                       </div>
@@ -512,39 +518,38 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
 
                   {/* ─── SLIDE TYPE 3: SHARE & UNLOCK TOURNAMENT PASS BANNER ─── */}
                   {slide.type === 'referral_unlock' && (
-                    <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 items-center py-1 sm:py-2">
-                      <div className="lg:col-span-8 flex flex-col gap-2 sm:gap-3">
-                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] sm:text-xs font-black uppercase tracking-wider bg-emerald-500 text-slate-950 shadow-md">
-                            <Gift className="w-3.5 h-3.5" />
-                            🎁 SHARE &amp; UNLOCK ACCESS
+                    <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-2 sm:gap-6 items-center py-0.5 sm:py-2">
+                      <div className="lg:col-span-8 flex flex-col gap-1 sm:gap-3">
+                        <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[9px] sm:text-xs font-black uppercase tracking-wider bg-emerald-500 text-slate-950 shadow-md">
+                            <Gift className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+                            FREE ACCESS
                           </span>
-                          <span className="bg-emerald-950/70 border border-emerald-400/40 text-emerald-300 px-3 py-1 rounded-full text-[10px] sm:text-xs font-bold">
-                            🎯 Offer: {slide.targetFriends} Friends = {slide.rewardDays} Days Pass ({slide.teamsPerMatch} Teams/Match)
+                          <span className="bg-emerald-950/70 border border-emerald-400/40 text-emerald-300 px-2 py-0.5 rounded-full text-[9px] sm:text-xs font-bold">
+                            Offer: {slide.targetFriends} Friends = {slide.rewardDays} Days Pass
                           </span>
                         </div>
 
                         <div>
-                          <h2 className="text-xl sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug drop-shadow-md">
-                            Share With Friends &amp; Play Free Matches!
+                          <h2 className="text-sm sm:text-3xl lg:text-4xl font-black text-white font-['Montserrat'] leading-snug drop-shadow-md">
+                            Share &amp; Play Free Matches!
                           </h2>
-                          <p className="text-xs sm:text-sm text-emerald-100/90 leading-relaxed font-medium mt-1">
+                          <p className="hidden sm:block text-xs sm:text-sm text-emerald-100/90 leading-relaxed font-medium mt-1">
                             Apne unique promo code se friends ko invite karo aur FREE tournament pass paao — bina kisi fees ke matches aur mega contests khelo!
                           </p>
                         </div>
 
                         {/* Promo Code & Quick Action Row */}
-                        <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-1">
-                          <div className="flex items-center gap-2 bg-black/40 backdrop-blur-md border border-emerald-500/30 px-3 py-1.5 rounded-xl">
-                            <Users className="w-4 h-4 text-emerald-400" />
-                            <span className="text-xs text-[#94A3B8] font-bold">Your Promo Code:</span>
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-3 pt-0.5">
+                          <div className="flex items-center gap-1.5 bg-black/40 backdrop-blur-md border border-emerald-500/30 px-2.5 py-1 rounded-lg">
+                            <span className="text-[10px] text-[#94A3B8] font-bold">Code:</span>
                             {slide.referralCode ? (
-                              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/50 font-mono font-black text-emerald-300 text-sm tracking-wider">
+                              <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/50 font-mono font-black text-emerald-300 text-xs tracking-wider">
                                 {slide.referralCode}
                               </span>
                             ) : (
-                              <Link href="/login" className="text-xs font-black text-amber-400 hover:underline">
-                                Log in to view code →
+                              <Link href="/login" className="text-[10px] font-black text-amber-400 hover:underline">
+                                Log in →
                               </Link>
                             )}
                           </div>
@@ -552,75 +557,59 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                           {slide.referralCode && (
                             <button
                               onClick={handleCopyCode}
-                              className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-xs font-bold flex items-center gap-1.5 transition cursor-pointer"
+                              className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[10px] font-bold flex items-center gap-1 transition cursor-pointer"
                             >
-                              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-emerald-300" />}
-                              <span>{copiedCode ? 'Code Copied!' : 'Copy Code'}</span>
+                              {copiedCode ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-emerald-300" />}
+                              <span>{copiedCode ? 'Copied' : 'Copy'}</span>
                             </button>
                           )}
                         </div>
                       </div>
 
                       {/* Right Action CTA */}
-                      <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-2.5 sm:gap-3">
+                      <div className="lg:col-span-4 flex flex-col justify-center items-stretch lg:items-end gap-1.5 sm:gap-3">
                         <Link
                           href="/subscription#referral"
-                          className="w-full lg:max-w-[280px] px-5 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500 hover:from-emerald-300 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider text-center shadow-[0_10px_25px_rgba(16,185,129,0.4)] hover:scale-105 transition flex items-center justify-center gap-2 cursor-pointer"
+                          className="w-full lg:max-w-[280px] px-3 py-2 sm:py-3.5 rounded-xl bg-gradient-to-r from-emerald-400 via-teal-400 to-emerald-500 hover:from-emerald-300 hover:to-teal-400 text-slate-950 font-black text-[11px] sm:text-sm uppercase tracking-wider text-center shadow-[0_10px_25px_rgba(16,185,129,0.4)] hover:scale-105 transition flex items-center justify-center gap-2 cursor-pointer"
                         >
-                          <Gift className="w-4 h-4 text-slate-900" />
-                          <span>SHARE &amp; UNLOCK ACCESS →</span>
+                          <Gift className="w-3.5 h-3.5 text-slate-900" />
+                          <span>UNLOCK ACCESS →</span>
                         </Link>
-
-                        <div className="flex items-center justify-center gap-2 w-full lg:max-w-[280px]">
-                          <button
-                            onClick={handleCopyReferral}
-                            className="flex-1 py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 border border-white/20 text-white text-[11px] font-bold text-center flex items-center justify-center gap-1.5 cursor-pointer transition"
-                          >
-                            <Share2 className="w-3.5 h-3.5 text-emerald-300" />
-                            <span>{copiedReferral ? 'Link Copied!' : 'Copy Invite Link'}</span>
-                          </button>
-                          <Link
-                            href="/subscription#referral"
-                            className="text-[11px] text-emerald-300 hover:underline font-bold px-2 py-1"
-                          >
-                            Rules &amp; Offer
-                          </Link>
-                        </div>
                       </div>
                     </div>
                   )}
 
-                  {/* Bottom Bar: Manual Arrows + Slide Dots Navigation */}
-                  <div className="relative z-10 pt-3 sm:pt-4 mt-2 border-t border-white/15 flex items-center justify-between">
+                  {/* Bottom Bar: Manual Arrows + Highlighted Inside Dots Navigation */}
+                  <div className="relative z-10 pt-1.5 sm:pt-4 mt-1 border-t border-white/15 flex items-center justify-between">
                     {/* Prev / Next Controls */}
-                    <div className="flex items-center gap-1.5 sm:gap-2">
+                    <div className="flex items-center gap-1 sm:gap-2">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveSlide((prev) => (prev - 1 + bannerSlides.length) % bannerSlides.length);
                         }}
-                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition cursor-pointer"
+                        className="w-5 h-5 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition cursor-pointer"
                         aria-label="Previous Slide"
                       >
-                        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveSlide((prev) => (prev + 1) % bannerSlides.length);
                         }}
-                        className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition cursor-pointer"
+                        className="w-5 h-5 sm:w-8 sm:h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center transition cursor-pointer"
                         aria-label="Next Slide"
                       >
-                        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
                       </button>
-                      <span className="text-[10px] sm:text-[11px] text-white/70 font-mono font-bold ml-1">
+                      <span className="text-[9px] sm:text-[11px] text-white/70 font-mono font-bold ml-1">
                         {slideIdx + 1} / {bannerSlides.length}
                       </span>
                     </div>
 
-                    {/* Inside Slide Indicator Dots */}
-                    <div className="flex items-center gap-1.5">
+                    {/* Inside Highlighted Slide Indicator Dots */}
+                    <div className="flex items-center gap-1 sm:gap-1.5">
                       {bannerSlides.map((s, idx) => (
                         <button
                           key={s.id}
@@ -628,10 +617,10 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                             e.stopPropagation();
                             setActiveSlide(idx);
                           }}
-                          className={`h-2 rounded-full transition-all cursor-pointer ${
+                          className={`h-2 sm:h-2.5 rounded-full transition-all cursor-pointer ${
                             activeSlide === idx
-                              ? 'w-6 sm:w-7 bg-white shadow-md'
-                              : 'w-2 bg-white/35 hover:bg-white/60'
+                              ? 'w-6 sm:w-8 bg-[#38BDF8] shadow-[0_0_8px_#38BDF8]'
+                              : 'w-2 bg-white/40 hover:bg-white/70'
                           }`}
                           aria-label={`Jump to slide ${idx + 1}`}
                         />
@@ -642,29 +631,11 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
               ))}
             </div>
           </div>
-
-          {/* 🔘 PROMINENT HIGHLIGHTED INDICATOR DOTS BENEATH BANNER */}
-          {bannerSlides.length > 1 && (
-            <div className="flex items-center justify-center gap-2 pt-1 pb-0.5">
-              {bannerSlides.map((s, idx) => (
-                <button
-                  key={s.id}
-                  onClick={() => setActiveSlide(idx)}
-                  className={`h-2.5 rounded-full transition-all duration-300 cursor-pointer ${
-                    activeSlide === idx
-                      ? 'w-8 bg-[#2563EB] shadow-[0_0_12px_rgba(37,99,235,0.7)]'
-                      : 'w-2.5 bg-[#CBD5E1] hover:bg-[#94A3B8]'
-                  }`}
-                  aria-label={`Jump to banner ${idx + 1}`}
-                />
-              ))}
-            </div>
-          )}
         </div>
       )}
 
       {/* Section 5.4: User-Side Category Filter Tabs */}
-      <div className="space-y-3 pt-1 sm:pt-2">
+      <div className="pt-0.5">
         <CategoryFilterTabs
           selectedCategory={selectedCategory}
           onSelect={(cat) => setSelectedCategory(cat)}
@@ -683,14 +654,11 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
       {/* 1. 🔴 LIVE MATCHES */}
       {/* ======================================================== */}
       {liveMatches.length > 0 && (
-        <div className="space-y-4 pt-2">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg sm:text-xl font-black text-[#0F172A] uppercase tracking-wider flex items-center gap-2.5">
-              <span className="w-3.5 h-3.5 rounded-full bg-[#EF4444] shadow-[0_0_12px_rgba(239,68,68,0.6)] animate-ping" />
-              <span className="text-[#EF4444]">Live Cricket Arena</span>
-              <span className="text-xs text-white font-black bg-[#2563EB] px-3 py-1 rounded-full border border-[#93C5FD] shadow-sm">
-                {liveMatches.length} In-Play · ↔ Swipe
-              </span>
+        <div className="space-y-2 pt-1">
+          <div className="flex items-center">
+            <h3 className="text-sm sm:text-base font-black text-[#EF4444] uppercase tracking-wider flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-[#EF4444] shadow-[0_0_8px_rgba(239,68,68,0.6)] animate-ping" />
+              <span>Live Matches</span>
             </h3>
           </div>
 
@@ -699,7 +667,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
               <Link
                 key={m.id}
                 href={`/match/${m.id}`}
-                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3 flex flex-col justify-between group border border-emerald-300 shadow-[0_0_22px_rgba(34,197,94,0.20)] hover:border-emerald-500 hover:shadow-[0_0_28px_rgba(34,197,94,0.34)]"
+                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-2.5 flex flex-col justify-between group border border-emerald-300 shadow-[0_0_22px_rgba(34,197,94,0.20)] hover:border-emerald-500 hover:shadow-[0_0_28px_rgba(34,197,94,0.34)]"
               >
                 <div>
                   {/* Match Poster Frame */}
@@ -714,11 +682,11 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                         LIVE
                       </span>
                     }
-                    heightClass="h-32 sm:h-36 mb-2.5"
+                    heightClass="h-32 sm:h-36 mb-1"
                   />
 
                   {/* Team A vs Team B Clash */}
-                  <div className="grid grid-cols-7 items-center py-1 px-0.5">
+                  <div className="grid grid-cols-7 items-center py-0.5 px-0.5">
                     <div className="col-span-3 flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#EF4444] to-[#B91C1C] border border-white flex items-center justify-center font-black text-[11px] text-white shadow-xs overflow-hidden shrink-0">
                         {resolveImageUrl(m.team_a_logo) && m.team_a_logo !== '/cricket/team_a.png' ? (
@@ -743,7 +711,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                   </div>
 
                   {/* Compact Live Score at the Bottom */}
-                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl p-2 mt-2 space-y-1 shadow-inner">
+                  <div className="bg-[#F8FAFC] border border-[#CBD5E1] rounded-xl p-2 mt-1.5 space-y-1 shadow-inner">
                     <div className="flex items-center justify-between text-[11px] font-mono">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />
@@ -760,16 +728,6 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                     </p>
                   </div>
                 </div>
-
-                <div className="pt-2.5 border-t border-[#E2E8F0] mt-2.5 flex items-center justify-between text-xs">
-                  <span className="text-[11px] font-bold text-[#64748B]">
-                    {m.contests_count ? `🏆 ${m.contests_count} Contests` : `Score: Live Feed`}
-                  </span>
-                  <span className="text-[11px] font-black text-emerald-600 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                    <span>Match In-Play</span>
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </span>
-                </div>
               </Link>
             ))}
           </div>
@@ -779,15 +737,11 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
       {/* ======================================================== */}
       {/* 2. ⚡ UPCOMING MATCHES (Starting within next 6 days) */}
       {/* ======================================================== */}
-      <div className="space-y-4 pt-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg sm:text-xl font-black text-[#0F172A] uppercase tracking-wider flex items-center gap-2">
-            <span className="text-[#2563EB]">⚡ Upcoming Matches</span>
-            <span className="text-xs text-[#64748B] font-bold">(Next 6 Days)</span>
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center">
+          <h3 className="text-sm sm:text-base font-black text-[#2563EB] uppercase tracking-wider flex items-center gap-2">
+            <span>⚡ Upcoming Matches</span>
           </h3>
-          <span className="text-xs font-black text-[#334155] px-3 py-1 rounded-full bg-white border border-[#CBD5E1] shadow-sm flex items-center gap-2">
-            {upcomingMatches.length} Matches <span aria-hidden="true">↔ Swipe</span>
-          </span>
         </div>
 
         {loading ? (
@@ -806,7 +760,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
               <Link
                 key={m.id}
                 href={`/match/${m.id}`}
-                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3 flex flex-col justify-between group border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)] cursor-pointer"
+                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-2.5 flex flex-col justify-between group border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)] cursor-pointer"
               >
                 <div>
                   {/* Match Poster Frame */}
@@ -824,11 +778,10 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                             e.stopPropagation();
                             toggleReminder(e, m.id, `${m.team_a} vs ${m.team_b}`);
                           }}
-                          className={`p-1.5 rounded-lg backdrop-blur-md transition cursor-pointer ${
-                            reminders[m.id]
-                              ? 'bg-amber-400 text-slate-950 shadow-[0_0_8px_rgba(245,158,11,0.8)]'
-                              : 'bg-black/50 text-white hover:bg-black/75'
-                          }`}
+                          className={`p-1.5 rounded-lg backdrop-blur-md transition cursor-pointer ${reminders[m.id]
+                            ? 'bg-amber-400 text-slate-950 shadow-[0_0_8px_rgba(245,158,11,0.8)]'
+                            : 'bg-black/50 text-white hover:bg-black/75'
+                            }`}
                           title={reminders[m.id] ? 'Reminder active' : 'Set match reminder'}
                         >
                           <Bell className="w-3 h-3" />
@@ -839,11 +792,11 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                         </span>
                       </div>
                     }
-                    heightClass="h-32 sm:h-36 mb-2.5"
+                    heightClass="h-32 sm:h-36 mb-1"
                   />
 
                   {/* Team A vs Team B Head-to-Head */}
-                  <div className="grid grid-cols-7 items-center py-1.5 px-0.5">
+                  <div className="grid grid-cols-7 items-center py-0.5 px-0.5">
                     <div className="col-span-3 flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#EF4444] to-[#B91C1C] border border-white flex items-center justify-center font-black text-[11px] text-white shadow-xs overflow-hidden shrink-0">
                         {resolveImageUrl(m.team_a_logo) && m.team_a_logo !== '/cricket/team_a.png' ? (
@@ -867,20 +820,6 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                     </div>
                   </div>
                 </div>
-
-                <div className="pt-2.5 border-t border-[#E2E8F0] mt-2 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-[#64748B] block text-[9px] font-bold uppercase">Contests</span>
-                    <span className="font-black text-[#2563EB] text-xs sm:text-sm font-mono">
-                      {m.contests_count || 5} Available Contests
-                    </span>
-                  </div>
-
-                  <span className="text-xs font-black text-[#2563EB] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                    <span>Enter Match</span>
-                    <ChevronRight className="w-4 h-4" />
-                  </span>
-                </div>
               </Link>
             ))}
           </div>
@@ -891,23 +830,20 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
       {/* 3. 📅 COMING SOON MATCHES (>6 Days out) */}
       {/* ======================================================== */}
       {comingSoonMatches.length > 0 && (
-        <div className="space-y-4 pt-4 border-t border-[#CBD5E1]">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg sm:text-xl font-black text-[#0F172A] uppercase tracking-wider flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-[#2563EB]" />
-              <span className="text-[#0F172A]">Coming Soon</span>
-              <span className="text-xs text-[#64748B] font-bold">(Scheduled &gt; 6 Days)</span>
+        <div className="space-y-2 pt-2 border-t border-[#CBD5E1]">
+          <div className="flex items-center">
+            <h3 className="text-sm sm:text-base font-black text-[#0F172A] uppercase tracking-wider flex items-center gap-2">
+              <Calendar className="w-3.5 h-3.5 text-[#2563EB]" />
+              <span>Coming Soon</span>
             </h3>
-            <span className="text-xs font-black text-[#334155] px-3 py-1 rounded-full bg-white border border-[#CBD5E1] shadow-sm flex items-center gap-2">
-              {comingSoonMatches.length} Matches <span aria-hidden="true">↔ Swipe</span>
-            </span>
           </div>
 
           <div className="flex snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain px-1 pb-3 scrollbar-none [touch-action:pan-x_pan-y] [-webkit-overflow-scrolling:touch]">
             {comingSoonMatches.map((m) => (
-              <div
+              <Link
                 key={m.id}
-                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-3 flex flex-col justify-between space-y-2.5 border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)]"
+                href={`/match/${m.id}`}
+                className="prime-card-3d min-w-[270px] max-w-[300px] shrink-0 snap-start p-2.5 flex flex-col justify-between space-y-2 border border-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)] hover:border-amber-500 hover:shadow-[0_0_24px_rgba(245,158,11,0.28)]"
               >
                 <div>
                   <MatchPosterFrame
@@ -920,10 +856,10 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                         Starts in {Math.round(getDaysUntilMatch(m.start_time))} Days
                       </span>
                     }
-                    heightClass="h-32 sm:h-36 mb-2.5"
+                    heightClass="h-32 sm:h-36 mb-1"
                   />
 
-                  <div className="flex items-center justify-between py-1.5 px-0.5">
+                  <div className="flex items-center justify-between py-0.5 px-0.5">
                     <div className="flex items-center gap-2 min-w-0">
                       <div className="w-8 h-8 rounded-lg bg-gradient-to-b from-[#EF4444] to-[#B91C1C] border border-white flex items-center justify-center font-black text-[11px] text-white overflow-hidden shrink-0">
                         {resolveImageUrl(m.team_a_logo) ? (
@@ -945,20 +881,7 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
                     </div>
                   </div>
                 </div>
-
-                <div className="pt-2.5 border-t border-[#E2E8F0] flex items-center justify-between text-xs">
-                  <span className="text-[#64748B] font-bold text-[11px]">
-                    📅 {m.match_date} • ⏰ {m.match_time}
-                  </span>
-                  <Link
-                    href={`/match/${m.id}`}
-                    className="text-[#2563EB] font-black hover:underline flex items-center gap-0.5 group text-xs"
-                  >
-                    <span>Preview</span>
-                    <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
-                  </Link>
-                </div>
-              </div>
+              </Link>
             ))}
           </div>
         </div>

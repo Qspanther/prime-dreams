@@ -61,18 +61,10 @@ export default function TopBar() {
 
   return (
     <>
-      <header className="sticky top-0 z-30 h-16 shrink-0 border-b-2 border-[#CBD5E1] bg-white/95 backdrop-blur-xl px-3 sm:px-6 flex items-center justify-between gap-2 sm:gap-4 shadow-[0_4px_20px_rgba(30,58,138,0.06)] text-[#0F172A] select-none">
+      <header className="sticky top-0 z-30 h-11 sm:h-16 shrink-0 border-b-2 border-[#CBD5E1] bg-white/95 backdrop-blur-xl px-2.5 sm:px-6 flex items-center justify-between gap-1.5 sm:gap-4 shadow-[0_4px_20px_rgba(30,58,138,0.06)] text-[#0F172A] select-none">
         <span className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-[#93C5FD] to-transparent pointer-events-none" />
-        {/* Left: Logo & Mobile Toggle */}
+        {/* Left: Logo */}
         <div className="flex items-center gap-1.5 sm:gap-4 min-w-0 flex-1">
-          <button
-            onClick={() => setMobileDrawerOpen(true)}
-            className="lg:hidden shrink-0 p-1.5 sm:p-2 rounded-xl text-[#475569] hover:bg-[#E0F2FE] hover:text-[#0284C7] border border-[#CBD5E1] transition shadow-sm"
-            aria-label="Open Navigation Drawer"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-
           <Link href="/" className="flex items-center gap-2 shrink-0 min-w-0">
             <PrimeLogo size="sm" compactOnMobile />
           </Link>
@@ -81,10 +73,10 @@ export default function TopBar() {
           {liveCount > 0 && (
             <button
               onClick={() => setShowLiveSwitcher(true)}
-              className="shrink-0 flex items-center gap-1 sm:gap-2 px-1.5 sm:px-3 py-1.5 rounded-full bg-gradient-to-r from-red-50 to-red-100 border-2 border-[#EF4444] text-[10px] sm:text-xs font-black text-[#B91C1C] hover:scale-105 shadow-[0_4px_12px_rgba(239,68,68,0.25)] transition cursor-pointer"
+              className="shrink-0 flex items-center gap-1 sm:gap-2 px-1.5 sm:px-3 py-1 rounded-full bg-gradient-to-r from-red-50 to-red-100 border-2 border-[#EF4444] text-[10px] sm:text-xs font-black text-[#B91C1C] hover:scale-105 shadow-[0_4px_12px_rgba(239,68,68,0.25)] transition cursor-pointer"
               title="Click to switch live matches"
             >
-              <Radio className="w-3.5 h-3.5 text-[#EF4444] animate-pulse shrink-0" />
+              <Radio className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#EF4444] animate-pulse shrink-0" />
               <span className="tracking-wider whitespace-nowrap">{liveCount}<span className="hidden md:inline"> {liveCount === 1 ? 'Match' : 'Matches'} LIVE</span></span>
             </button>
           )}
@@ -95,10 +87,10 @@ export default function TopBar() {
           {/* Tournament Passes Pill */}
           <Link
             href="/subscription"
-            className="prime-btn-gold-3d !py-1.5 !px-2 sm:!px-3 !text-xs font-black shrink-0 flex items-center gap-1.5"
+            className="prime-btn-gold-3d !py-1 sm:!py-1.5 !px-2 sm:!px-3 !text-[11px] sm:!text-xs font-black shrink-0 flex items-center gap-1.5"
             title="Prime Dreems Tournament Passes"
           >
-            <Crown className="w-4 h-4 text-[#92400E] shrink-0" />
+            <Crown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#92400E] shrink-0" />
             <span className="font-mono text-xs hidden sm:inline">Passes</span>
           </Link>
 
@@ -106,12 +98,12 @@ export default function TopBar() {
           <div className="relative">
             <button
               onClick={() => setShowNotif(!showNotif)}
-              className="relative p-2 sm:p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#475569] hover:text-[#2563EB] hover:border-[#3B82F6] transition shadow-sm"
+              className="relative p-1.5 sm:p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#475569] hover:text-[#2563EB] hover:border-[#3B82F6] transition shadow-sm"
               aria-label="Notifications"
             >
-              <Bell className="w-4 h-4" />
+              <Bell className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               {unreadCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-[#EF4444] text-white text-[10px] font-black flex items-center justify-center shadow-[0_0_8px_#EF4444]">
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-[#EF4444] text-white text-[9px] font-black flex items-center justify-center shadow-[0_0_8px_#EF4444]">
                   {unreadCount}
                 </span>
               )}
@@ -231,10 +223,10 @@ export default function TopBar() {
               </span>
               <button
                 onClick={logout}
-                className="p-2 sm:p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#64748B] hover:text-[#EF4444] hover:border-[#EF4444] transition shadow-sm"
+                className="p-1.5 sm:p-2.5 rounded-xl bg-white border-2 border-[#CBD5E1] text-[#64748B] hover:text-[#EF4444] hover:border-[#EF4444] transition shadow-sm"
                 title="Logout"
               >
-                <LogOut className="w-4 h-4" />
+                <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
           ) : (

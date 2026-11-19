@@ -9,6 +9,7 @@ import AdminSidebar from './components/layout/AdminSidebar';
 import TopBar from './components/layout/TopBar';
 import MobileBottomNav from './components/layout/MobileBottomNav';
 import NetworkStatus from './components/ui/NetworkStatus';
+import PullToRefresh from './components/ui/PullToRefresh';
 import { wsManager } from '@/lib/ws-manager';
 
 const H2HChallengePopup = dynamic(() => import('./components/ui/H2HChallengePopup'), { ssr: false });
@@ -38,6 +39,16 @@ function AppShell({ children }: { children: ReactNode }) {
         // Force check for sw updates
         reg.update().catch(() => {});
       }).catch(() => {});
+
+      if ('caches' in window) {
+        caches.keys().then((names) => {
+          names.forEach((name) => {
+            if (name !== 'prime-dreams-v7') {
+              caches.delete(name);
+            }
+          });
+        }).catch(() => {});
+      }
 
       let refreshing = false;
       navigator.serviceWorker.addEventListener('controllerchange', () => {
@@ -77,17 +88,17 @@ function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="relative h-screen w-full bg-[#F0F4F9] text-[#0F172A] overflow-hidden font-['Montserrat',sans-serif]">
       {isAuthPage ? (
-        <main className="relative z-10 h-screen w-full overflow-y-auto flex items-center justify-center p-4">
+        <PullToRefresh className="relative z-10 h-screen w-full overflow-y-auto flex items-center justify-center p-4">
           {children}
-        </main>
+        </PullToRefresh>
       ) : (
         <div className="relative z-10 flex h-screen w-full overflow-hidden">
           {isAdminRoute ? <AdminSidebar /> : <Sidebar />}
           <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
             <TopBar />
-            <main className={`flex-1 overflow-y-auto overflow-x-hidden ${isTeamBuilder ? 'pb-4' : 'pb-28 lg:pb-8'}`}>
+            <PullToRefresh className={`flex-1 overflow-y-auto overflow-x-hidden ${isTeamBuilder ? 'pb-20 lg:pb-8' : 'pb-28 lg:pb-8'}`}>
               {children}
-            </main>
+            </PullToRefresh>
           </div>
           {!isTeamBuilder && <MobileBottomNav />}
         </div>

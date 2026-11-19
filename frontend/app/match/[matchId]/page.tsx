@@ -6,8 +6,8 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Trophy, Swords, Users, Clock, Shield, Radio, Lock,
-  ArrowLeft, ArrowRight, AlertCircle, Zap, Calendar, MapPin, Share2, ShieldCheck, CheckCircle2, ChevronRight
+  Trophy, Users, Clock, Shield, Radio,
+  ArrowLeft, ArrowRight, AlertCircle, Calendar, MapPin, ShieldCheck
 } from 'lucide-react';
 import { apiGet, apiPost, resolveImageUrl, getWebSocketUrl } from '../../lib/api';
 import { wsManager } from '@/lib/ws-manager';
@@ -308,7 +308,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
   });
 
   return (
-    <div className="px-3 sm:px-6 py-6 max-w-6xl mx-auto w-full space-y-6 bg-transparent text-[#0F172A]">
+    <div className="px-2 sm:px-6 pt-2 pb-20 sm:py-6 max-w-6xl mx-auto w-full space-y-3 sm:space-y-6 bg-transparent text-[#0F172A]">
       {/* Top Breadcrumb */}
       <div>
         <Link
@@ -321,116 +321,118 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
       </div>
 
       {/* Main Match Header 3D Card */}
-      <div className="prime-card-3d p-6 space-y-4">
-        {/* Match Poster Banner — fixed 3:2 size (full poster, no crop), 50% visibility */}
+      <div className="prime-card-3d p-1.5 sm:p-5 space-y-2.5 sm:space-y-4">
+        {/* Match Poster Banner — fits frame with 1-point border difference, 100% full opacity */}
         {resolveImageUrl(match.match_poster) && (
-          <div className="relative aspect-[3/2] w-full max-w-2xl mx-auto rounded-xl overflow-hidden border-2 border-[#CBD5E1] bg-[#F1F5F9] shadow-[0_4px_16px_rgba(37,99,235,0.12)]">
+          <div className="relative aspect-[16/9] sm:aspect-[21/9] w-full rounded-xl overflow-hidden border border-[#CBD5E1] bg-[#0A0E17] shadow-[0_4px_16px_rgba(37,99,235,0.12)]">
             <Image
               src={resolveImageUrl(match.match_poster)}
               alt="Match Poster"
               fill
               unoptimized
-              className="w-full h-full object-cover opacity-50"
+              className="w-full h-full object-cover opacity-100"
               onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
             />
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] pb-3">
-          <CategoryBadge category={match.category} size="md" />
+        <div className="px-1 sm:px-0">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-[#E2E8F0] pb-2.5">
+            <CategoryBadge category={match.category} size="md" />
 
-          {isLive ? (
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <span className="neon-badge-red px-3 py-1 rounded-full text-xs font-black flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-white animate-ping" />
-                LIVE MATCH INNINGS
+            {isLive ? (
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="neon-badge-red px-2.5 py-0.5 rounded-full text-xs font-black flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                  LIVE MATCH INNINGS
+                </span>
+                <Link
+                  href={`/match/${matchId}/leaderboard`}
+                  className="prime-btn-gold-3d px-2.5 py-1 rounded-full text-xs font-black inline-flex items-center gap-1.5"
+                >
+                  <Trophy className="w-3.5 h-3.5" />
+                  <span>Live Leaderboard</span>
+                </Link>
+              </div>
+            ) : match.is_locked ? (
+              <span className="px-2.5 py-0.5 rounded-full bg-red-100 text-red-700 border border-red-300 text-xs font-black">
+                🔒 CONTESTS LOCKED
               </span>
-              <Link
-                href={`/match/${matchId}/leaderboard`}
-                className="prime-btn-gold-3d px-3 py-1 rounded-full text-xs font-black inline-flex items-center gap-1.5"
-              >
-                <Trophy className="w-3.5 h-3.5" />
-                <span>Live Leaderboard</span>
-              </Link>
-            </div>
-          ) : match.is_locked ? (
-            <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 border border-red-300 text-xs font-black">
-              🔒 CONTESTS LOCKED
-            </span>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black text-[#1E3A8A] flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#EFF6FF] border border-[#93C5FD]">
-                <Clock className="w-3.5 h-3.5 text-[#2563EB]" />
-                📅 {match.match_date} • ⏰ {match.match_time}
-              </span>
-              <span className="bg-[#F1F5F9] text-[#334155] border border-[#CBD5E1] px-2.5 py-1 rounded-full text-xs font-black">
-                ⚡ UPCOMING
-              </span>
-            </div>
-          )}
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] sm:text-xs font-black text-[#1E3A8A] flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#EFF6FF] border border-[#93C5FD]">
+                  <Clock className="w-3 h-3 text-[#2563EB]" />
+                  📅 {match.match_date} • ⏰ {match.match_time}
+                </span>
+                <span className="bg-[#F1F5F9] text-[#334155] border border-[#CBD5E1] px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-black">
+                  ⚡ UPCOMING
+                </span>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Teams Matchup Ribbon */}
-        <div className="relative z-10 py-2 sm:py-3">
+        <div className="relative z-10 py-1 sm:py-2 px-1 sm:px-0">
           {/* Mobile Screen Layout (<sm): Clean Two-Row Clash with VS Badge */}
-          <div className="sm:hidden space-y-2">
+          <div className="sm:hidden space-y-1.5">
             {/* Team A Card */}
-            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/90 border-2 border-[#93C5FD] shadow-xs">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border-2 border-[#93C5FD] flex items-center justify-center font-black text-sm text-white shadow-xs shrink-0 overflow-hidden">
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/90 border-2 border-[#93C5FD] shadow-xs">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-b from-[#2563EB] to-[#1D4ED8] border border-[#93C5FD] flex items-center justify-center font-black text-xs text-white shadow-xs shrink-0 overflow-hidden">
                   {resolveImageUrl(match.team_a_logo) ? (
-                    <Image src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} width={40} height={40} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                    <Image src={resolveImageUrl(match.team_a_logo)} alt={match.team_a} width={36} height={36} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                   ) : (match.team_a_code || match.team_a?.slice(0, 3).toUpperCase())}
                 </div>
                 <div className="min-w-0">
-                  <h2 className="font-black text-sm text-[#0F172A] truncate">{match.team_a}</h2>
-                  <span className="text-[10px] text-[#64748B] font-bold block">{match.team_a_code || 'TEAM A'}</span>
+                  <h2 className="font-black text-xs text-[#0F172A] truncate">{match.team_a}</h2>
+                  <span className="text-[9px] text-[#64748B] font-bold block">{match.team_a_code || 'TEAM A'}</span>
                 </div>
               </div>
               <div className="text-right shrink-0">
                 {scoreSummary?.team_a ? (
-                  <p className="text-sm font-mono font-black text-[#2563EB]">
+                  <p className="text-xs font-mono font-black text-[#2563EB]">
                     {scoreSummary.team_a.runs}/{scoreSummary.team_a.wickets}
-                    <span className="text-[11px] font-normal text-[#64748B] ml-1">
+                    <span className="text-[10px] font-normal text-[#64748B] ml-1">
                       ({scoreSummary.team_a.overs} ov)
                     </span>
                   </p>
                 ) : (
-                  <span className="text-xs font-mono text-[#64748B]">{isLive ? 'Yet to bat' : 'Scheduled'}</span>
+                  <span className="text-[11px] font-mono text-[#64748B]">{isLive ? 'Yet to bat' : 'Scheduled'}</span>
                 )}
               </div>
             </div>
 
             {/* VS Pill */}
             <div className="flex items-center justify-center -my-1">
-              <span className="px-3 py-0.5 rounded-full bg-gradient-to-r from-[#0284C7] to-[#0369A1] text-white font-black text-[10px] italic shadow-sm border border-[#BAE6FD]">
+              <span className="px-2.5 py-0.5 rounded-full bg-gradient-to-r from-[#0284C7] to-[#0369A1] text-white font-black text-[9px] italic shadow-sm border border-[#BAE6FD]">
                 VS
               </span>
             </div>
 
             {/* Team B Card */}
-            <div className="flex items-center justify-between p-3 rounded-2xl bg-white/90 border-2 border-[#FDE68A] shadow-xs">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-b from-[#F59E0B] to-[#D97706] border-2 border-[#FDE68A] flex items-center justify-center font-black text-sm text-white shadow-xs shrink-0 overflow-hidden">
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-white/90 border-2 border-[#FDE68A] shadow-xs">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-gradient-to-b from-[#F59E0B] to-[#D97706] border border-[#FDE68A] flex items-center justify-center font-black text-xs text-white shadow-xs shrink-0 overflow-hidden">
                   {resolveImageUrl(match.team_b_logo) ? (
-                    <Image src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} width={40} height={40} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
+                    <Image src={resolveImageUrl(match.team_b_logo)} alt={match.team_b} width={36} height={36} unoptimized className="w-full h-full object-cover" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
                   ) : (match.team_b_code || match.team_b?.slice(0, 3).toUpperCase())}
                 </div>
                 <div className="min-w-0">
-                  <h2 className="font-black text-sm text-[#0F172A] truncate">{match.team_b}</h2>
-                  <span className="text-[10px] text-[#64748B] font-bold block">{match.team_b_code || 'TEAM B'}</span>
+                  <h2 className="font-black text-xs text-[#0F172A] truncate">{match.team_b}</h2>
+                  <span className="text-[9px] text-[#64748B] font-bold block">{match.team_b_code || 'TEAM B'}</span>
                 </div>
               </div>
               <div className="text-right shrink-0">
                 {scoreSummary?.team_b ? (
-                  <p className="text-sm font-mono font-black text-[#D97706]">
+                  <p className="text-xs font-mono font-black text-[#D97706]">
                     {scoreSummary.team_b.runs}/{scoreSummary.team_b.wickets}
-                    <span className="text-[11px] font-normal text-[#64748B] ml-1">
+                    <span className="text-[10px] font-normal text-[#64748B] ml-1">
                       ({scoreSummary.team_b.overs} ov)
                     </span>
                   </p>
                 ) : (
-                  <span className="text-xs font-mono text-[#64748B]">{isLive ? 'Yet to bat' : 'Scheduled'}</span>
+                  <span className="text-[11px] font-mono text-[#64748B]">{isLive ? 'Yet to bat' : 'Scheduled'}</span>
                 )}
               </div>
             </div>
@@ -490,7 +492,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         </div>
 
         {/* Schedule & Venue Meta */}
-        <div className="pt-3 border-t border-[#E2E8F0] flex flex-wrap items-center justify-between gap-3 text-xs text-[#64748B] font-bold">
+        <div className="pt-2 border-t border-[#E2E8F0] px-1 sm:px-0 flex flex-wrap items-center justify-between gap-2 text-[11px] sm:text-xs text-[#64748B] font-bold">
           <span className="flex items-center gap-1.5 text-[#0F172A]">
             <MapPin className="w-3.5 h-3.5 text-[#2563EB]" />
             <span>{match.venue || 'International Cricket Stadium'}</span>
@@ -649,58 +651,26 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
         </div>
       )}
 
-      {/* Main Section Navigation: Contests vs Squad Rosters (15 + 15 Players) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#E2E8F0] pb-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setActiveView('contests')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-              activeView === 'contests' ? 'prime-btn-3d !py-2 !px-4' : 'prime-btn-dark-3d !py-2 !px-4 !text-[#64748B]'
-            }`}
-          >
-            Contests &amp; Pools ({(match.contests || []).length})
-          </button>
+      {/* Main Section Navigation: Contests vs Squad Rosters */}
+      <div className="flex items-center gap-2 border-b border-[#E2E8F0] pb-2">
+        <button
+          onClick={() => setActiveView('contests')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+            activeView === 'contests' ? 'prime-btn-3d !py-1.5 !px-3.5' : 'prime-btn-dark-3d !py-1.5 !px-3.5 !text-[#64748B]'
+          }`}
+        >
+          Contests &amp; Pools ({(match.contests || []).length})
+        </button>
 
-          <button
-            onClick={() => setActiveView('squads')}
-            className={`px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition ${
-              activeView === 'squads' ? 'prime-btn-gold-3d !py-2 !px-4' : 'prime-btn-dark-3d !py-2 !px-4 !text-[#64748B]'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5 inline mr-1.5" />
-            <span>Squad Rosters (30 Players)</span>
-          </button>
-        </div>
-
-        {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-3">
-          {isLocked ? (
-            <button
-              disabled
-              title="Match has started. Team creation is closed."
-              className="px-4 py-2 rounded-xl text-xs font-black bg-[#F1F5F9] text-[#94A3B8] border border-[#CBD5E1] cursor-not-allowed flex items-center gap-1.5 opacity-80"
-            >
-              <Lock className="w-4 h-4 text-[#94A3B8]" />
-              <span>Squads Locked (Match In-Play)</span>
-            </button>
-          ) : (
-            <button
-              onClick={(e) => handleCreateXI(e, `/team-builder/${matchId}`)}
-              className="prime-btn-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5 cursor-pointer"
-            >
-              <Shield className="w-4 h-4" />
-              <span>Create My XI</span>
-            </button>
-          )}
-
-          <Link
-            href={`/match/${matchId}/leaderboard`}
-            className="prime-btn-gold-3d text-xs !py-2 !px-4 font-black flex items-center gap-1.5"
-          >
-            <Trophy className="w-4 h-4" />
-            <span>Leaderboard & Teams</span>
-          </Link>
-        </div>
+        <button
+          onClick={() => setActiveView('squads')}
+          className={`px-3.5 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition ${
+            activeView === 'squads' ? 'prime-btn-gold-3d !py-1.5 !px-3.5' : 'prime-btn-dark-3d !py-1.5 !px-3.5 !text-[#64748B]'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5 inline mr-1.5" />
+          <span>Squad Rosters (30 Players)</span>
+        </button>
       </div>
 
       {/* VIEW 1: CONTESTS LIST */}
@@ -832,7 +802,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                       }
                     }
                   }}
-                  className={`contest-card-3d p-5 flex flex-col justify-between group transition-all ${
+                  className={`contest-card-3d p-3 sm:p-5 flex flex-col justify-between group transition-all ${
                     contestLocked || contestFull
                       ? 'cursor-not-allowed opacity-90'
                       : 'cursor-pointer hover:border-[#2563EB] hover:shadow-[0_0_24px_rgba(37,99,235,0.18)] hover:-translate-y-0.5'
@@ -840,23 +810,23 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                 >
                   <div>
                     {/* High-Impact Highlighted Contest ID Header */}
-                    <div className="flex items-center justify-between mb-3 bg-gradient-to-r from-[#0F172A] to-[#1E293B] px-3.5 py-2.5 rounded-xl border-2 border-[#334155] shadow-md">
+                    <div className="flex items-center justify-between mb-2 bg-gradient-to-r from-[#0F172A] to-[#1E293B] px-3 py-1.5 rounded-xl border-2 border-[#334155] shadow-md">
                       <div className="flex items-center gap-2">
-                        <span className="text-[11px] sm:text-xs font-black text-[#F59E0B] tracking-widest uppercase">CONTEST ID:</span>
-                        <span className="px-2.5 py-0.5 rounded-md text-sm sm:text-base font-black font-mono bg-[#F59E0B] text-[#0F172A] tracking-wider shadow">
+                        <span className="text-[10px] sm:text-xs font-black text-[#F59E0B] tracking-widest uppercase">CONTEST ID:</span>
+                        <span className="px-2 py-0.5 rounded-md text-xs sm:text-sm font-black font-mono bg-[#F59E0B] text-[#0F172A] tracking-wider shadow">
                           #{c.contest_code || 2011}
                         </span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <CategoryBadge category={match.category} size="xs" />
-                        <span className="font-mono font-black text-[11px] sm:text-xs text-[#10B981] bg-[#064E3B]/80 px-2.5 py-0.5 rounded-lg border border-[#059669]/60 shadow-xs">
+                        <span className="font-mono font-black text-[10px] sm:text-xs text-[#10B981] bg-[#064E3B]/80 px-2 py-0.5 rounded-lg border border-[#059669]/60 shadow-xs">
                           FREE (Pass)
                         </span>
                       </div>
                     </div>
 
                     <div className="flex items-center justify-between">
-                      <h4 className="font-black text-[#0F172A] text-base">{c.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').replace(/\(\s*\)/g, '').trim()}</h4>
+                      <h4 className="font-black text-[#0F172A] text-sm sm:text-base">{c.title?.replace(/₹\s*[\d,]+/g, '').replace(/\s+/g, ' ').replace(/\(\s*\)/g, '').trim()}</h4>
                       {c.type !== 'practice' && (
                         <span className="inline-flex items-center gap-1 rounded bg-emerald-50 border border-emerald-300 px-1.5 py-0.5 text-[9px] font-black uppercase text-emerald-700">
                           <ShieldCheck className="w-3 h-3" /> Guaranteed
@@ -865,17 +835,17 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                     </div>
 
                     {isUnlimited ? (
-                      <div className="mt-4 py-2.5 px-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/60 rounded-xl flex items-center justify-between">
+                      <div className="mt-2.5 py-2 px-3 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/60 rounded-xl flex items-center justify-between">
                         <span className="text-[#2563EB] font-black text-xs uppercase tracking-wider">Unlimited Spots</span>
                         <span className="text-[11px] font-mono font-bold text-slate-500">Open Arena</span>
                       </div>
                     ) : (
-                      <div className="mt-4 space-y-1.5">
+                      <div className="mt-2.5 space-y-1">
                         <div className="flex items-center justify-between text-xs font-bold">
                           <span className="text-[#2563EB] font-black">{spotsLeft} spots left</span>
                           <span className="text-[#64748B]">{percentFilled}% filled • {c.total_spots} total</span>
                         </div>
-                        <div className="h-2 w-full bg-[#E2E8F0] rounded-full overflow-hidden border border-[#CBD5E1]">
+                        <div className="h-1.5 w-full bg-[#E2E8F0] rounded-full overflow-hidden border border-[#CBD5E1]">
                           <div
                             className="h-full bg-gradient-to-r from-[#2563EB] via-[#38BDF8] to-[#0284C7] rounded-full transition-all"
                             style={{ width: `${percentFilled}%` }}
@@ -885,35 +855,14 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                     )}
                   </div>
 
-                  <div className="mt-5 pt-3 border-t border-[#E2E8F0] space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Link
-                        href={`/match/${matchId}/leaderboard?contestId=${c.id}`}
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-xs font-black text-[#2563EB] hover:text-[#1D4ED8] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer py-2 px-3 border-2 border-blue-100 rounded-xl hover:bg-blue-50 w-full"
-                      >
-                        <Users className="w-4 h-4 text-[#2563EB]" /> Live Contest Ranks & Teams ({c.filled_spots || 0})
-                      </Link>
-                    </div>
-                    <div className="flex items-center justify-between text-xs pt-0.5">
-                      <span className="text-[10px] text-[#64748B] font-bold">
-                        {c.total_spots > 2 ? 'Up to 20 Teams' : 'Single Entry'}
-                      </span>
-                      {contestLocked ? (
-                        <span className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase text-red-600">
-                          <Lock className="w-3 h-3" /> Locked
-                        </span>
-                      ) : contestFull ? (
-                        <span className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase text-slate-500">
-                          Full
-                        </span>
-                      ) : (
-                        <span className="text-xs font-black text-[#2563EB] flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform">
-                          <span>Enter Contest</span>
-                          <ChevronRight className="w-4 h-4" />
-                        </span>
-                      )}
-                    </div>
+                  <div className="mt-3 pt-2 border-t border-[#E2E8F0]">
+                    <Link
+                      href={`/match/${matchId}/leaderboard?contestId=${c.id}`}
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-xs font-black text-[#2563EB] hover:text-[#1D4ED8] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer py-1.5 px-3 border-2 border-blue-100 rounded-xl hover:bg-blue-50 w-full"
+                    >
+                      <Users className="w-3.5 h-3.5 text-[#2563EB]" /> Live Contest Ranks &amp; Teams ({c.filled_spots || 0})
+                    </Link>
                   </div>
                 </div>
               );
