@@ -1,0 +1,27 @@
+name: Render Services Keep-Alive
+
+on:
+  schedule:
+    # Runs every 12 minutes (Render free tier sleeps after 15 minutes of inactivity)
+    - cron: '*/12 * * * *'
+  workflow_dispatch: # Allows manual ping trigger from GitHub web UI
+
+jobs:
+  ping-services:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Ping Backend Service
+        run: |
+          echo "Pinging Backend API..."
+          curl -s -o /dev/null -w "Backend HTTP Status: %{http_code}\n" -m 35 "https://prime-dreems-backend.onrender.com/health" || true
+
+      - name: Ping Bot Service
+        run: |
+          echo "Pinging Bot Service..."
+          curl -s -o /dev/null -w "Bot Service HTTP Status: %{http_code}\n" -m 35 "https://prime-dreems-bot-service.onrender.com/health" || true
+
+      - name: Ping Frontend Web UI
+        run: |
+          echo "Pinging Frontend UI..."
+          curl -s -o /dev/null -w "Frontend HTTP Status: %{http_code}\n" -m 35 "https://prime-dreams.onrender.com" || true
