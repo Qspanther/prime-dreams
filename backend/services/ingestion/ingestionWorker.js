@@ -13,6 +13,7 @@ const config = require('../../config');
 const { Op } = require('sequelize');
 const { botScheduler, checkIsEndGame, rearrangeBotsForEndGame } = require('../botScheduler');
 const { isMatchBlacklisted } = require('../deletedMatchesRegistry');
+const { fetchMatchTelemetry } = require('../cricbuzzAdapter');
 
 let workerInterval = null;
 let isProcessing = false;
@@ -304,16 +305,29 @@ async function processLiveIngestionTick() {
         let rawCandidateScore = null;
         let commentaryText = 'Live in-play';
 
+        // Fetch deep match telemetry (striker, non-striker, bowler, balls) from Cricbuzz web stream
+        const rawMatchId = cricbuzzMatch.raw_id || (match.cricbuzz_id ? String(match.cricbuzz_id).replace(/^cb-/, '') : null);
+        let liveTelemetry = null;
+        if (rawMatchId) {
+          liveTelemetry = await fetchMatchTelemetry(rawMatchId).catch(() => null);
+        }
+
         if (cricbuzzMatch && cricbuzzMatch.score_summary) {
           rawCandidateScore = {
             match_id: match.id,
             current_innings: cricbuzzMatch.score_summary.current_innings,
             team_a: cricbuzzMatch.score_summary.team_a,
             team_b: cricbuzzMatch.score_summary.team_b,
-            last_ball_event: cricbuzzMatch.cricbuzz_status || 'Ball in-play',
-            commentary: [cricbuzzMatch.cricbuzz_status || 'Live in-play'],
+            last_ball_event: liveTelemetry?.cricbuzz_status || cricbuzzMatch.cricbuzz_status || 'Ball in-play',
+            commentary: [liveTelemetry?.cricbuzz_status || cricbuzzMatch.cricbuzz_status || 'Live in-play'],
+            current_striker: liveTelemetry?.current_striker || match.live_data?.current_striker || null,
+            non_striker: liveTelemetry?.non_striker || match.live_data?.non_striker || null,
+            current_bowler: liveTelemetry?.current_bowler || match.live_data?.current_bowler || null,
+            recent_balls: liveTelemetry?.recent_balls || match.live_data?.recent_balls || [],
+            current_rate: liveTelemetry?.current_rate || match.live_data?.current_rate || '0.00',
+            required_rate: liveTelemetry?.required_rate || match.live_data?.required_rate || '—',
           };
-          commentaryText = cricbuzzMatch.cricbuzz_status || 'Live in-play';
+          commentaryText = liveTelemetry?.cricbuzz_status || cricbuzzMatch.cricbuzz_status || 'Live in-play';
         } else {
           // If no external feed available, use last good snapshot
           continue;
@@ -345,21 +359,50 @@ async function processLiveIngestionTick() {
             cross_check_status: lastSnapshot?.cross_check_status || 'PRIMARY_ACCEPTED',
             is_degraded: lastSnapshot?.is_degraded || false,
           });
+          const mergedLive = {
+            ...(match.live_data || {}),
+            current_striker: normalized.current_striker || match.live_data?.current_striker || null,
+            non_striker: normalized.non_striker || match.live_data?.non_striker || null,
+            current_bowler: normalized.current_bowler || match.live_data?.current_bowler || null,
+            recent_balls: normalized.recent_balls || match.live_data?.recent_balls || [],
+            current_rate: normalized.current_rate || match.live_data?.current_rate || '0.00',
+            required_rate: normalized.required_rate || match.live_data?.required_rate || '—',
+            status_text: commentaryText,
+            source: 'Cricbuzz',
+            last_source_sync_at: new Date().toISOString(),
+          };
           await match.update({
             score_summary: {
               team_a: normalized.team_a,
               team_b: normalized.team_b,
               current_innings: normalized.current_innings,
             },
-            live_data: {
-              ...(match.live_data || {}),
-              status_text: commentaryText,
-              source: 'Cricbuzz',
-              last_source_sync_at: new Date().toISOString(),
-            },
+            live_data: mergedLive,
             last_live_poll_at: new Date(),
           });
           if (playerSnapshot) await updatePlayerFantasyPoints(match.id, normalized, eventId, playerSnapshot);
+
+          // Broadcast DELTA so frontend UI updates striker/bowler even if total score hasn't ticked
+          wsGateway.broadcastDelta(match.id, {
+            over: activeScore.overs,
+            runs: activeScore.runs,
+            wickets: activeScore.wickets,
+            current_innings: normalized.current_innings,
+            event: normalized.last_ball_event,
+            commentary: normalized.commentary[0] || commentaryText,
+            current_striker: mergedLive.current_striker,
+            non_striker: mergedLive.non_striker,
+            current_bowler: mergedLive.current_bowler,
+            recent_balls: mergedLive.recent_balls,
+            current_rate: mergedLive.current_rate,
+            required_rate: mergedLive.required_rate,
+            score_summary: {
+              team_a: normalized.team_a,
+              team_b: normalized.team_b,
+              current_innings: normalized.current_innings,
+            },
+            cross_check_status: lastSnapshot?.cross_check_status || 'PRIMARY_ACCEPTED',
+          });
           continue;
         }
 
@@ -434,7 +477,7 @@ async function processLiveIngestionTick() {
           console.warn(`⚠️ [Ingestion EndGame Hook Warning]:`, egHookErr.message);
         }
 
-        // Broadcast lean 200-byte DELTA to connected WebSocket clients (Section 3.2)
+        // Broadcast lean DELTA with striker, bowler, recent balls to connected WebSocket clients (Section 3.2)
         wsGateway.broadcastDelta(match.id, {
           over: activeScore.overs,
           runs: activeScore.runs,
@@ -442,6 +485,12 @@ async function processLiveIngestionTick() {
           current_innings: normalized.current_innings,
           event: normalized.last_ball_event,
           commentary: normalized.commentary[0] || commentaryText,
+          current_striker: normalized.current_striker,
+          non_striker: normalized.non_striker,
+          current_bowler: normalized.current_bowler,
+          recent_balls: normalized.recent_balls,
+          current_rate: normalized.current_rate,
+          required_rate: normalized.required_rate,
           score_summary: {
             team_a: normalized.team_a,
             team_b: normalized.team_b,

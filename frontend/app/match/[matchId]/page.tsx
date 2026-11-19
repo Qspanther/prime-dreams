@@ -183,6 +183,12 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               score_summary: data.score_summary || prev.score_summary,
               live_data: {
                 ...(prev.live_data || {}),
+                current_striker: data.current_striker !== undefined ? data.current_striker : prev.live_data?.current_striker,
+                non_striker: data.non_striker !== undefined ? data.non_striker : prev.live_data?.non_striker,
+                current_bowler: data.current_bowler !== undefined ? data.current_bowler : prev.live_data?.current_bowler,
+                recent_balls: data.recent_balls !== undefined ? data.recent_balls : prev.live_data?.recent_balls,
+                current_rate: data.current_rate !== undefined ? data.current_rate : prev.live_data?.current_rate,
+                required_rate: data.required_rate !== undefined ? data.required_rate : prev.live_data?.required_rate,
                 commentary: data.commentary ? [data.commentary, ...((prev.live_data?.commentary || []).slice(0, 9))] : (prev.live_data?.commentary || []),
                 last_ball_time: new Date().toISOString(),
               }
@@ -196,6 +202,15 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                 ...(prev.match || {}),
                 status: 'live',
                 score_summary: data.score_summary || prev.match?.score_summary,
+                live_data: {
+                  ...(prev.match?.live_data || {}),
+                  current_striker: data.current_striker !== undefined ? data.current_striker : prev.match?.live_data?.current_striker,
+                  non_striker: data.non_striker !== undefined ? data.non_striker : prev.match?.live_data?.non_striker,
+                  current_bowler: data.current_bowler !== undefined ? data.current_bowler : prev.match?.live_data?.current_bowler,
+                  recent_balls: data.recent_balls !== undefined ? data.recent_balls : prev.match?.live_data?.recent_balls,
+                  current_rate: data.current_rate !== undefined ? data.current_rate : prev.match?.live_data?.current_rate,
+                  required_rate: data.required_rate !== undefined ? data.required_rate : prev.match?.live_data?.required_rate,
+                }
               }
             };
           });
@@ -212,8 +227,8 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
       }
     });
 
-    // Background REST polling heartbeat every 20 seconds as fallback
-    const interval = setInterval(fetchMatchData, 20000);
+    // Background REST polling heartbeat every 5 seconds for live ball fidelity
+    const interval = setInterval(fetchMatchData, 5000);
 
     return () => {
       unsubscribe();
@@ -518,18 +533,18 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               <div className="p-2.5 rounded-lg bg-[#F8FAFC] border border-[#CBD5E1] flex items-center justify-between">
                 <div>
                   <p className="font-black text-[#0F172A] text-sm flex items-center gap-1">
-                    🏏 {liveData.current_striker?.name || 'Active Striker'} *
+                    🏏 {liveData.current_striker?.name || 'On Crease'} *
                   </p>
                   <span className="text-[11px] text-[#64748B] font-bold">
-                    4s: {liveData.current_striker?.fours || 5} • 6s: {liveData.current_striker?.sixes || 2}
+                    4s: {liveData.current_striker?.fours ?? 0} • 6s: {liveData.current_striker?.sixes ?? 0}
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="font-black text-base text-[#2563EB] font-mono">
-                    {liveData.current_striker?.runs || 48} ({liveData.current_striker?.balls || 32})
+                    {liveData.current_striker?.runs ?? 0} ({liveData.current_striker?.balls ?? 0})
                   </span>
                   <span className="text-[10px] text-[#64748B] block font-mono">
-                    SR: {liveData.current_striker?.strike_rate || '150.0'}
+                    SR: {liveData.current_striker?.strike_rate ?? '0.0'}
                   </span>
                 </div>
               </div>
@@ -541,15 +556,15 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                     {liveData.non_striker?.name || 'Non-Striker'}
                   </p>
                   <span className="text-[10px] text-[#64748B]">
-                    4s: {liveData.non_striker?.fours || 2} • 6s: {liveData.non_striker?.sixes || 0}
+                    4s: {liveData.non_striker?.fours ?? 0} • 6s: {liveData.non_striker?.sixes ?? 0}
                   </span>
                 </div>
                 <div className="text-right">
                   <span className="font-mono text-sm text-[#0F172A] font-bold">
-                    {liveData.non_striker?.runs || 24} ({liveData.non_striker?.balls || 18})
+                    {liveData.non_striker?.runs ?? 0} ({liveData.non_striker?.balls ?? 0})
                   </span>
                   <span className="text-[10px] text-[#64748B] block font-mono">
-                    SR: {liveData.non_striker?.strike_rate || '133.3'}
+                    SR: {liveData.non_striker?.strike_rate ?? '0.0'}
                   </span>
                 </div>
               </div>
@@ -568,22 +583,22 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
                     ⚾ {liveData.current_bowler?.name || 'Active Bowler'}
                   </p>
                   <span className="font-mono font-black text-base text-[#DC2626]">
-                    {liveData.current_bowler?.wickets || 2}/{liveData.current_bowler?.runs || 28}
+                    {liveData.current_bowler ? `${liveData.current_bowler.wickets ?? 0}/${liveData.current_bowler.runs ?? 0}` : '0/0'}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-center text-xs">
                   <div className="p-1.5 rounded-lg bg-white border border-[#CBD5E1]">
                     <span className="text-[10px] text-[#64748B] block font-bold">Overs</span>
-                    <strong className="text-[#0F172A] font-mono">{liveData.current_bowler?.overs || '3.4'}</strong>
+                    <strong className="text-[#0F172A] font-mono">{liveData.current_bowler?.overs ?? '0.0'}</strong>
                   </div>
                   <div className="p-1.5 rounded-lg bg-white border border-[#CBD5E1]">
                     <span className="text-[10px] text-[#64748B] block font-bold">Maidens</span>
-                    <strong className="text-[#0F172A] font-mono">{liveData.current_bowler?.maidens || 0}</strong>
+                    <strong className="text-[#0F172A] font-mono">{liveData.current_bowler?.maidens ?? 0}</strong>
                   </div>
                   <div className="p-1.5 rounded-lg bg-white border border-[#CBD5E1]">
                     <span className="text-[10px] text-[#64748B] block font-bold">Economy</span>
-                    <strong className="text-[#0F172A] font-mono">{liveData.current_bowler?.economy || '7.63'}</strong>
+                    <strong className="text-[#0F172A] font-mono">{liveData.current_bowler?.economy ?? '0.00'}</strong>
                   </div>
                 </div>
               </div>
@@ -594,7 +609,7 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
           <div className="p-3 rounded-xl bg-white border border-[#CBD5E1] flex flex-wrap items-center gap-3">
             <span className="text-xs font-black text-[#64748B] uppercase">This Over Balls:</span>
             <div className="flex items-center gap-2">
-              {(liveData.recent_balls || ['1', '0', '4', '2', 'W', '1']).map((token: string, idx: number) => (
+              {(liveData.recent_balls && liveData.recent_balls.length > 0 ? liveData.recent_balls : ['•']).map((token: string, idx: number) => (
                 <span
                   key={idx}
                   className={`w-7 h-7 rounded-full flex items-center justify-center font-black text-xs ${
@@ -610,8 +625,8 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               ))}
             </div>
             <div className="ml-auto flex items-center gap-4 text-xs font-mono font-bold">
-              <span className="text-[#2563EB]">CRR: {liveData.current_rate || '8.76'}</span>
-              <span className="text-[#64748B]">RRR: {liveData.required_rate || '8.40'}</span>
+              <span className="text-[#2563EB]">CRR: {liveData.current_rate ?? '0.00'}</span>
+              <span className="text-[#64748B]">RRR: {liveData.required_rate ?? '—'}</span>
             </div>
           </div>
 
@@ -621,11 +636,8 @@ export default function MatchDetailPage({ params }: MatchDetailProps) {
               <span>Ball-by-Ball Live Commentary</span>
             </h4>
             <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 text-xs">
-              {(liveData.commentary || [
-                '⚡ FOUR! Beautiful cover drive piercing through the fielders!',
-                'Single pushed down to long-on.',
-                'Dot ball, tight length on the off-stump.',
-                '🔴 WICKET! Caught at deep square leg! Massive breakthrough!',
+              {(liveData.commentary && liveData.commentary.length > 0 ? liveData.commentary : [
+                liveData.status_text || 'Ball in-play. Live telemetry syncing...'
               ]).map((comm: string, i: number) => (
                 <div key={i} className="p-2 rounded-lg bg-[#F8FAFC] border border-[#E2E8F0] font-medium text-[#0F172A] flex items-start gap-2">
                   <span className="text-[#2563EB] font-black shrink-0">#{i + 1}</span>

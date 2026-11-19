@@ -407,6 +407,31 @@ router.get('/matches/:id/telemetry', async (req, res) => {
       liveSnapshot = await syncLiveMatch(match.id);
     }
 
+    const rawId = match.cricbuzz_id ? String(match.cricbuzz_id).replace(/^cb-/, '') : null;
+    let liveTelemetry = null;
+    if (rawId) {
+      const { fetchMatchTelemetry } = require('../services/cricbuzzAdapter');
+      liveTelemetry = await fetchMatchTelemetry(rawId).catch(() => null);
+    }
+
+    const mergedLiveData = {
+      ...(match.live_data || {}),
+      ...(liveSnapshot?.live_data || {}),
+      ...(liveTelemetry ? {
+        current_striker: liveTelemetry.current_striker || match.live_data?.current_striker || null,
+        non_striker: liveTelemetry.non_striker || match.live_data?.non_striker || null,
+        current_bowler: liveTelemetry.current_bowler || match.live_data?.current_bowler || null,
+        recent_balls: liveTelemetry.recent_balls || match.live_data?.recent_balls || [],
+        current_rate: liveTelemetry.current_rate || match.live_data?.current_rate || '0.00',
+        required_rate: liveTelemetry.required_rate || match.live_data?.required_rate || '—',
+        status_text: liveTelemetry.cricbuzz_status || match.live_data?.status_text || 'In-play',
+      } : {})
+    };
+
+    if (liveTelemetry) {
+      match.update({ live_data: mergedLiveData }).catch(() => {});
+    }
+
     const payload = {
       success: true,
       match: {
@@ -419,7 +444,7 @@ router.get('/matches/:id/telemetry', async (req, res) => {
         team_b_code: match.team_b_code,
         status: match.status,
         score_summary: liveSnapshot?.score_summary || match.score_summary || {},
-        live_data: liveSnapshot?.live_data || match.live_data || {},
+        live_data: mergedLiveData,
         updated_tag: liveSnapshot?.updated_tag || 'Live',
       },
       players: (match.players || []).map(p => ({
@@ -1155,6 +1180,26 @@ router.get('/matches/:id', async (req, res) => {
       };
     });
 
+    const rawMatchId = match.cricbuzz_id ? String(match.cricbuzz_id).replace(/^cb-/, '') : null;
+    let matchTelemetry = null;
+    if (rawMatchId && (match.status === 'live' || computedStatus === 'live')) {
+      const { fetchMatchTelemetry } = require('../services/cricbuzzAdapter');
+      matchTelemetry = await fetchMatchTelemetry(rawMatchId).catch(() => null);
+    }
+
+    const detailedLiveData = {
+      ...(match.live_data || {}),
+      ...(matchTelemetry ? {
+        current_striker: matchTelemetry.current_striker || match.live_data?.current_striker || null,
+        non_striker: matchTelemetry.non_striker || match.live_data?.non_striker || null,
+        current_bowler: matchTelemetry.current_bowler || match.live_data?.current_bowler || null,
+        recent_balls: matchTelemetry.recent_balls || match.live_data?.recent_balls || [],
+        current_rate: matchTelemetry.current_rate || match.live_data?.current_rate || '0.00',
+        required_rate: matchTelemetry.required_rate || match.live_data?.required_rate || '—',
+        status_text: matchTelemetry.cricbuzz_status || match.live_data?.status_text || 'In-play',
+      } : {})
+    };
+
     const matchResponse = {
       success: true,
       match: {
@@ -1179,7 +1224,7 @@ router.get('/matches/:id', async (req, res) => {
         players: playersWithStats,
         contests,
         score_summary: match.score_summary,
-        live_data: match.live_data,
+        live_data: detailedLiveData,
       },
     };
 
