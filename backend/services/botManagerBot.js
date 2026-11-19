@@ -364,13 +364,6 @@ class ManagerBot {
 
       const B = botTeams.length;
 
-      // Find highest human score in this contest
-      let maxHumanScore = 0;
-      for (const ht of humanTeams) {
-        const s = Number(ht.total_points) || 0;
-        if (s > maxHumanScore) maxHumanScore = s;
-      }
-
       // 1. Manager Bot decides Batches & Phases
       const assignedBots = await this.decideBatchesAndPhases(botTeams, contest);
 
@@ -430,13 +423,12 @@ class ManagerBot {
 
       // 5. Human teams: Strictly starting AFTER all bots and AFTER all prize-winning ranks
       // Guarantees bots capture 100% of all prize positions in the contest!
-      const maxPrizeRank = getMaxPrizeRank(contest);
-      const prizeCutoff = Math.max(B, maxPrizeRank);
+      const currentPrizeCutoff = Math.max(B, maxPrizeRank);
 
       humanTeams.sort((a, b) => (Number(b.total_points) || 0) - (Number(a.total_points) || 0));
       const humanUpdates = [];
       humanTeams.forEach((ht, hIdx) => {
-        const humanRank = prizeCutoff + 1 + hIdx;
+        const humanRank = currentPrizeCutoff + 1 + hIdx;
         humanUpdates.push({
           id: ht.id,
           rank: humanRank
