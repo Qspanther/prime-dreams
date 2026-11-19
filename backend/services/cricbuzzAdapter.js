@@ -254,6 +254,157 @@ function generateSquad(teamName, prefix) {
   return players;
 }
 
+// Helper: robust parser for an innings JSON block (handles missing wickets if 0)
+function parseInningsScore(inngsStr) {
+  if (!inngsStr) return { runs: 0, wickets: 0, overs: 0 };
+  const rMatch = inngsStr.match(/"runs":(\d+)/);
+  const wMatch = inngsStr.match(/"wickets":(\d+)/);
+  const oMatch = inngsStr.match(/"overs":([0-9.]+)/);
+  return {
+    runs: rMatch ? Number(rMatch[1]) : 0,
+    wickets: wMatch ? Number(wMatch[1]) : 0,
+    overs: oMatch ? Number(oMatch[1]) : 0
+  };
+}
+
+// Helper: parse team score supporting multi-innings Test matches and declarations
+function parseTeamScore(teamBlock) {
+  if (!teamBlock) return { runs: 0, wickets: 0, overs: 0 };
+  const inngs2Match = teamBlock.match(/"inngs2":\{([^}]+)\}/);
+  if (inngs2Match) {
+    return parseInningsScore(inngs2Match[1]);
+  }
+  const inngs1Match = teamBlock.match(/"inngs1":\{([^}]+)\}/);
+  if (inngs1Match) {
+    return parseInningsScore(inngs1Match[1]);
+  }
+  return { runs: 0, wickets: 0, overs: 0 };
+}
+
+// In-memory cache for live match telemetry (10s TTL)
+const telemetryCache = new Map();
+
+// Helper: fetch genuine live striker, non-striker, active bowler, and ball-by-ball telemetry
+async function fetchMatchTelemetry(rawMatchId) {
+  const cached = telemetryCache.get(rawMatchId);
+  if (cached && Date.now() - cached.timestamp < 10000) {
+    return cached.data;
+  }
+
+  try {
+    const res = await fetchUrl(`https://www.cricbuzz.com/live-cricket-scores/${rawMatchId}`);
+    if (res.status !== 200 || !res.data) return null;
+
+    // Unescape Next.js hydration payload
+    const regex = /self\.__next_f\.push\(\[1,"([\s\S]*?)"\]\)/g;
+    let payload = '';
+    let m;
+    while ((m = regex.exec(res.data)) !== null) {
+      try {
+        payload += JSON.parse('"' + m[1] + '"');
+      } catch (e) {
+        payload += m[1];
+      }
+    }
+
+    const msIdx = payload.indexOf('"miniscore":');
+    if (msIdx === -1) return null;
+    const chunk = payload.slice(msIdx, msIdx + 4000);
+
+    // 1. Current Striker
+    let current_striker = null;
+    const sMatch = chunk.match(/"batsmanStriker":\{"id":(\d+),"name":"([^"]+)","runs":(\d+),"balls":(\d+)(?:,"fours":(\d+))?(?:,"sixes":(\d+))?(?:,"strikeRate":"([^"]+)")?/);
+    if (sMatch) {
+      current_striker = {
+        name: sMatch[2],
+        role: 'BAT',
+        runs: Number(sMatch[3]),
+        balls: Number(sMatch[4]),
+        fours: Number(sMatch[5] || 0),
+        sixes: Number(sMatch[6] || 0),
+        strike_rate: sMatch[7] || ((Number(sMatch[3]) / Math.max(1, Number(sMatch[4]))) * 100).toFixed(1)
+      };
+    }
+
+    // 2. Non-Striker
+    let non_striker = null;
+    const nsMatch = chunk.match(/"batsmanNonStriker":\{"id":(\d+),"name":"([^"]+)","runs":(\d+),"balls":(\d+)(?:,"fours":(\d+))?(?:,"sixes":(\d+))?(?:,"strikeRate":"([^"]+)")?/);
+    if (nsMatch) {
+      non_striker = {
+        name: nsMatch[2],
+        role: 'BAT',
+        runs: Number(nsMatch[3]),
+        balls: Number(nsMatch[4]),
+        fours: Number(nsMatch[5] || 0),
+        sixes: Number(nsMatch[6] || 0),
+        strike_rate: nsMatch[7] || ((Number(nsMatch[3]) / Math.max(1, Number(nsMatch[4]))) * 100).toFixed(1)
+      };
+    }
+
+    // 3. Active Bowler
+    let current_bowler = null;
+    const bMatch = chunk.match(/"bowlerStriker":\{"id":(\d+),"name":"([^"]+)","overs":([0-9.]+)(?:,"maidens":(\d+))?(?:,"economy":([0-9.]+))?,"runs":(\d+),"wickets":(\d+)/);
+    if (bMatch) {
+      current_bowler = {
+        name: bMatch[2],
+        role: 'BOWL',
+        overs: bMatch[3],
+        maidens: Number(bMatch[4] || 0),
+        economy: bMatch[5] || (Number(bMatch[6]) / Math.max(0.1, Number(bMatch[3]))).toFixed(2),
+        runs: Number(bMatch[6]),
+        wickets: Number(bMatch[7])
+      };
+    }
+
+    // 4. Status, CRR, RRR, Last Wicket
+    const statusMatch = chunk.match(/"status":"([^"]+)"/);
+    const crrMatch = chunk.match(/"currentRunRate":([0-9.]+)/);
+    const rrrMatch = chunk.match(/"requiredRunRate":([0-9.]+)/);
+    const lastWicketMatch = chunk.match(/"lastWicket":"([^"]+)"/);
+
+    // 5. Recent ball tokens
+    let recent_balls = ['1', '0', '4', '2', '1', '0'];
+    const recentOvsMatch = chunk.match(/"recentOvsStats":"([^"]+)"/);
+    if (recentOvsMatch) {
+      const parts = recentOvsMatch[1].split('|').pop().trim().split(/\s+/).filter(Boolean);
+      if (parts.length > 0) recent_balls = parts.slice(-6);
+    }
+
+    // 6. Authoritative innings score list
+    let teamScores = null;
+    const islIdx = chunk.indexOf('"inningsScoreList":[');
+    if (islIdx !== -1) {
+      const endBracket = chunk.indexOf(']', islIdx);
+      if (endBracket !== -1) {
+        const islJson = chunk.slice(islIdx + '"inningsScoreList":'.length, endBracket + 1);
+        try {
+          const list = JSON.parse(islJson);
+          if (Array.isArray(list) && list.length > 0) {
+            teamScores = list;
+          }
+        } catch (_) {}
+      }
+    }
+
+    const data = {
+      current_striker,
+      non_striker,
+      current_bowler,
+      cricbuzz_status: statusMatch ? statusMatch[1] : '',
+      current_rate: crrMatch ? crrMatch[1] : '—',
+      required_rate: rrrMatch ? rrrMatch[1] : '—',
+      last_wicket: lastWicketMatch ? lastWicketMatch[1] : '',
+      recent_balls,
+      teamScores
+    };
+
+    telemetryCache.set(rawMatchId, { data, timestamp: Date.now() });
+    return data;
+  } catch (err) {
+    return null;
+  }
+}
+
 // Scrape live matches and upcoming fixtures directly from Cricbuzz
 async function syncWithCricbuzzLive() {
   try {
@@ -318,7 +469,6 @@ async function syncWithCricbuzzLive() {
 
       // Fallback: If date/time not in startDateRaw, parse status string or default intelligently
       if (!matchDateStr) {
-        // Status might say "Match starts at Nov 08, 11:30 GMT" or "Match starts in 2 hrs"
         const tomorrow = new Date(Date.now() + 86400000);
         matchDateStr = tomorrow.toISOString().split('T')[0];
       }
@@ -331,17 +481,17 @@ async function syncWithCricbuzzLive() {
         }
       }
 
-      // Extract scores if available
+      // Extract scores from main hydration payload
       let score1 = { runs: 0, wickets: 0, overs: 0 };
       let score2 = { runs: 0, wickets: 0, overs: 0 };
 
       const scoreIdx = fullStr.indexOf(`"matchId":${matchId}`);
       if (scoreIdx !== -1) {
-        const chunk = fullStr.slice(scoreIdx, scoreIdx + 1200);
-        const s1m = chunk.match(/"team1Score":\{"inngs1":\{"inningsId":\d+,"runs":(\d+),"wickets":(\d+),"overs":([0-9.]+)\}/);
-        if (s1m) score1 = { runs: Number(s1m[1]), wickets: Number(s1m[2]), overs: Number(s1m[3]) };
-        const s2m = chunk.match(/"team2Score":\{"inngs1":\{"inningsId":\d+,"runs":(\d+),"wickets":(\d+),"overs":([0-9.]+)\}/);
-        if (s2m) score2 = { runs: Number(s2m[1]), wickets: Number(s2m[2]), overs: Number(s2m[3]) };
+        const chunk = fullStr.slice(scoreIdx, scoreIdx + 1600);
+        const t1Block = chunk.match(/"team1Score":\{([^}]+(?:\{[^}]+\})*)\}/);
+        if (t1Block) score1 = parseTeamScore(t1Block[0]);
+        const t2Block = chunk.match(/"team2Score":\{([^}]+(?:\{[^}]+\})*)\}/);
+        if (t2Block) score2 = parseTeamScore(t2Block[0]);
       }
 
       let category = 'League';
@@ -372,6 +522,8 @@ async function syncWithCricbuzzLive() {
         venue: `${team1} International Stadium`,
         status: state.toLowerCase() === 'in progress' || state.toLowerCase() === 'innings break' ? 'live' : 'upcoming',
         match_format: `${format} • Cricket`,
+        cricbuzz_status: status,
+        live_commentary: status,
         current_inning: score2.runs > 0 ? 'team_b' : 'team_a',
         score_summary: {
           team_a: score1,
@@ -379,17 +531,15 @@ async function syncWithCricbuzzLive() {
           current_innings: score2.runs > 0 ? 'team_b' : 'team_a'
         },
         live_data: {
-          current_striker: { name: `${team2Code} Lead Striker`, role: 'BAT', runs: 38, balls: 24, fours: 4, sixes: 1, strike_rate: '158.3' },
-          non_striker: { name: `${team2Code} Anchor`, role: 'BAT', runs: 24, balls: 18, fours: 2, sixes: 0, strike_rate: '133.3' },
-          current_bowler: { name: `${team1Code} Ace Bowler`, role: 'BOWL', overs: '3.2', maidens: 0, runs: 26, wickets: 1, economy: '7.80' },
-          recent_balls: ['1', '0', '4', '2', '1', '0'],
-          current_rate: '8.10',
+          current_striker: { name: `${team2Code} Lead Striker`, role: 'BAT', runs: 0, balls: 0, fours: 0, sixes: 0, strike_rate: '0.0' },
+          non_striker: { name: `${team2Code} Non-Striker`, role: 'BAT', runs: 0, balls: 0, fours: 0, sixes: 0, strike_rate: '0.0' },
+          current_bowler: { name: `${team1Code} Active Bowler`, role: 'BOWL', overs: '0.0', maidens: 0, runs: 0, wickets: 0, economy: '0.00' },
+          recent_balls: ['0', '0', '0', '0', '0', '0'],
+          current_rate: '0.00',
           required_rate: '—',
-          partnership: { runs: 52, balls: 36 },
+          partnership: { runs: 0, balls: 0 },
           commentary: [
             `📢 Live Update: ${status}`,
-            `Single tapped gently to mid-on.`,
-            `Dot ball, beat him on the outside edge.`
           ],
           last_ball_time: new Date().toISOString()
         },
@@ -401,6 +551,71 @@ async function syncWithCricbuzzLive() {
         live.push(item);
       } else if (state.toLowerCase() === 'preview' || state.toLowerCase() === 'upcoming') {
         upcoming.push(item);
+      }
+    }
+
+    // Now fetch genuine live telemetry in parallel for ALL in-play live matches
+    if (live.length > 0) {
+      try {
+        const telemetryResults = await Promise.all(
+          live.map(item => fetchMatchTelemetry(item.raw_id).catch(() => null))
+        );
+
+        for (let i = 0; i < live.length; i++) {
+          const item = live[i];
+          const tel = telemetryResults[i];
+          if (!tel) continue;
+
+          // Override / refine scores if authoritative inningsScoreList is present
+          if (tel.teamScores && Array.isArray(tel.teamScores) && tel.teamScores.length > 0) {
+            for (const sc of tel.teamScores) {
+              const scTeam = (sc.batTeamName || '').toUpperCase();
+              if (scTeam === (item.team_a_code || '').toUpperCase() || scTeam === (item.team_a || '').toUpperCase()) {
+                item.score_summary.team_a = { runs: Number(sc.score || 0), wickets: Number(sc.wickets || 0), overs: Number(sc.overs || 0) };
+              } else if (scTeam === (item.team_b_code || '').toUpperCase() || scTeam === (item.team_b || '').toUpperCase()) {
+                item.score_summary.team_b = { runs: Number(sc.score || 0), wickets: Number(sc.wickets || 0), overs: Number(sc.overs || 0) };
+              }
+            }
+          }
+
+          // Populate live in-play action and situation
+          if (tel.cricbuzz_status) {
+            item.cricbuzz_status = tel.cricbuzz_status;
+            item.live_commentary = tel.cricbuzz_status;
+          }
+
+          // Populate authentic live striker, non-striker, and active bowler
+          if (tel.current_striker) {
+            item.live_data.current_striker = tel.current_striker;
+          }
+          if (tel.non_striker) {
+            item.live_data.non_striker = tel.non_striker;
+          }
+          if (tel.current_bowler) {
+            item.live_data.current_bowler = tel.current_bowler;
+          }
+          if (tel.recent_balls && tel.recent_balls.length > 0) {
+            item.live_data.recent_balls = tel.recent_balls;
+          }
+          if (tel.current_rate && tel.current_rate !== '—') {
+            item.live_data.current_rate = tel.current_rate;
+          }
+          if (tel.required_rate && tel.required_rate !== '—') {
+            item.live_data.required_rate = tel.required_rate;
+          }
+          if (tel.last_wicket) {
+            item.live_data.last_wicket = tel.last_wicket;
+            item.live_data.commentary = [
+              `📢 Wicket: ${tel.last_wicket}`,
+              `📢 Live Update: ${item.cricbuzz_status || item.status}`
+            ];
+          }
+
+          item.score_summary.current_innings = (item.score_summary.team_b.runs > 0 || item.score_summary.team_b.overs > 0) ? 'team_b' : 'team_a';
+          item.current_inning = item.score_summary.current_innings;
+        }
+      } catch (telErr) {
+        console.warn(`[Cricbuzz] Telemetry parallel fetch warning:`, telErr.message);
       }
     }
 
@@ -559,6 +774,8 @@ async function importCricbuzzMatchToDatabase(cricbuzzId) {
 module.exports = {
   getCricbuzzLiveFeed,
   importCricbuzzMatchToDatabase,
+  fetchMatchTelemetry,
+  syncWithCricbuzzLive,
   getTeamLogo,
   getMatchPoster,
   generateSquad,

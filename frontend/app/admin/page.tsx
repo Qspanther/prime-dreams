@@ -382,15 +382,56 @@ export default function AdminDashboardPage() {
                         </td>
                         <td className="p-3 font-mono">
                           <p className="text-[#2563EB] font-black text-sm">
-                            {m.team_a}: {m.score_summary?.team_a?.runs || 0}/{m.score_summary?.team_a?.wickets || 0} ({m.score_summary?.team_a?.overs || 0} ov)
+                            {m.team_a}: {m.score_summary?.team_a?.runs ?? 0}/{m.score_summary?.team_a?.wickets ?? 0} ({m.score_summary?.team_a?.overs ?? 0} ov)
                           </p>
                           <p className="text-[#D97706] font-bold text-xs mt-0.5">
-                            {m.team_b}: {m.score_summary?.team_b?.runs || 0}/{m.score_summary?.team_b?.wickets || 0} ({m.score_summary?.team_b?.overs || 0} ov)
+                            {m.team_b}: {m.score_summary?.team_b?.runs ?? 0}/{m.score_summary?.team_b?.wickets ?? 0} ({m.score_summary?.team_b?.overs ?? 0} ov)
                           </p>
                         </td>
                         <td className="p-3">
                           <p className="text-[#0F172A] font-bold line-clamp-1">{m.live_commentary || m.cricbuzz_status || 'Ball in-play'}</p>
-                          <p className="text-[10px] text-emerald-600 font-bold mt-0.5">● Ball verified from live telemetry stream</p>
+                          {/* Live In-Play Batsmen & Active Bowler Telemetry */}
+                          {m.live_data?.current_striker?.name && (
+                            <div className="mt-1.5 space-y-1">
+                              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 text-blue-900 border border-blue-200 font-bold">
+                                  <span>🏏 {m.live_data.current_striker.name}*</span>
+                                  <span className="font-mono text-blue-700 font-black">{m.live_data.current_striker.runs} ({m.live_data.current_striker.balls}b)</span>
+                                  {m.live_data.current_striker.strike_rate && <span className="text-[10px] text-blue-500 font-mono">SR: {m.live_data.current_striker.strike_rate}</span>}
+                                </span>
+                                {m.live_data?.non_striker?.name && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-50 text-slate-800 border border-slate-200 font-bold">
+                                    <span>🏏 {m.live_data.non_striker.name}</span>
+                                    <span className="font-mono text-slate-600 font-black">{m.live_data.non_striker.runs} ({m.live_data.non_striker.balls}b)</span>
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                {m.live_data?.current_bowler?.name && (
+                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-rose-50 text-rose-900 border border-rose-200 font-bold">
+                                    <span>⚾ {m.live_data.current_bowler.name}</span>
+                                    <span className="font-mono text-rose-700 font-black">{m.live_data.current_bowler.wickets}/{m.live_data.current_bowler.runs}</span>
+                                    <span className="text-[10px] text-rose-600 font-mono">({m.live_data.current_bowler.overs} ov, Econ: {m.live_data.current_bowler.economy})</span>
+                                  </span>
+                                )}
+                                {m.live_data?.recent_balls && m.live_data.recent_balls.length > 0 && (
+                                  <div className="inline-flex items-center gap-1 ml-1">
+                                    <span className="text-[10px] text-[#64748B] font-bold">Over:</span>
+                                    {m.live_data.recent_balls.map((b: string, bIdx: number) => (
+                                      <span key={bIdx} className={`w-4 h-4 rounded-full text-[9px] flex items-center justify-center font-bold ${
+                                        b.toUpperCase().includes('W') ? 'bg-red-600 text-white font-black' :
+                                        b === '4' || b === '6' ? 'bg-emerald-600 text-white font-black' :
+                                        'bg-slate-200 text-slate-800'
+                                      }`}>
+                                        {b}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                          <p className="text-[10px] text-emerald-600 font-bold mt-1">● Real-time Cricbuzz Telemetry Stream</p>
                         </td>
                         <td className="p-3 text-right">
                           <div className="flex items-center justify-end gap-1.5">
