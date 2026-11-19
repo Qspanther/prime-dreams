@@ -208,11 +208,38 @@ async function setMatchContests(matchId, contestsData, ttl = 30) {
   return await set(`match:${matchId}:contests`, contestsData, ttl);
 }
 
+async function getMatchesList(category = 'all', status = 'all') {
+  return await get(`matches:list:${category}:${status}`);
+}
+
+async function setMatchesList(category = 'all', status = 'all', data = [], ttl = 8) {
+  return await set(`matches:list:${category}:${status}`, data, ttl);
+}
+
+async function getMatchDetails(matchId) {
+  return await get(`match:${matchId}:details`);
+}
+
+async function setMatchDetails(matchId, data, ttl = 10) {
+  return await set(`match:${matchId}:details`, data, ttl);
+}
+
+async function getContestLeaderboardCache(matchId, contestId, page = 1, limit = 10, search = '') {
+  const sKey = search ? `:s:${encodeURIComponent(search)}` : '';
+  return await get(`leaderboard:${matchId}:${contestId}:p${page}:l${limit}${sKey}`);
+}
+
+async function setContestLeaderboardCache(matchId, contestId, page = 1, limit = 10, search = '', data = null, ttl = 8) {
+  const sKey = search ? `:s:${encodeURIComponent(search)}` : '';
+  return await set(`leaderboard:${matchId}:${contestId}:p${page}:l${limit}${sKey}`, data, ttl);
+}
+
 async function invalidateMatch(matchId) {
   await Promise.all([
     del(`match:${matchId}:score`),
     del(`match:${matchId}:leaderboard`),
     del(`match:${matchId}:contests`),
+    del(`match:${matchId}:details`),
   ]);
 }
 
@@ -222,6 +249,12 @@ module.exports = {
   del,
   zadd,
   zrevrange,
+  getMatchesList,
+  setMatchesList,
+  getMatchDetails,
+  setMatchDetails,
+  getContestLeaderboardCache,
+  setContestLeaderboardCache,
   getMatchScore,
   setMatchScore,
   getMatchLeaderboard,

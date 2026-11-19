@@ -83,10 +83,20 @@ sequelize.authenticate().then(async () => {
     try {
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_matches_category ON cricket_matches(category);').catch(() => {});
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_matches_status ON cricket_matches(status);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_matches_status_start ON cricket_matches(status, start_time);').catch(() => {});
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_players_match_id ON cricket_players(match_id);').catch(() => {});
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_match_contests_match_id ON match_contests(match_id);').catch(() => {});
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_match_id ON cricket_teams(match_id);').catch(() => {});
       await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_user_id ON cricket_teams(user_id);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_user_match ON cricket_teams(user_id, match_id);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_contest_points ON cricket_teams(contest_id, total_points DESC);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_team_players_team_id ON team_players(team_id);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_team_players_player_id ON team_players(player_id);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_contest_part_contest_user ON contest_participants(contest_id, user_id);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_contest_part_user ON contest_participants(user_id);').catch(() => {});
+      await sequelize.query('CREATE TABLE IF NOT EXISTS bot_teams (id UUID PRIMARY KEY, bot_id UUID NOT NULL, bot_name VARCHAR(255) NOT NULL, bot_username VARCHAR(255), match_id VARCHAR(255) NOT NULL, contest_id VARCHAR(255) NOT NULL, team_name VARCHAR(255) NOT NULL, captain_id VARCHAR(255), vice_captain_id VARCHAR(255), total_points FLOAT DEFAULT 0, rank INTEGER, phase INTEGER DEFAULT 1, lineup TEXT, created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(), updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW());').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_bot_teams_contest_points ON bot_teams(contest_id, total_points DESC);').catch(() => {});
+      await sequelize.query('CREATE INDEX IF NOT EXISTS idx_bot_teams_match_id ON bot_teams(match_id);').catch(() => {});
       await sequelize.query('ALTER TABLE match_contests ADD COLUMN IF NOT EXISTS bot_spots INTEGER DEFAULT 0;').catch(() => {});
       await sequelize.query('ALTER TABLE cricket_teams ADD COLUMN IF NOT EXISTS phase INTEGER DEFAULT 1;').catch(() => {});
       await sequelize.query('ALTER TABLE bot_win_history ADD COLUMN IF NOT EXISTS phase INTEGER DEFAULT 1;').catch(() => {});
@@ -129,14 +139,24 @@ sequelize.authenticate().then(async () => {
     await sequelize.query('PRAGMA wal_autocheckpoint = 1000;'); // Auto-checkpoint every 1000 pages (~4MB)
 
     // Essential high-speed compound and foreign key indexes for Cricket
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_matches_category ON cricket_matches(category);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_matches_status ON cricket_matches(status);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_players_match_id ON cricket_players(match_id);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_match_contests_match_id ON match_contests(match_id);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_match_id ON cricket_teams(match_id);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_user_id ON cricket_teams(user_id);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_h2h_challenges_match_id ON h2h_challenges(match_id);');
-    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_h2h_challenges_receiver_id ON h2h_challenges(receiver_id);');
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_matches_category ON cricket_matches(category);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_matches_status ON cricket_matches(status);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_matches_status_start ON cricket_matches(status, start_time);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_players_match_id ON cricket_players(match_id);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_match_contests_match_id ON match_contests(match_id);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_match_id ON cricket_teams(match_id);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_user_id ON cricket_teams(user_id);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_user_match ON cricket_teams(user_id, match_id);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_cricket_teams_contest_points ON cricket_teams(contest_id, total_points);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_team_players_team_id ON team_players(team_id);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_team_players_player_id ON team_players(player_id);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_contest_part_contest_user ON contest_participants(contest_id, user_id);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_contest_part_user ON contest_participants(user_id);').catch(() => {});
+    await sequelize.query('CREATE TABLE IF NOT EXISTS bot_teams (id TEXT PRIMARY KEY, bot_id TEXT NOT NULL, bot_name TEXT NOT NULL, bot_username TEXT, match_id TEXT NOT NULL, contest_id TEXT NOT NULL, team_name TEXT NOT NULL, captain_id TEXT, vice_captain_id TEXT, total_points REAL DEFAULT 0, rank INTEGER, phase INTEGER DEFAULT 1, lineup TEXT, created_at TEXT, updated_at TEXT);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_bot_teams_contest_points ON bot_teams(contest_id, total_points);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_bot_teams_match_id ON bot_teams(match_id);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_h2h_challenges_match_id ON h2h_challenges(match_id);').catch(() => {});
+    await sequelize.query('CREATE INDEX IF NOT EXISTS idx_h2h_challenges_receiver_id ON h2h_challenges(receiver_id);').catch(() => {});
     await sequelize.query('ALTER TABLE match_contests ADD COLUMN bot_spots INTEGER DEFAULT 0;').catch(() => {});
     await sequelize.query('ALTER TABLE cricket_teams ADD COLUMN phase INTEGER DEFAULT 1;').catch(() => {});
     await sequelize.query('ALTER TABLE bot_win_history ADD COLUMN phase INTEGER DEFAULT 1;').catch(() => {});

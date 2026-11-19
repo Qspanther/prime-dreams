@@ -41,6 +41,9 @@ services:
         value: "true"
       - key: INGESTION_POLL_INTERVAL_MS
         value: "30000"
+      # Prevent duplicate internal bot scheduler ticks when dedicated bot service is deployed
+      - key: ENABLE_INTERNAL_BOT_SCHEDULER
+        value: "false"
 
   # ─── 2. AUTONOMOUS BOT SERVICE (COMPLETELY ISOLATED) ───
   - type: web
@@ -70,7 +73,9 @@ services:
       - key: BOT_MAX_ACTIVE
         value: "1000"
       - key: BOT_BATCH_PER_TICK
-        value: "5"
+        value: "1"
+      - key: BOT_RULE_1_HOUR
+        value: "true"
 
   # ─── 3. FRONTEND NEXT.JS WEB APP ───
   - type: web

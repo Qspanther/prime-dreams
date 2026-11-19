@@ -12,6 +12,7 @@ const {
   CricketTeam,
   TeamPlayer,
   ContestParticipant,
+  BotTeam,
 } = require('../db/models');
 const { getNeonActiveConnections } = require('./db');
 
@@ -165,8 +166,8 @@ class BotSchedulerService {
         const hoursUntilStart = diffMs / (1000 * 60 * 60);
 
         const lockMinutes = match.lock_time_minutes || 15;
-        // Don't join locked or far-away matches
-        if (hoursUntilStart <= lockMinutes / 60 || hoursUntilStart > 72) {
+        // ⏱️ 1-HOUR RULE: All bot teams must complete entry by 1 hour before start
+        if (hoursUntilStart <= 1.0 || hoursUntilStart > 48) {
           continue;
         }
 
@@ -180,6 +181,8 @@ class BotSchedulerService {
   }
 
   async deployTickForMatch(match, hoursUntilStart) {
+    if (hoursUntilStart <= 1.0) return;
+
     const matchId = match.id;
     const contests = await MatchContest.findAll({
       where: { match_id: matchId, is_active: true, status: 'open' },
@@ -192,65 +195,64 @@ class BotSchedulerService {
     const matchPlayers = await CricketPlayer.findAll({ where: { match_id: matchId } });
     if (matchPlayers.length < 22) return;
 
+    // Natural pacing curve reaching 100% target at hoursUntilStart === 1.0
+    const totalWindow = 47; // 48h to 1h
+    const timeBefore1h = Math.max(0, hoursUntilStart - 1.0);
+    const progress = Math.min(1.0, Math.max(0, totalWindow - timeBefore1h) / totalWindow);
+    const targetFillFactor = Math.min(1.0, Math.pow(progress, 0.85));
+
     for (const contest of contests) {
       if (!isContestEligibleForBots(contest)) continue;
 
       const totalSpots = contest.total_spots || 100;
       const currentFilled = contest.filled_spots || 0;
       const botTarget = contest.bot_spots || (contest.type === 'mega' ? 10000 : Math.min(25, totalSpots));
+      const targetForNow = Math.min(totalSpots, Math.max(7, Math.floor(botTarget * targetFillFactor)));
 
-      if (currentFilled >= botTarget || currentFilled >= totalSpots) continue;
+      if (currentFilled >= targetForNow || currentFilled >= totalSpots) continue;
 
-      const needed = Math.min(botTarget - currentFilled, totalSpots - currentFilled);
-      // Batch joins to at most 5 bots per tick to prevent CPU / DB spikes on Free Tier
-      const batchCount = Math.min(needed, maxBatchPerTick);
-      if (batchCount <= 0) continue;
+      // Natural 1-by-1 micro-batch entry with jitter
+      const bot = allBots[Math.floor(Math.random() * allBots.length)];
+      if (!bot) continue;
 
-      const botsToEnter = [...allBots].sort(() => Math.random() - 0.5).slice(0, batchCount);
+      try {
+        const lineup = buildValidCricketLineup(matchPlayers);
+        const teamId = uuidv4();
+        const teamName = `${(bot.username || bot.name || 'Bot').split(' ')[0]}'s XI`;
 
-      for (const bot of botsToEnter) {
-        try {
-          const lineup = buildValidCricketLineup(matchPlayers);
-          const teamId = uuidv4();
-          const teamName = `${bot.username || 'Bot'}'s XI`;
-
-          await CricketTeam.create({
-            id: teamId,
-            user_id: bot.id,
-            match_id: matchId,
-            contest_id: contest.id,
-            team_name: teamName,
-            captain_id: lineup.captain?.id,
-            vice_captain_id: lineup.viceCaptain?.id,
-            total_points: 0,
-            rank: currentFilled + 1,
-            phase: 1,
-          });
-
-          const teamPlayerRows = lineup.players.map((p) => ({
-            id: uuidv4(),
-            team_id: teamId,
-            player_id: p.id,
+        // 🛡️ Isolated Bot Table write: 1 row instead of 13 rows
+        await BotTeam.create({
+          id: teamId,
+          bot_id: bot.id,
+          bot_name: bot.name || 'Player',
+          bot_username: bot.username || 'bot',
+          match_id: matchId,
+          contest_id: contest.id,
+          team_name: teamName,
+          captain_id: lineup.captain?.id,
+          vice_captain_id: lineup.viceCaptain?.id,
+          total_points: 0,
+          rank: currentFilled + 1,
+          phase: 1,
+          lineup: lineup.players.map((p) => ({
+            id: p.id,
+            name: p.name,
+            role: p.role,
+            team_name: p.team_name,
+            credits: p.credits,
+            is_captain: p.id === lineup.captain?.id,
+            is_vice_captain: p.id === lineup.viceCaptain?.id,
             multiplier: p.id === lineup.captain?.id ? 2.0 : p.id === lineup.viceCaptain?.id ? 1.5 : 1.0,
-          }));
+          })),
+        });
 
-          await TeamPlayer.bulkCreate(teamPlayerRows, { ignoreDuplicates: true });
+        await contest.increment('filled_spots', { by: 1 });
+        this.totalBotsJoined += 1;
 
-          await ContestParticipant.create({
-            id: uuidv4(),
-            contest_id: contest.id,
-            user_id: bot.id,
-            team_id: teamId,
-            entry_fee: contest.entry_fee || 0,
-            points: 0,
-            rank: currentFilled + 1,
-          });
-
-          await contest.increment('filled_spots', { by: 1 });
-          this.totalBotsJoined += 1;
-        } catch (botJoinErr) {
-          // Best effort join
-        }
+        // Micro-jitter delay
+        await new Promise((r) => setTimeout(r, 150 + Math.floor(Math.random() * 250)));
+      } catch (botJoinErr) {
+        // Best effort join
       }
     }
   }

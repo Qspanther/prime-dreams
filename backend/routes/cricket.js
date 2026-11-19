@@ -2,13 +2,15 @@
 
 const express = require('express');
 const router = express.Router();
+const { v4: uuidv4 } = require('uuid');
 const { Op } = require('sequelize');
 const { 
   CricketMatch, CricketPlayer, MatchContest, 
   CricketTeam, TeamPlayer, H2HChallenge, User, Wallet,
-  Transaction, Notification, SystemSetting
+  Transaction, Notification, SystemSetting, BotTeam
 } = require('../db/models');
 const sequelize = require('../db');
+const redisCache = require('../cache/redis');
 const { authenticate, optionalAuthenticate, isAdmin } = require('../middleware/auth');
 const config = require('../config');
 const { syncLiveMatch, getCachedMatchLive } = require('../services/cricbuzzService');
@@ -179,15 +181,13 @@ async function ensureMatchSquad(match) {
   }
 }
 
-const { v4: uuidv4 } = require('uuid');
-
 async function ensureContestTeamsInDB(match, contest, players) {
   try {
     if (!contest || !match || !players || players.length < 11) return;
 
-    const existingCount = await CricketTeam.count({ where: { contest_id: contest.id } });
+    const existingBotCount = await BotTeam.count({ where: { contest_id: contest.id } });
     const targetTeams = Math.max(Number(contest.filled_spots) || 0, Number(contest.bot_spots) || 0, 10);
-    const needed = targetTeams - existingCount;
+    const needed = targetTeams - existingBotCount;
     if (needed <= 0) return;
 
     let bots = await User.findAll({
@@ -196,73 +196,64 @@ async function ensureContestTeamsInDB(match, contest, players) {
       limit: Math.min(Math.max(targetTeams, 100), 5000),
     });
 
-    if (bots.length === 0) {
-      const { seedBots } = require('../services/seed-10000-bots');
-      await seedBots(Math.min(targetTeams, 500));
-      bots = await User.findAll({
-        where: { is_bot: true },
-        attributes: ['id', 'username', 'name'],
-        limit: Math.min(Math.max(targetTeams, 100), 5000),
-      });
-    }
-
     if (bots.length === 0) return;
 
     const { buildValidCricketLineup } = require('../services/botScheduler');
-
-    const newTeams = [];
-    const newTeamPlayers = [];
+    const newBotTeams = [];
 
     for (let i = 0; i < needed; i++) {
-      const bot = bots[(existingCount + i) % bots.length];
+      const bot = bots[(existingBotCount + i) % bots.length];
       const lineup = buildValidCricketLineup(players);
       const teamId = uuidv4();
-      const teamNumber = Math.floor((existingCount + i) / bots.length) + 1;
+      const teamNumber = Math.floor((existingBotCount + i) / bots.length) + 1;
       const teamSuffix = teamNumber > 1 ? ` (T${teamNumber})` : '';
       const botFirstName = (bot.name || bot.username || 'Pro').split(' ')[0];
       const teamName = `${botFirstName}'s XI${teamSuffix}`;
 
       let calculatedPoints = 0;
-      lineup.players.forEach(p => {
+      const formattedLineup = lineup.players.map(p => {
         let pts = Number(p.points) || 0;
         if (pts === 0) {
           const charCode = (p.name || 'P').charCodeAt(0);
-          pts = 20 + ((charCode * 19 + (existingCount + i) * 11) % 65);
+          pts = 20 + ((charCode * 19 + (existingBotCount + i) * 11) % 65);
         }
         const mult = p.id === lineup.captain?.id ? 2.0 : p.id === lineup.viceCaptain?.id ? 1.5 : 1.0;
         const ptsEarned = Math.round(pts * mult * 10) / 10;
         calculatedPoints += ptsEarned;
-
-        newTeamPlayers.push({
-          id: uuidv4(),
-          team_id: teamId,
-          player_id: p.id,
+        return {
+          id: p.id,
+          name: p.name,
+          role: p.role,
+          team_name: p.team_name,
+          credits: p.credits,
           is_captain: p.id === lineup.captain?.id,
           is_vice_captain: p.id === lineup.viceCaptain?.id,
+          multiplier: mult,
           points_earned: ptsEarned,
-        });
+        };
       });
 
-      newTeams.push({
+      newBotTeams.push({
         id: teamId,
-        user_id: bot.id,
+        bot_id: bot.id,
+        bot_name: bot.name || 'Player',
+        bot_username: bot.username || 'bot',
         match_id: match.id,
         contest_id: contest.id,
         team_name: teamName,
         captain_id: lineup.captain?.id,
         vice_captain_id: lineup.viceCaptain?.id,
         total_points: Math.round(calculatedPoints * 10) / 10,
+        rank: existingBotCount + i + 1,
+        phase: 1,
+        lineup: formattedLineup,
       });
     }
 
-    if (newTeams.length > 0) {
+    if (newBotTeams.length > 0) {
       const CHUNK_SIZE = 250;
-      for (let c = 0; c < newTeams.length; c += CHUNK_SIZE) {
-        await CricketTeam.bulkCreate(newTeams.slice(c, c + CHUNK_SIZE));
-      }
-      const TP_CHUNK_SIZE = 500;
-      for (let c = 0; c < newTeamPlayers.length; c += TP_CHUNK_SIZE) {
-        await TeamPlayer.bulkCreate(newTeamPlayers.slice(c, c + TP_CHUNK_SIZE));
+      for (let c = 0; c < newBotTeams.length; c += CHUNK_SIZE) {
+        await BotTeam.bulkCreate(newBotTeams.slice(c, c + CHUNK_SIZE));
       }
     }
   } catch (err) {
@@ -278,8 +269,16 @@ router.get('/matches', async (req, res) => {
   res.set('Cache-Control', 'public, max-age=5, stale-while-revalidate=15');
   try {
     const { category, status } = req.query;
-    const where = {};
+    const catKey = category || 'all';
+    const statKey = status || 'all';
 
+    // ⚡ Instant Cache lookup (< 1ms)
+    const cached = await redisCache.getMatchesList(catKey, statKey);
+    if (cached && Array.isArray(cached) && cached.length > 0) {
+      return res.json({ success: true, matches: cached });
+    }
+
+    const where = {};
     if (category && config.VALID_CATEGORIES.includes(category)) {
       where.category = category;
     }
@@ -335,6 +334,9 @@ router.get('/matches', async (req, res) => {
         live_data: m.live_data,
       };
     });
+
+    // Populate cache for 8 seconds (fast revalidation)
+    await redisCache.setMatchesList(catKey, statKey, formatted, 8);
 
     res.json({ success: true, matches: formatted });
   } catch (err) {
@@ -553,16 +555,10 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
       batchPage = Math.max(1, parseInt(req.query.page, 10) || 1);
       batchLimit = req.query.all === 'true' ? 5000 : Math.max(1, Math.min(250, parseInt(req.query.limit, 10) || 10));
       const offset = (batchPage - 1) * batchLimit;
-      const searchQuery = (req.query.search || req.query.q || '').trim();
+      const searchQuery = (req.query.search || req.query.q || '').trim().toLowerCase();
 
-      totalContestTeams = await CricketTeam.count({ where: { contest_id: selectedContest.id } });
-      const requiredFilled = Math.max(Number(selectedContest.filled_spots) || 0, Number(selectedContest.bot_spots) || 0);
-      if (totalContestTeams === 0 || totalContestTeams < requiredFilled) {
-        await ensureContestTeamsInDB(match, selectedContest, players);
-        totalContestTeams = await CricketTeam.count({ where: { contest_id: selectedContest.id } });
-      }
-
-      let teamsQueryOptions = {
+      // 1. Fetch Human Teams in this contest
+      const humanTeams = await CricketTeam.findAll({
         where: { contest_id: selectedContest.id },
         attributes: ['id', 'user_id', 'team_name', 'total_points', 'captain_id', 'vice_captain_id', 'created_at'],
         include: [
@@ -575,50 +571,21 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
           },
         ],
         order: [['total_points', 'DESC'], ['created_at', 'ASC']],
-      };
+      });
 
-      if (searchQuery) {
-        // Priority Search: Search by Team Name, Username, Full Name, or User ID
-        const matchedUsers = await User.findAll({
-          where: {
-            [Op.or]: [
-              { username: { [Op.like]: `%${searchQuery}%` } },
-              { name: { [Op.like]: `%${searchQuery}%` } },
-              { id: searchQuery }
-            ]
-          },
-          attributes: ['id'],
-          limit: 30,
-          raw: true
-        });
-        const matchedUserIds = matchedUsers.map(u => u.id);
+      // 2. Fetch Isolated Bot Teams in this contest (Reads from dedicated bot_teams table)
+      const botTeams = await BotTeam.findAll({
+        where: { contest_id: selectedContest.id },
+        attributes: ['id', 'bot_id', 'bot_name', 'bot_username', 'team_name', 'captain_id', 'vice_captain_id', 'total_points', 'phase', 'lineup', 'created_at'],
+        order: [['total_points', 'DESC'], ['created_at', 'ASC']],
+      });
 
-        teamsQueryOptions.where = {
-          contest_id: selectedContest.id,
-          [Op.or]: [
-            { team_name: { [Op.like]: `%${searchQuery}%` } },
-            ...(matchedUserIds.length > 0 ? [{ user_id: { [Op.in]: matchedUserIds } }] : [])
-          ]
-        };
-        teamsQueryOptions.limit = 50;
-      } else {
-        teamsQueryOptions.limit = batchLimit;
-        teamsQueryOptions.offset = offset;
-      }
-
-      const teams = await CricketTeam.findAll(teamsQueryOptions);
-
-      hasMoreBatches = !searchQuery && (offset + teams.length < totalContestTeams);
-
-      contestLeaderboard = await Promise.all(teams.map(async (team, index) => {
-        const mappedPlayers = (team.teamPlayers || []).map(entry => {
+      // Format Human Teams
+      const formattedHumanTeams = humanTeams.map((team) => {
+        const mappedPlayers = (team.teamPlayers || []).map((entry) => {
           const basePoints = isUpcoming ? 0 : (playerPointsMap.get(entry.player?.id) ?? Number(entry.player?.points ?? 0));
           const mult = entry.is_captain ? 2.0 : entry.is_vice_captain ? 1.5 : 1.0;
-          const ptsEarned = isUpcoming
-            ? 0
-            : (entry.points_earned && Number(entry.points_earned) > 0
-                ? Number(entry.points_earned)
-                : Math.round(basePoints * mult * 10) / 10);
+          const ptsEarned = isUpcoming ? 0 : (entry.points_earned && Number(entry.points_earned) > 0 ? Number(entry.points_earned) : Math.round(basePoints * mult * 10) / 10);
           return {
             id: entry.player?.id,
             name: entry.player?.name || 'Player',
@@ -637,33 +604,14 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
 
         const calculatedTeamTotal = isUpcoming ? 0 : Math.round(mappedPlayers.reduce((sum, p) => sum + (p.points_earned || 0), 0) * 10) / 10;
         const totalPoints = isUpcoming ? 0 : (Number(team.total_points) > 0 ? Number(team.total_points) : calculatedTeamTotal);
-
-        if (!isUpcoming && Number(team.total_points) === 0 && totalPoints > 0) {
-          team.update({ total_points: totalPoints }).catch(() => {});
-        }
-
-        const capPlayer = mappedPlayers.find(p => p.is_captain || p.id === team.captain_id);
-        const vcPlayer = mappedPlayers.find(p => p.is_vice_captain || p.id === team.vice_captain_id);
-
-        let teamRank = 0;
-        if (searchQuery) {
-          const higherTeams = await CricketTeam.count({
-            where: {
-              contest_id: selectedContest.id,
-              total_points: { [Op.gt]: totalPoints }
-            }
-          });
-          teamRank = higherTeams + 1;
-        } else {
-          teamRank = offset + index + 1;
-        }
+        const capPlayer = mappedPlayers.find((p) => p.is_captain || p.id === team.captain_id);
+        const vcPlayer = mappedPlayers.find((p) => p.is_vice_captain || p.id === team.vice_captain_id);
 
         return {
           team_id: team.id,
           user_id: team.user_id,
           team_name: team.team_name || 'Team',
           username: team.user?.username || team.user?.name || 'Player',
-          rank: teamRank,
           total_points: totalPoints,
           captain_id: team.captain_id,
           vice_captain_id: team.vice_captain_id,
@@ -671,7 +619,78 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
           vice_captain_name: vcPlayer?.name || 'Vice-Captain',
           is_my_team: req.user ? team.user_id === req.user.id : false,
           players: mappedPlayers,
+          created_at: team.created_at,
         };
+      });
+
+      // Format Isolated Bot Teams
+      const formattedBotTeams = botTeams.map((bt) => {
+        const rawLineup = bt.lineup || [];
+        const mappedPlayers = rawLineup.map((p) => {
+          const basePoints = isUpcoming ? 0 : (playerPointsMap.get(p.id) ?? 0);
+          const mult = p.is_captain ? 2.0 : p.is_vice_captain ? 1.5 : 1.0;
+          const ptsEarned = isUpcoming ? 0 : Math.round(basePoints * mult * 10) / 10;
+          return {
+            id: p.id,
+            name: p.name || 'Player',
+            role: p.role || null,
+            team_name: p.team_name || null,
+            points: basePoints,
+            points_earned: ptsEarned,
+            rank: isUpcoming ? null : (playerRanks.get(p.id) || null),
+            is_captain: Boolean(p.is_captain),
+            is_vice_captain: Boolean(p.is_vice_captain),
+            photo_url: p.photo_url || null,
+            credits: p.credits || 9.0,
+            stats: {},
+          };
+        });
+
+        const calculatedTeamTotal = isUpcoming ? 0 : Math.round(mappedPlayers.reduce((sum, p) => sum + (p.points_earned || 0), 0) * 10) / 10;
+        const totalPoints = isUpcoming ? 0 : (Number(bt.total_points) > 0 ? Number(bt.total_points) : calculatedTeamTotal);
+        const capPlayer = mappedPlayers.find((p) => p.is_captain || p.id === bt.captain_id);
+        const vcPlayer = mappedPlayers.find((p) => p.is_vice_captain || p.id === bt.vice_captain_id);
+
+        return {
+          team_id: bt.id,
+          user_id: bt.bot_id,
+          team_name: bt.team_name || 'Team',
+          username: bt.bot_username || bt.bot_name || 'Bot',
+          total_points: totalPoints,
+          captain_id: bt.captain_id,
+          vice_captain_id: bt.vice_captain_id,
+          captain_name: capPlayer?.name || 'Captain',
+          vice_captain_name: vcPlayer?.name || 'Vice-Captain',
+          is_my_team: false,
+          players: mappedPlayers,
+          created_at: bt.created_at,
+        };
+      });
+
+      // Combine and sort in-memory (Zero DB overhead)
+      let allContestTeams = [...formattedHumanTeams, ...formattedBotTeams];
+      allContestTeams.sort((a, b) => {
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+
+      // Filter by search query if present
+      if (searchQuery) {
+        allContestTeams = allContestTeams.filter(
+          (t) =>
+            t.team_name.toLowerCase().includes(searchQuery) ||
+            t.username.toLowerCase().includes(searchQuery) ||
+            t.user_id === searchQuery
+        );
+      }
+
+      totalContestTeams = allContestTeams.length;
+      hasMoreBatches = !searchQuery && offset + batchLimit < totalContestTeams;
+
+      // Assign in-memory ranks and slice pagination page
+      contestLeaderboard = allContestTeams.slice(offset, offset + batchLimit).map((team, idx) => ({
+        ...team,
+        rank: offset + idx + 1,
       }));
 
       // Strictly contest-scoped myTeam: User must have registered a team specifically in this contest!
@@ -835,6 +854,12 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
 router.get('/matches/:id', async (req, res) => {
   res.set('Cache-Control', 'public, max-age=3, stale-while-revalidate=10');
   try {
+    // ⚡ Instant Cache Lookup (< 1ms)
+    const cached = await redisCache.getMatchDetails(req.params.id);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const contestWhere = {
       is_active: true,
       is_private: false,
@@ -986,7 +1011,7 @@ router.get('/matches/:id', async (req, res) => {
       };
     });
 
-    res.json({
+    const matchResponse = {
       success: true,
       match: {
         id: match.id,
@@ -1012,7 +1037,12 @@ router.get('/matches/:id', async (req, res) => {
         score_summary: match.score_summary,
         live_data: match.live_data,
       },
-    });
+    };
+
+    // Cache match details for 10 seconds
+    await redisCache.setMatchDetails(req.params.id, matchResponse, 10);
+
+    res.json(matchResponse);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

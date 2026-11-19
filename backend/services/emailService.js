@@ -1,4 +1,4 @@
-// OTP delivery is restricted to Brevo HTTPS.
+// OTP delivery engine with Brevo HTTPS, SMTP Failover, and Dev Fallback
 
 require('dotenv').config();
 
@@ -48,6 +48,41 @@ async function tryBrevo({ toEmail, subject, text, html }) {
     return { success: true, messageId: data.messageId, provider: 'brevo-https' };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'Brevo request failed.' };
+  }
+}
+
+async function tryNodemailer({ toEmail, subject, text, html }) {
+  const mailUser = (process.env.MAIL_USER || process.env.SMTP_USER || '').trim();
+  const mailPass = (process.env.MAIL_PASS || process.env.SMTP_PASS || '').trim();
+  if (!mailUser || !mailPass) {
+    return { success: false, error: 'SMTP credentials not configured.' };
+  }
+
+  try {
+    const nodemailer = require('nodemailer');
+    const transporter = nodemailer.createTransport({
+      host: process.env.SMTP_HOST || 'smtp.gmail.com',
+      port: parseInt(process.env.SMTP_PORT || '465', 10),
+      secure: process.env.SMTP_SECURE !== 'false',
+      auth: { user: mailUser, pass: mailPass },
+      connectionTimeout: 8000,
+      tls: { rejectUnauthorized: false },
+    });
+
+    const info = await withTimeout(
+      transporter.sendMail({
+        from: `"Prime Dreems" <${mailUser}>`,
+        to: toEmail,
+        subject,
+        text,
+        html,
+      }),
+      8000,
+      'sending mail via SMTP'
+    );
+    return { success: true, messageId: info.messageId, provider: 'smtp-nodemailer' };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
 }
 
@@ -118,7 +153,28 @@ async function executeSendMail({ toEmail, name, otp, purpose, expiryMinutes = 10
   const subject = isReset ? `Prime Dreems Password Reset Code: ${otp}` : `Your Prime Dreems Verification Code: ${otp}`;
   const plainText = `Hi ${name || 'Player'},\n\nYour Prime Dreems verification code is: ${otp}\n\nValid for ${expiryMinutes} minutes.\n\n— Team Prime Dreems`;
   const html = buildOtpEmailHtml({ recipientName: name, otp, purpose, expiryMinutes });
-  return await tryBrevo({ toEmail, subject, text: plainText, html });
+
+  console.log(`📬 [OTP Engine] Delivering OTP to: ${toEmail} | Code: [${otp}] | Purpose: ${purpose}`);
+
+  // 1. Primary: Brevo HTTPS API
+  const brevoRes = await tryBrevo({ toEmail, subject, text: plainText, html });
+  if (brevoRes.success) {
+    return brevoRes;
+  }
+
+  // 2. Secondary Failover: SMTP Nodemailer
+  const smtpRes = await tryNodemailer({ toEmail, subject, text: plainText, html });
+  if (smtpRes.success) {
+    return smtpRes;
+  }
+
+  // 3. In non-production or dev mode, permit simulator pass so local signup isn't blocked
+  if (process.env.NODE_ENV !== 'production' || process.env.ALLOW_DEV_OTP === 'true') {
+    console.log(`⚡ [DEV OTP FALLBACK] Brevo/SMTP unavailable in development. Code for ${toEmail}: ${otp}`);
+    return { success: true, messageId: 'simulated-dev-id', provider: 'dev-simulator' };
+  }
+
+  return { success: false, error: `Email delivery failed. Brevo: ${brevoRes.error} | SMTP: ${smtpRes.error}` };
 }
 
 // ─── Exported Methods ──────────────────────────────────────────────────────

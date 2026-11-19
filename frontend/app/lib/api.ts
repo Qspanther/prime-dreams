@@ -1,9 +1,10 @@
+// ⚡ PRIME DREEMS — HIGH-PERFORMANCE INSTANT API CLIENT WITH SWR CACHING
+
 export function getApiBase() {
   if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL;
   if (typeof window !== 'undefined') {
     const isLocal = ['localhost', '127.0.0.1'].includes(window.location.hostname);
     if (isLocal) {
-      // Connect directly to local backend port 5000 to eliminate Next.js proxy socket dropouts (ECONNRESET)
       return `${window.location.protocol}//${window.location.hostname}:5000`;
     }
     return '/api-backend';
@@ -30,15 +31,69 @@ export function getWebSocketUrl(): string {
   return 'ws://127.0.0.1:5000/ws';
 }
 
+// ── In-Memory Client SWR Cache for Instant (0ms) Page Loads ──
+interface CacheEntry {
+  data: any;
+  timestamp: number;
+}
+const clientCache = new Map<string, CacheEntry>();
+
+export function clearApiCache(endpointPrefix?: string) {
+  if (!endpointPrefix) {
+    clientCache.clear();
+    return;
+  }
+  for (const key of clientCache.keys()) {
+    if (key.includes(endpointPrefix)) {
+      clientCache.delete(key);
+    }
+  }
+}
+
 type FetchOptions = {
   method?: string;
   body?: unknown;
   token?: string | null;
   retries?: number;
+  skipCache?: boolean;
+  ttlMs?: number;
 };
 
 export async function api(endpoint: string, options: FetchOptions = {}) {
+  const { method = 'GET', body, token, retries = 1, skipCache = false, ttlMs = 6000 } = options;
+  const isGet = method.toUpperCase() === 'GET';
+  const cacheKey = `${token ? 'auth:' : 'anon:'}${endpoint}`;
+
+  // 1. Instant Cache Return for GET requests (< 1ms)
+  if (isGet && !skipCache && typeof window !== 'undefined') {
+    const cached = clientCache.get(cacheKey);
+    if (cached) {
+      const age = Date.now() - cached.timestamp;
+      // If fresh, return immediately!
+      if (age < ttlMs) {
+        return cached.data;
+      }
+      // Stale-While-Revalidate: If under 30 seconds old, return cached data immediately
+      // and revalidate in background silently
+      if (age < 30000) {
+        // Background revalidation
+        fetchNetwork(endpoint, options, cacheKey).catch(() => {});
+        return cached.data;
+      }
+    }
+  }
+
+  // If mutation (POST/PUT/DELETE), purge related caches so user sees instant updates
+  if (!isGet) {
+    clearApiCache(endpoint.split('/')[1] || '');
+  }
+
+  return await fetchNetwork(endpoint, options, cacheKey);
+}
+
+async function fetchNetwork(endpoint: string, options: FetchOptions, cacheKey: string) {
   const { method = 'GET', body, token, retries = 1 } = options;
+  const isGet = method.toUpperCase() === 'GET';
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -56,12 +111,11 @@ export async function api(endpoint: string, options: FetchOptions = {}) {
       method,
       headers,
       body: body ? JSON.stringify(body) : undefined,
-      cache: 'no-store', // Disable caching to ensure fresh data
     });
   } catch (netErr: any) {
     if (retries > 0) {
-      await new Promise(r => setTimeout(r, 600));
-      return api(endpoint, { ...options, retries: retries - 1 });
+      await new Promise(r => setTimeout(r, 500));
+      return fetchNetwork(endpoint, { ...options, retries: retries - 1 }, cacheKey);
     }
     throw new Error('Network error: Unable to connect to server. Please try again.');
   }
@@ -72,8 +126,8 @@ export async function api(endpoint: string, options: FetchOptions = {}) {
     data = JSON.parse(text);
   } catch {
     if (res.status >= 500 && retries > 0) {
-      await new Promise(r => setTimeout(r, 800));
-      return api(endpoint, { ...options, retries: retries - 1 });
+      await new Promise(r => setTimeout(r, 600));
+      return fetchNetwork(endpoint, { ...options, retries: retries - 1 }, cacheKey);
     }
     throw new Error(text || `Request failed with status ${res.status}`);
   }
@@ -83,18 +137,23 @@ export async function api(endpoint: string, options: FetchOptions = {}) {
       return data;
     }
     if (res.status >= 500 && retries > 0) {
-      await new Promise(r => setTimeout(r, 800));
-      return api(endpoint, { ...options, retries: retries - 1 });
+      await new Promise(r => setTimeout(r, 600));
+      return fetchNetwork(endpoint, { ...options, retries: retries - 1 }, cacheKey);
     }
     throw new Error(data?.error || `Request failed with status ${res.status}`);
+  }
+
+  // Populate client cache on successful GET
+  if (isGet && typeof window !== 'undefined') {
+    clientCache.set(cacheKey, { data, timestamp: Date.now() });
   }
 
   return data;
 }
 
 // Convenience wrappers
-export const apiGet = (endpoint: string, token?: string | null) =>
-  api(endpoint, { token });
+export const apiGet = (endpoint: string, token?: string | null, options?: Omit<FetchOptions, 'token' | 'method'>) =>
+  api(endpoint, { ...options, method: 'GET', token });
 
 export const apiPost = (endpoint: string, body: unknown, token?: string | null) =>
   api(endpoint, { method: 'POST', body, token });
@@ -129,8 +188,6 @@ export function resolveImageUrl(url?: string | null): string {
   return `/uploads/${trimmed}`;
 }
 
-// Player photos may be direct images, Google imgres links, or profile pages.
-// Page links go through the backend resolver which extracts og:image server-side.
 export function resolvePlayerPhoto(url?: string | null, name?: string): string {
   const base = resolveImageUrl(url);
   if (!base || !/^https?:\/\//i.test(base)) return base;
@@ -139,8 +196,6 @@ export function resolvePlayerPhoto(url?: string | null, name?: string): string {
     const u = new URL(base);
     isGoogleImgres = /(^|\.)google\.[a-z.]+$/i.test(u.hostname) && u.searchParams.has('imgurl');
   } catch (_) {}
-  // Google imgres always goes through the proxy: the embedded imgurl host may
-  // block cross-origin browser loads, and the proxy can fall back to the tbn thumbnail.
   if (!isGoogleImgres && (/\.(png|jpe?g|webp|gif|svg|avif)(\?|#|$)/i.test(base) || /(dicebear|gstatic|redd\.it|wikimedia|twimg|fbcdn)/i.test(base))) {
     return base;
   }

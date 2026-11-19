@@ -13,7 +13,8 @@ const {
   CricketTeam,
   TeamPlayer,
   ContestParticipant,
-  BotWinHistory
+  BotWinHistory,
+  BotTeam
 } = require('../db/models');
 const { handleBattlefieldFill } = require('./contestService');
 const config = require('../config');
@@ -418,31 +419,39 @@ class BotScheduler {
           continue;
         }
 
-        // Case A: More than 72 hours away -> Wait on standby
-        if (hoursUntilStart > 72) {
-          matchRecord.status = 'STANDBY_WAITING_72H';
-          // Bots wait patiently for the 72-hour mark
+        // ⏱️ 1-HOUR RULE: All bot teams must complete entry by 1 hour before start
+        if (hoursUntilStart <= 1.0) {
+          if (matchRecord.status !== '1H_COMPLETED_STANDBY') {
+            matchRecord.status = '1H_COMPLETED_STANDBY';
+            console.log(`⏱️ [1-Hour Rule] Match "${match.title}" starts in <= 1 hour (${(hoursUntilStart * 60).toFixed(0)}m). Bot target 100% completed & locked.`);
+          }
           continue;
         }
 
-        // Case B: Within 72 hours -> Trigger Alert & Commence Organic Deployment
-        if (hoursUntilStart <= 72 && hoursUntilStart > (lockMinutes / 60)) {
+        // Case A: More than 48 hours away -> Wait on standby
+        if (hoursUntilStart > 48) {
+          matchRecord.status = 'STANDBY_WAITING_WINDOW';
+          continue;
+        }
+
+        // Case B: Active Window (> 1.0 hour and <= 48 hours) -> Organic Paced Deployment
+        if (hoursUntilStart <= 48 && hoursUntilStart > 1.0) {
           if (!matchRecord.alert72hTriggered) {
             matchRecord.alert72hTriggered = true;
             matchRecord.alert72hTriggeredAt = now.toISOString();
-            matchRecord.status = 'ACTIVE_72H_DEPLOYMENT';
+            matchRecord.status = 'ACTIVE_1H_RULE_DEPLOYMENT';
             console.log('\n================================================================');
-            console.log(`🚨 [72-HOUR BOT ALERT TRIGGERED]`);
+            console.log(`🚨 [1-HOUR RULE BOT NETWORK ACTIVE]`);
             console.log(`🏏 Match: "${match.title}" (ID: ${match.id})`);
-            console.log(`⏰ Time Left: ${hoursUntilStart.toFixed(1)} hours (within 72-hour window)!`);
-            console.log(`🤖 10,000 Bots Network Activated for Organic Staggered Deployment!`);
-            console.log(`🛡️  Strict Rules: H2H (Excluded) | Private (Excluded) | Mega & Battlefield & Mini (Active)`);
+            console.log(`⏰ Time Left: ${hoursUntilStart.toFixed(1)} hours (completes at 1.0h mark)!`);
+            console.log(`🤖 10,000 Bots Network: Natural Micro-Batches with Jitter`);
+            console.log(`🛡️  Strict Rules: Isolated Bot Tables | H2H & Private 100% Excluded`);
             console.log('================================================================\n');
           } else {
-            matchRecord.status = 'ACTIVE_72H_DEPLOYMENT';
+            matchRecord.status = 'ACTIVE_1H_RULE_DEPLOYMENT';
           }
 
-          // Execute organic staggered join tick for this match
+          // Execute organic 1-by-1 micro-batch staggered join tick
           await this.deployOrganicStaggeredTick(match, hoursUntilStart);
         }
       }
@@ -521,18 +530,25 @@ class BotScheduler {
 
     if (contests.length === 0) return;
 
+    // ⏱️ 1-HOUR RULE: Stop bot entries if <= 1.0 hour remains before match start!
+    if (hoursUntilStart <= 1.0) {
+      return;
+    }
+
     const allBots = await getCachedBots();
     if (allBots.length === 0) return;
 
     const matchPlayers = await CricketPlayer.findAll({ where: { match_id: matchId } });
     if (matchPlayers.length < 22) return;
 
-    // Calculate progression across the 72-hour window
-    // 72 hours = 0% elapsed, 0 hours = 100% elapsed
-    const elapsedHours = Math.max(0, 72 - hoursUntilStart);
-    const progressRatio = Math.min(1.0, elapsedHours / 72);
-    // Smooth natural curve reaching 1.0 (100% of target) before match starts
-    const targetFillFactor = hoursUntilStart <= 1.0 ? 1.0 : Math.min(1.0, Math.pow(progressRatio, 0.85));
+    // Calculate progression: Target must reach 100% at hoursUntilStart === 1.0
+    // Active window from 48h down to 1.0h before start
+    const totalDeploymentWindow = 47; // 48h to 1h
+    const hoursRemainingUntilTarget = Math.max(0, hoursUntilStart - 1.0);
+    const elapsed = Math.max(0, totalDeploymentWindow - hoursRemainingUntilTarget);
+    const progressRatio = Math.min(1.0, elapsed / totalDeploymentWindow);
+    // Smooth natural curve reaching 1.0 (100% of target) at exactly 1 hour before start
+    const targetFillFactor = Math.min(1.0, Math.pow(progressRatio, 0.85));
 
     for (const contest of contests) {
       // 1. STRICT ISOLATION FILTER: Head-to-Head & Private contests are 100% EXCLUDED
@@ -603,26 +619,16 @@ class BotScheduler {
       const needed = Math.min(targetForThisMoment - currentFilled, totalSpots - currentFilled);
       if (needed <= 0) continue;
 
-      // Small organic batch size or dynamic scaling based on time remaining to reach full target
-      let batchSize;
-      if (currentFilled < minGuaranteed) {
-        batchSize = Math.min(needed, 50);
-      } else {
-        const ticksRemaining = Math.max(1, Math.floor(hoursUntilStart * 120)); // ~2 ticks/min
-        const optimalPerTick = Math.ceil(needed / ticksRemaining);
-        const maxBatch = Math.max(10, Math.min(250, optimalPerTick * 2));
-        batchSize = Math.max(1, Math.min(needed, Math.floor(Math.random() * maxBatch) + 1));
-      }
-
-      // Multi-team support: Count existing teams per bot in this contest
-      const existingTeams = await CricketTeam.findAll({
+      // 🛡️ ISOLATED BOT MANAGEMENT: Query existing teams from dedicated bot_teams table
+      const existingBotTeams = await BotTeam.findAll({
         where: { match_id: matchId, contest_id: contest.id },
-        attributes: ['user_id', 'team_name']
+        attributes: ['bot_id'],
+        raw: true
       });
 
       const botTeamCounts = new Map();
-      for (const t of existingTeams) {
-        botTeamCounts.set(t.user_id, (botTeamCounts.get(t.user_id) || 0) + 1);
+      for (const t of existingBotTeams) {
+        botTeamCounts.set(t.bot_id, (botTeamCounts.get(t.bot_id) || 0) + 1);
       }
 
       // Sort bots by existing team count ascending (0 teams first, then 1, etc.)
@@ -633,66 +639,48 @@ class BotScheduler {
         return Math.random() - 0.5;
       });
 
-      const botsToEnter = [];
-      for (let i = 0; i < batchSize; i++) {
-        botsToEnter.push(sortedBots[i % sortedBots.length]);
-      }
-      if (botsToEnter.length === 0) continue;
+      const bot = sortedBots[0];
+      if (!bot) continue;
 
-      const newTeams = [];
-      const newTeamPlayers = [];
-      const newParticipants = [];
+      const lineup = buildValidCricketLineup(matchPlayers);
+      const teamId = uuidv4();
+      const curBotCount = (botTeamCounts.get(bot.id) || 0) + 1;
+      const suffix = curBotCount > 1 ? ` (T${curBotCount})` : '';
+      const teamName = `${(bot.name || 'Player').split(' ')[0]}'s XI${suffix}`;
 
-      for (const bot of botsToEnter) {
-        const lineup = buildValidCricketLineup(matchPlayers);
-        const teamId = uuidv4();
-        const curBotCount = (botTeamCounts.get(bot.id) || 0) + 1;
-        botTeamCounts.set(bot.id, curBotCount);
-        const suffix = curBotCount > 1 ? ` (T${curBotCount})` : '';
-        const teamName = `${bot.name.split(' ')[0]}'s XI${suffix}`;
+      // 🛡️ ISOLATED BOT ENTRY: Writes to dedicated bot_teams table with compact JSON lineup
+      // Eliminates 11 rows in team_players & contest_participants -> 91% fewer DB writes on Neon Free Tier!
+      await BotTeam.create({
+        id: teamId,
+        bot_id: bot.id,
+        bot_name: bot.name,
+        bot_username: bot.username || bot.name.split(' ')[0],
+        match_id: matchId,
+        contest_id: contest.id,
+        team_name: teamName,
+        captain_id: lineup.captain.id,
+        vice_captain_id: lineup.viceCaptain.id,
+        total_points: 0,
+        rank: currentFilled + 1,
+        phase: 1,
+        lineup: lineup.players.map(p => ({
+          id: p.id,
+          name: p.name,
+          role: p.role,
+          team_name: p.team_name,
+          credits: p.credits,
+          is_captain: p.id === lineup.captain.id,
+          is_vice_captain: p.id === lineup.viceCaptain.id,
+          multiplier: p.id === lineup.captain.id ? 2.0 : p.id === lineup.viceCaptain.id ? 1.5 : 1.0,
+        })),
+      });
 
-        newTeams.push({
-          id: teamId,
-          user_id: bot.id,
-          match_id: matchId,
-          contest_id: contest.id,
-          team_name: teamName,
-          captain_id: lineup.captain.id,
-          vice_captain_id: lineup.viceCaptain.id,
-          total_points: 0,
-        });
-
-        lineup.players.forEach(p => {
-          newTeamPlayers.push({
-            id: uuidv4(),
-            team_id: teamId,
-            player_id: p.id,
-            is_captain: p.id === lineup.captain.id,
-            is_vice_captain: p.id === lineup.viceCaptain.id,
-            points_earned: 0,
-          });
-        });
-
-        newParticipants.push({
-          id: uuidv4(),
-          contest_id: contest.id,
-          team_id: teamId,
-          user_id: bot.id,
-          rank: null,
-          prize_won: 0,
-        });
-      }
-
-      // Bulk create teams, players, participants with safe chunking
-      await CricketTeam.bulkCreate(newTeams);
-      const CHUNK_PLAYERS = 100;
-      for (let p = 0; p < newTeamPlayers.length; p += CHUNK_PLAYERS) {
-        await TeamPlayer.bulkCreate(newTeamPlayers.slice(p, p + CHUNK_PLAYERS));
-      }
-      await ContestParticipant.bulkCreate(newParticipants);
-
-      const updatedFilled = currentFilled + newTeams.length;
+      const updatedFilled = currentFilled + 1;
       await contest.update({ filled_spots: updatedFilled });
+
+      // Invalidate match contest cache so spots count updates in real-time
+      const redisCache = require('../cache/redis');
+      await redisCache.del(`match:${matchId}:contests`);
 
       // Handle Battlefield auto-clone if room filled
       if (contest.type === 'multi_battlefield') {
@@ -709,7 +697,10 @@ class BotScheduler {
         };
       }
 
-      console.log(`🤖 [Organic Join] ${newTeams.length} bot(s) joined "${contest.title}" (${match.title}) | Spots: ${updatedFilled}/${totalSpots} | Time left: ${hoursUntilStart.toFixed(1)}h`);
+      console.log(`🤖 [Micro-Batch Organic Join] 1 bot joined "${contest.title}" (${match.title}) | Spots: ${updatedFilled}/${totalSpots} | Time left: ${hoursUntilStart.toFixed(1)}h`);
+
+      // Natural jitter delay (150ms - 400ms) between micro-batches
+      await new Promise(r => setTimeout(r, 150 + Math.floor(Math.random() * 250)));
     }
   }
 

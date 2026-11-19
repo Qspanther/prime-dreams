@@ -20,6 +20,7 @@ const UserReward = require('./UserReward');
 const GuruTeam = require('./GuruTeam');
 const ContestParticipant = require('./ContestParticipant');
 const BotWinHistory = require('./BotWinHistory');
+const BotTeam = require('./BotTeam');
 
 // ─── Associations ───
 
@@ -110,4 +111,5 @@ module.exports = {
   GuruTeam,
   ContestParticipant,
   BotWinHistory,
+  BotTeam,
 };

@@ -283,13 +283,17 @@ async function start() {
     console.warn('⚠️ Contest lock scheduler notice:', lockErr.message);
   }
 
-  // Start Autonomous 72-Hour Bot Engine & End-Game Tactical Rearranger
-  try {
-    const { botScheduler } = require('./services/botScheduler');
-    botScheduler.startScheduler(30000);
-    console.log('🤖 Autonomous 10,000 Bot Scheduler & End-Game Rearranger active (30s tick)');
-  } catch (botErr) {
-    console.warn('⚠️ Bot scheduler startup notice:', botErr.message);
+  // Start Autonomous 1-Hour Rule Bot Engine & End-Game Tactical Rearranger
+  if (process.env.ENABLE_INTERNAL_BOT_SCHEDULER !== 'false') {
+    try {
+      const { botScheduler } = require('./services/botScheduler');
+      botScheduler.startScheduler(30000);
+      console.log('🤖 Autonomous 10,000 Bot Scheduler & 1-Hour Rule Engine active (30s tick)');
+    } catch (botErr) {
+      console.warn('⚠️ Bot scheduler startup notice:', botErr.message);
+    }
+  } else {
+    console.log('🛡️ [Bot Isolation] Internal bot scheduler disabled on backend API — handled by dedicated bot service.');
   }
 }
 
