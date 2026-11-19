@@ -1,7 +1,7 @@
 // 🏏 PRIME DREEMS — REAL-TIME INGESTION WORKER
 // Orchestrates Ingestion, Validation, Deduplication, Verification, HotStore, and WebSocket Streaming
 
-const { CricketMatch, CricketPlayer, MatchContest, CricketTeam, TeamPlayer, ScoreAuditLog } = require('../../db/models');
+const { CricketMatch, CricketPlayer, MatchContest, CricketTeam, TeamPlayer, ScoreAuditLog, BotTeam } = require('../../db/models');
 const cricbuzzSource = require('./sources/cricbuzzSource');
 const dualSourceVerifier = require('./dualSourceVerifier');
 const deduplicator = require('./deduplication');
@@ -470,18 +470,53 @@ async function updatePlayerFantasyPoints(matchId, scoreData, eventId, playerSnap
   try {
     if (Array.isArray(playerSnapshot?.players) && playerSnapshot.players.length > 0) {
       const existingPlayers = await CricketPlayer.findAll({ where: { match_id: matchId } });
-      const keyFor = (name, teamName) => `${String(teamName || '').trim().toLowerCase()}|${String(name || '').trim().toLowerCase()}`;
-      const playerByName = new Map(existingPlayers.map(player => [keyFor(player.name, player.team_name), player]));
+      const norm = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const keyFor = (name, teamName) => `${norm(teamName)}|${norm(name)}`;
+
+      const playerByKey = new Map();
+      const existingByTeam = new Map();
+      for (const p of existingPlayers) {
+        playerByKey.set(keyFor(p.name, p.team_name), p);
+        const tKey = norm(p.team_name);
+        if (!existingByTeam.has(tKey)) existingByTeam.set(tKey, []);
+        existingByTeam.get(tKey).push(p);
+      }
+
+      const matchedPlayerIds = new Set();
 
       for (const sourcePlayer of playerSnapshot.players) {
         const name = String(sourcePlayer.name || '').trim();
         const teamName = String(sourcePlayer.team_name || '').trim();
         if (!name || !teamName) continue;
-        const existing = playerByName.get(keyFor(name, teamName));
+
+        const k = keyFor(name, teamName);
+        let existing = playerByKey.get(k);
+
+        // If not found by exact name, look for placeholder player in the same team
+        if (!existing) {
+          const teamPool = existingByTeam.get(norm(teamName)) || [];
+          const placeholder = teamPool.find(p =>
+            !matchedPlayerIds.has(p.id) &&
+            (/(\b(arab|test|player|xi)\b|\d+)/i.test(p.name) || !p.stats || Object.keys(p.stats).length === 0 || Number(p.points || 0) === 0)
+          );
+
+          if (placeholder) {
+            existing = placeholder;
+            await existing.update({
+              name,
+              role: sourcePlayer.role || existing.role || 'BAT',
+              stats: sourcePlayer.stats || existing.stats || {},
+              credits: sourcePlayer.credits || existing.credits || 9,
+            });
+            playerByKey.set(k, existing);
+          }
+        }
+
         if (existing) {
-          const stats = sourcePlayer.stats || existing.stats;
+          matchedPlayerIds.add(existing.id);
+          const stats = sourcePlayer.stats || existing.stats || {};
           if (JSON.stringify(existing.stats || {}) !== JSON.stringify(stats || {})) {
-            await existing.update({ stats });
+            await existing.update({ stats, role: sourcePlayer.role || existing.role });
           }
         } else {
           const created = await CricketPlayer.create({
@@ -489,11 +524,12 @@ async function updatePlayerFantasyPoints(matchId, scoreData, eventId, playerSnap
             name,
             team_name: teamName,
             role: sourcePlayer.role || 'BAT',
-            credits: 9,
+            credits: sourcePlayer.credits || 9,
             points: 0,
             stats: sourcePlayer.stats || {},
           });
-          playerByName.set(keyFor(name, teamName), created);
+          matchedPlayerIds.add(created.id);
+          playerByKey.set(k, created);
         }
       }
     }
@@ -514,43 +550,85 @@ async function updatePlayerFantasyPoints(matchId, scoreData, eventId, playerSnap
       }
     }
 
-    // Recalculate Fantasy User Teams (Captain 2x, VC 1.5x)
+    // Build lookup maps
+    const playerMap = new Map();
+    const playerNameMap = new Map();
+    players.forEach(p => {
+      playerMap.set(p.id, Number(p.points) || 0);
+      playerNameMap.set(p.id, p.name);
+    });
+
+    // 1. Recalculate Fantasy User Teams (Captain 2x, VC 1.5x)
     const teams = await CricketTeam.findAll({
       where: { match_id: matchId },
       include: [{ model: TeamPlayer, as: 'teamPlayers' }]
     });
 
-    const playerMap = new Map();
-    players.forEach(p => playerMap.set(p.id, Number(p.points) || 0));
-
     for (const team of teams) {
       let teamTotal = 0;
-      for (const tp of team.teamPlayers) {
+      for (const tp of (team.teamPlayers || [])) {
         const basePts = playerMap.get(tp.player_id) || 0;
         let earned = basePts;
-        if (tp.is_captain) earned = basePts * config.CAPTAIN_MULTIPLIER;
-        else if (tp.is_vice_captain) earned = basePts * config.VICE_CAPTAIN_MULTIPLIER;
+        if (tp.is_captain) earned = basePts * (config.CAPTAIN_MULTIPLIER || 2.0);
+        else if (tp.is_vice_captain) earned = basePts * (config.VICE_CAPTAIN_MULTIPLIER || 1.5);
+        earned = Math.round(earned * 10) / 10;
 
         await tp.update({ points_earned: earned });
         teamTotal += earned;
       }
-      await team.update({ total_points: Math.round(teamTotal * 10) / 10 });
+      teamTotal = Math.round(teamTotal * 10) / 10;
+      await team.update({ total_points: teamTotal });
     }
 
-    // Keep every contest rank synchronized with the same ball's player totals.
+    // 2. Recalculate Bot Teams (Captain 2x, VC 1.5x)
+    const botTeams = await BotTeam.findAll({ where: { match_id: matchId } });
+    for (const bt of botTeams) {
+      let botTotal = 0;
+      const rawLineup = Array.isArray(bt.lineup) ? bt.lineup : (typeof bt.lineup === 'string' ? JSON.parse(bt.lineup || '[]') : []);
+      const updatedLineup = rawLineup.map(p => {
+        const basePts = playerMap.get(p.id) || 0;
+        const isCap = Boolean(p.is_captain || p.id === bt.captain_id);
+        const isVc = Boolean(p.is_vice_captain || p.id === bt.vice_captain_id);
+        let earned = basePts;
+        if (isCap) earned = basePts * (config.CAPTAIN_MULTIPLIER || 2.0);
+        else if (isVc) earned = basePts * (config.VICE_CAPTAIN_MULTIPLIER || 1.5);
+        earned = Math.round(earned * 10) / 10;
+        botTotal += earned;
+        return {
+          ...p,
+          name: playerNameMap.get(p.id) || p.name,
+          points: basePts,
+          points_earned: earned,
+        };
+      });
+      botTotal = Math.round(botTotal * 10) / 10;
+      await bt.update({
+        total_points: botTotal,
+        lineup: updatedLineup,
+      });
+    }
+
+    // 3. Keep every contest rank synchronized across ALL teams (human + bot)
     const contests = await MatchContest.findAll({ where: { match_id: matchId } });
     for (const contest of contests) {
-      const contestTeams = await CricketTeam.findAll({
-        where: { contest_id: contest.id },
-        order: [['total_points', 'DESC'], ['created_at', 'ASC']],
-      });
-      let previousPoints = null;
-      let rank = 0;
-      for (let index = 0; index < contestTeams.length; index++) {
-        const points = Number(contestTeams[index].total_points) || 0;
-        if (previousPoints === null || points !== previousPoints) rank = index + 1;
-        previousPoints = points;
-        if (contestTeams[index].rank !== rank) await contestTeams[index].update({ rank });
+      const [contestTeams, contestBots] = await Promise.all([
+        CricketTeam.findAll({ where: { contest_id: contest.id } }),
+        BotTeam.findAll({ where: { contest_id: contest.id } }),
+      ]);
+
+      const allEntries = [
+        ...contestTeams.map(t => ({ entity: t, total_points: Number(t.total_points) || 0, created_at: t.created_at })),
+        ...contestBots.map(b => ({ entity: b, total_points: Number(b.total_points) || 0, created_at: b.created_at })),
+      ];
+
+      allEntries.sort((a, b) => (b.total_points - a.total_points) || (new Date(a.created_at) - new Date(b.created_at)));
+
+      for (let index = 0; index < allEntries.length; index++) {
+        const targetRank = index + 1;
+        const entry = allEntries[index];
+        if (entry.entity.rank !== targetRank) {
+          await entry.entity.update({ rank: targetRank });
+        }
       }
     }
   } catch (err) {

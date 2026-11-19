@@ -622,12 +622,14 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
             }));
             const capPlayer = mappedPlayers.find((p) => p.is_captain || p.id === team.captain_id);
             const vcPlayer = mappedPlayers.find((p) => p.is_vice_captain || p.id === team.vice_captain_id);
+            const calculatedPoints = Math.round(mappedPlayers.reduce((sum, p) => sum + (Number(p.points_earned) || 0), 0) * 10) / 10;
+            const finalPoints = isUpcoming ? 0 : Math.max(Number(team.total_points) || 0, calculatedPoints);
             return {
               team_id: team.id,
               user_id: team.user_id,
               team_name: team.team_name || 'Team',
               username: team.user?.username || team.user?.name || 'Player',
-              total_points: Number(team.total_points) || 0,
+              total_points: finalPoints,
               captain_id: team.captain_id,
               vice_captain_id: team.vice_captain_id,
               captain_name: capPlayer?.name || 'Captain',
@@ -657,12 +659,14 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
             }));
             const capPlayer = mappedPlayers.find((p) => p.is_captain || p.id === bt.captain_id);
             const vcPlayer = mappedPlayers.find((p) => p.is_vice_captain || p.id === bt.vice_captain_id);
+            const calculatedPoints = Math.round(mappedPlayers.reduce((sum, p) => sum + (Number(p.points_earned) || 0), 0) * 10) / 10;
+            const finalPoints = isUpcoming ? 0 : Math.max(Number(bt.total_points) || 0, calculatedPoints);
             return {
               team_id: bt.id,
               user_id: bt.bot_id,
               team_name: bt.team_name || 'Team',
               username: bt.bot_username || bt.bot_name || 'Bot',
-              total_points: Number(bt.total_points) || 0,
+              total_points: finalPoints,
               captain_id: bt.captain_id,
               vice_captain_id: bt.vice_captain_id,
               captain_name: capPlayer?.name || 'Captain',
@@ -674,7 +678,14 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
             };
           });
 
-          contestLeaderboard = [...formattedH, ...formattedB].slice(0, batchLimit);
+          contestLeaderboard = [...formattedH, ...formattedB];
+          if (!isUpcoming) {
+            contestLeaderboard.sort((a, b) => (b.total_points - a.total_points) || (new Date(a.created_at) - new Date(b.created_at)));
+            contestLeaderboard.forEach((t, i) => {
+              t.rank = offset + i + 1;
+            });
+          }
+          contestLeaderboard = contestLeaderboard.slice(0, batchLimit);
           hasMoreBatches = (offset + batchLimit) < (searchedHumans.length + searchedBots.length);
         } else {
           // ⚡ 3. High-Performance Paginated DB Query (Strict SQL LIMIT & OFFSET: ~15ms)
@@ -735,12 +746,14 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
             });
             const capPlayer = mappedPlayers.find((p) => p.is_captain || p.id === team.captain_id);
             const vcPlayer = mappedPlayers.find((p) => p.is_vice_captain || p.id === team.vice_captain_id);
+            const calculatedPoints = Math.round(mappedPlayers.reduce((sum, p) => sum + (Number(p.points_earned) || 0), 0) * 10) / 10;
+            const finalPoints = isUpcoming ? 0 : Math.max(Number(team.total_points) || 0, calculatedPoints);
             return {
               team_id: team.id,
               user_id: team.user_id,
               team_name: team.team_name || 'Team',
               username: team.user?.username || team.user?.name || 'Player',
-              total_points: Number(team.total_points) || 0,
+              total_points: finalPoints,
               captain_id: team.captain_id,
               vice_captain_id: team.vice_captain_id,
               captain_name: capPlayer?.name || 'Captain',
@@ -775,12 +788,14 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
             });
             const capPlayer = mappedPlayers.find((p) => p.is_captain || p.id === bt.captain_id);
             const vcPlayer = mappedPlayers.find((p) => p.is_vice_captain || p.id === bt.vice_captain_id);
+            const calculatedPoints = Math.round(mappedPlayers.reduce((sum, p) => sum + (Number(p.points_earned) || 0), 0) * 10) / 10;
+            const finalPoints = isUpcoming ? 0 : Math.max(Number(bt.total_points) || 0, calculatedPoints);
             return {
               team_id: bt.id,
               user_id: bt.bot_id,
               team_name: bt.team_name || 'Team',
               username: bt.bot_username || bt.bot_name || 'Bot',
-              total_points: Number(bt.total_points) || 0,
+              total_points: finalPoints,
               captain_id: bt.captain_id,
               vice_captain_id: bt.vice_captain_id,
               captain_name: capPlayer?.name || 'Captain',
@@ -793,6 +808,12 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
           });
 
           contestLeaderboard = [...formattedHumanTeams, ...formattedBotTeams];
+          if (!isUpcoming) {
+            contestLeaderboard.sort((a, b) => (b.total_points - a.total_points) || (new Date(a.created_at) - new Date(b.created_at)));
+            contestLeaderboard.forEach((t, i) => {
+              t.rank = offset + i + 1;
+            });
+          }
           hasMoreBatches = offset + batchLimit < totalContestTeams;
 
           // Cache this page for 8 seconds
@@ -877,18 +898,26 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
       });
 
       const calculatedMyTeamPoints = isUpcoming ? 0 : Math.round(myPlayers.reduce((sum, p) => sum + (p.points_earned || 0), 0) * 10) / 10;
-      const myStanding = contestLeaderboard.find(team => team.team_id === (myTeam.id || myTeam.team_id));
-      const totalPoints = isUpcoming ? 0 : (myStanding ? myStanding.total_points : (Number(myTeam.total_points) > 0 ? Number(myTeam.total_points) : calculatedMyTeamPoints));
+      const myStanding = contestLeaderboard.find(team => team.team_id === (myTeam.id || myTeam.team_id) || (req.user && team.user_id === req.user.id));
+      const totalPoints = isUpcoming ? 0 : (myStanding ? myStanding.total_points : Math.max(Number(myTeam.total_points) || 0, calculatedMyTeamPoints));
 
       let myRank = isUpcoming ? null : (myStanding?.rank || myTeam.rank || null);
       if (!myRank && selectedContest && !isUpcoming) {
-        const higherTeams = await CricketTeam.count({
-          where: {
-            contest_id: selectedContest.id,
-            total_points: { [Op.gt]: totalPoints }
-          }
-        });
-        myRank = higherTeams + 1;
+        const [higherHumans, higherBots] = await Promise.all([
+          CricketTeam.count({
+            where: {
+              contest_id: selectedContest.id,
+              total_points: { [Op.gt]: totalPoints }
+            }
+          }),
+          BotTeam.count({
+            where: {
+              contest_id: selectedContest.id,
+              total_points: { [Op.gt]: totalPoints }
+            }
+          }),
+        ]);
+        myRank = higherHumans + higherBots + 1;
       }
 
       myTeamPayload = {
