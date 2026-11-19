@@ -13,6 +13,7 @@ const {
   MatchContest,
   CricketTeam,
   TeamPlayer,
+  BotTeam,
   ContestParticipant,
   BotWinHistory
 } = require('../db/models');
@@ -141,14 +142,14 @@ async function deployPreContestCricketBots(matchId, contestId = null, botCount =
 
     if (countToDeploy <= 0) continue;
 
-    // Multi-team bot allocation: Count existing teams per bot in this contest
-    const existingTeams = await CricketTeam.findAll({
+    // Multi-team bot allocation: Count existing teams per bot in this contest from isolated BotTeam table
+    const existingTeams = await BotTeam.findAll({
       where: { match_id: matchId, contest_id: contest.id },
-      attributes: ['user_id', 'team_name']
+      attributes: ['bot_id', 'team_name']
     });
     const botTeamCounts = new Map();
     for (const t of existingTeams) {
-      botTeamCounts.set(t.user_id, (botTeamCounts.get(t.user_id) || 0) + 1);
+      botTeamCounts.set(t.bot_id, (botTeamCounts.get(t.bot_id) || 0) + 1);
     }
 
     // Sort bots by existing team count ascending (bots with 0 teams chosen first, then 1, etc.)
@@ -165,14 +166,12 @@ async function deployPreContestCricketBots(matchId, contestId = null, botCount =
     }
     if (botsToRegister.length === 0) continue;
 
-    const BATCH_SIZE = 200;
+    const BATCH_SIZE = 100;
     let deployedForThisContest = 0;
 
     for (let startIdx = 0; startIdx < botsToRegister.length; startIdx += BATCH_SIZE) {
       const batchBots = botsToRegister.slice(startIdx, startIdx + BATCH_SIZE);
-      const batchTeams = [];
-      const batchTeamPlayers = [];
-      const batchParticipants = [];
+      const batchBotTeams = [];
 
       for (let i = 0; i < batchBots.length; i++) {
         const bot = batchBots[i];
@@ -180,48 +179,38 @@ async function deployPreContestCricketBots(matchId, contestId = null, botCount =
         const curBotCount = (botTeamCounts.get(bot.id) || 0) + 1;
         botTeamCounts.set(bot.id, curBotCount);
         const suffix = curBotCount > 1 ? ` (T${curBotCount})` : '';
-        const teamName = `${bot.name.split(' ')[0]}'s XI${suffix}`;
+        const teamName = `${(bot.name || 'Player').split(' ')[0]}'s XI${suffix}`;
 
         const teamId = uuidv4();
-        batchTeams.push({
+        batchBotTeams.push({
           id: teamId,
-          user_id: bot.id,
+          bot_id: bot.id,
+          bot_name: bot.name || 'Player',
+          bot_username: bot.username || (bot.name || 'bot').split(' ')[0],
           match_id: matchId,
           contest_id: contest.id,
           team_name: teamName,
           captain_id: lineup.captain.id,
           vice_captain_id: lineup.viceCaptain.id,
           total_points: 0,
-        });
-
-        lineup.players.forEach(p => {
-          batchTeamPlayers.push({
-            id: uuidv4(),
-            team_id: teamId,
-            player_id: p.id,
+          rank: contest.filled_spots + deployedForThisContest + i + 1,
+          phase: 1,
+          lineup: lineup.players.map(p => ({
+            id: p.id,
+            name: p.name,
+            role: p.role,
+            team_name: p.team_name,
+            credits: p.credits,
             is_captain: p.id === lineup.captain.id,
             is_vice_captain: p.id === lineup.viceCaptain.id,
-            points_earned: 0,
-          });
-        });
-
-        batchParticipants.push({
-          id: uuidv4(),
-          contest_id: contest.id,
-          team_id: teamId,
-          user_id: bot.id,
-          rank: null,
-          prize_won: 0,
+            multiplier: p.id === lineup.captain.id ? 2.0 : p.id === lineup.viceCaptain.id ? 1.5 : 1.0,
+          })),
         });
       }
 
-      await CricketTeam.bulkCreate(batchTeams);
-      const CHUNK_PLAYERS = 100;
-      for (let p = 0; p < batchTeamPlayers.length; p += CHUNK_PLAYERS) {
-        await TeamPlayer.bulkCreate(batchTeamPlayers.slice(p, p + CHUNK_PLAYERS));
-      }
-      await ContestParticipant.bulkCreate(batchParticipants);
-      deployedForThisContest += batchTeams.length;
+      // 🛡️ Isolated Bot Table write: 1 row per bot instead of 13 rows in cricket_teams & team_players
+      await BotTeam.bulkCreate(batchBotTeams);
+      deployedForThisContest += batchBotTeams.length;
     }
 
     const updatedFilled = contest.filled_spots + deployedForThisContest;

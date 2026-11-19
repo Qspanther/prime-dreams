@@ -83,9 +83,9 @@ export async function api(endpoint: string, options: FetchOptions = {}) {
     }
   }
 
-  // If mutation (POST/PUT/DELETE), purge related caches so user sees instant updates
+  // If mutation (POST/PUT/DELETE), purge client caches so user sees instant updates
   if (!isGet) {
-    clearApiCache(endpoint.split('/')[1] || '');
+    clientCache.clear();
   }
 
   return await fetchNetwork(endpoint, options, cacheKey);

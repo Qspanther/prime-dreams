@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useAuth } from './lib/auth-context';
-import { apiGet, apiPost, resolveImageUrl } from './lib/api';
+import { api, apiGet, apiPost, resolveImageUrl } from './lib/api';
 import {
   Trophy, Clock, Users, ArrowRight, Shield, Activity,
   Radio, Sparkles, ChevronRight, ChevronLeft, AlertCircle,
@@ -81,12 +81,12 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
   };
 
   // Fetch matches from API with category filter
-  const fetchMatches = async () => {
+  const fetchMatches = async (bypassCache = false) => {
     try {
       const url = selectedCategory === 'All'
         ? '/matches'
         : `/matches?category=${encodeURIComponent(selectedCategory)}`;
-      const res = await apiGet(url);
+      const res = await api(url, { method: 'GET', skipCache: bypassCache });
       if (res?.matches) {
         setMatches(res.matches);
       }
@@ -98,8 +98,8 @@ export default function HomeClient({ initialMatches = [] }: HomeClientProps) {
   };
 
   useEffect(() => {
-    fetchMatches();
-    const interval = setInterval(fetchMatches, 10000);
+    fetchMatches(true);
+    const interval = setInterval(() => fetchMatches(true), 10000);
     return () => clearInterval(interval);
   }, [selectedCategory]);
 

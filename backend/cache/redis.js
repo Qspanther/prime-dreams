@@ -234,6 +234,20 @@ async function setContestLeaderboardCache(matchId, contestId, page = 1, limit = 
   return await set(`leaderboard:${matchId}:${contestId}:p${page}:l${limit}${sKey}`, data, ttl);
 }
 
+async function clearAllMatchesCache() {
+  if (isRedisActive && redisClient) {
+    try {
+      const keys = await redisClient.keys('matches:*');
+      if (keys.length > 0) await redisClient.del(keys);
+    } catch (_) {}
+  }
+  for (const k of memoryCache.keys()) {
+    if (k.startsWith('matches:') || k.startsWith('match:') || k.startsWith('leaderboard:')) {
+      memoryCache.delete(k);
+    }
+  }
+}
+
 async function invalidateMatch(matchId) {
   await Promise.all([
     del(`match:${matchId}:score`),
@@ -241,6 +255,7 @@ async function invalidateMatch(matchId) {
     del(`match:${matchId}:contests`),
     del(`match:${matchId}:details`),
   ]);
+  clearAllMatchesCache().catch(() => {});
 }
 
 module.exports = {
@@ -262,6 +277,7 @@ module.exports = {
   getMatchContests,
   setMatchContests,
   invalidateMatch,
+  clearAllMatchesCache,
   isRedisActive: () => isRedisActive,
   getRedisClient: () => redisClient,
 };

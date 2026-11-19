@@ -548,150 +548,265 @@ router.get('/matches/:id/leaderboard', optionalAuthenticate, async (req, res) =>
     let contestLeaderboard = [];
     let totalContestTeams = 0;
     let batchPage = 1;
-    let batchLimit = 10;
+    let batchLimit = 25;
     let hasMoreBatches = false;
 
     if (selectedContest) {
       batchPage = Math.max(1, parseInt(req.query.page, 10) || 1);
-      batchLimit = req.query.all === 'true' ? 5000 : Math.max(1, Math.min(250, parseInt(req.query.limit, 10) || 10));
+      batchLimit = req.query.all === 'true' ? 500 : Math.max(1, Math.min(250, parseInt(req.query.limit, 10) || 25));
       const offset = (batchPage - 1) * batchLimit;
       const searchQuery = (req.query.search || req.query.q || '').trim().toLowerCase();
 
-      // 1. Fetch Human Teams in this contest
-      const humanTeams = await CricketTeam.findAll({
-        where: { contest_id: selectedContest.id },
-        attributes: ['id', 'user_id', 'team_name', 'total_points', 'captain_id', 'vice_captain_id', 'created_at'],
-        include: [
-          { model: User, as: 'user', attributes: ['id', 'username', 'name'] },
-          {
-            model: TeamPlayer,
-            as: 'teamPlayers',
-            attributes: ['is_captain', 'is_vice_captain', 'points_earned'],
-            include: [{ model: CricketPlayer, as: 'player', attributes: ['id', 'name', 'role', 'team_name', 'points', 'stats', 'photo_url', 'credits'] }],
-          },
-        ],
-        order: [['total_points', 'DESC'], ['created_at', 'ASC']],
-      });
+      // ⚡ 1. Check Redis / Memory cache for instant (< 1ms) response
+      const cachedResult = await redisCache.getContestLeaderboardCache(match.id, selectedContest.id, batchPage, batchLimit, searchQuery);
+      if (cachedResult && cachedResult.contest_leaderboard) {
+        contestLeaderboard = cachedResult.contest_leaderboard;
+        totalContestTeams = cachedResult.total_contest_teams || contestLeaderboard.length;
+        hasMoreBatches = Boolean(cachedResult.has_more);
+      } else {
+        // ⚡ 2. Fast DB-level count (< 3ms)
+        const [humanCount, botCount] = await Promise.all([
+          CricketTeam.count({ where: { contest_id: selectedContest.id } }),
+          BotTeam.count({ where: { contest_id: selectedContest.id } }),
+        ]);
+        totalContestTeams = humanCount + botCount;
 
-      // 2. Fetch Isolated Bot Teams in this contest (Reads from dedicated bot_teams table)
-      const botTeams = await BotTeam.findAll({
-        where: { contest_id: selectedContest.id },
-        attributes: ['id', 'bot_id', 'bot_name', 'bot_username', 'team_name', 'captain_id', 'vice_captain_id', 'total_points', 'phase', 'lineup', 'created_at'],
-        order: [['total_points', 'DESC'], ['created_at', 'ASC']],
-      });
+        if (searchQuery) {
+          // Fast DB Search using indexes
+          const [searchedHumans, searchedBots] = await Promise.all([
+            CricketTeam.findAll({
+              where: {
+                contest_id: selectedContest.id,
+                team_name: { [Op.iLike]: `%${searchQuery}%` },
+              },
+              include: [
+                { model: User, as: 'user', attributes: ['id', 'username', 'name'] },
+                {
+                  model: TeamPlayer,
+                  as: 'teamPlayers',
+                  attributes: ['is_captain', 'is_vice_captain', 'points_earned'],
+                  include: [{ model: CricketPlayer, as: 'player', attributes: ['id', 'name', 'role', 'team_name', 'points', 'stats', 'photo_url', 'credits'] }],
+                },
+              ],
+              limit: batchLimit,
+              offset,
+            }),
+            BotTeam.findAll({
+              where: {
+                contest_id: selectedContest.id,
+                [Op.or]: [
+                  { team_name: { [Op.iLike]: `%${searchQuery}%` } },
+                  { bot_username: { [Op.iLike]: `%${searchQuery}%` } },
+                  { bot_name: { [Op.iLike]: `%${searchQuery}%` } },
+                ],
+              },
+              limit: batchLimit,
+              offset,
+            }),
+          ]);
 
-      // Format Human Teams
-      const formattedHumanTeams = humanTeams.map((team) => {
-        const mappedPlayers = (team.teamPlayers || []).map((entry) => {
-          const basePoints = isUpcoming ? 0 : (playerPointsMap.get(entry.player?.id) ?? Number(entry.player?.points ?? 0));
-          const mult = entry.is_captain ? 2.0 : entry.is_vice_captain ? 1.5 : 1.0;
-          const ptsEarned = isUpcoming ? 0 : (entry.points_earned && Number(entry.points_earned) > 0 ? Number(entry.points_earned) : Math.round(basePoints * mult * 10) / 10);
-          return {
-            id: entry.player?.id,
-            name: entry.player?.name || 'Player',
-            role: entry.player?.role || null,
-            team_name: entry.player?.team_name || null,
-            points: basePoints,
-            points_earned: ptsEarned,
-            rank: isUpcoming ? null : (playerRanks.get(entry.player?.id) || null),
-            is_captain: Boolean(entry.is_captain),
-            is_vice_captain: Boolean(entry.is_vice_captain),
-            photo_url: entry.player?.photo_url || null,
-            credits: entry.player?.credits || 9.0,
-            stats: entry.player?.stats || {},
-          };
-        });
+          const formattedH = searchedHumans.map((team, idx) => {
+            const mappedPlayers = (team.teamPlayers || []).map((entry) => ({
+              id: entry.player?.id,
+              name: entry.player?.name || 'Player',
+              role: entry.player?.role || null,
+              team_name: entry.player?.team_name || null,
+              points: Number(entry.player?.points || 0),
+              points_earned: Number(entry.points_earned || 0),
+              rank: playerRanks.get(entry.player?.id) || null,
+              is_captain: Boolean(entry.is_captain),
+              is_vice_captain: Boolean(entry.is_vice_captain),
+              photo_url: entry.player?.photo_url || null,
+              credits: entry.player?.credits || 9.0,
+              stats: entry.player?.stats || {},
+            }));
+            const capPlayer = mappedPlayers.find((p) => p.is_captain || p.id === team.captain_id);
+            const vcPlayer = mappedPlayers.find((p) => p.is_vice_captain || p.id === team.vice_captain_id);
+            return {
+              team_id: team.id,
+              user_id: team.user_id,
+              team_name: team.team_name || 'Team',
+              username: team.user?.username || team.user?.name || 'Player',
+              total_points: Number(team.total_points) || 0,
+              captain_id: team.captain_id,
+              vice_captain_id: team.vice_captain_id,
+              captain_name: capPlayer?.name || 'Captain',
+              vice_captain_name: vcPlayer?.name || 'Vice-Captain',
+              is_my_team: req.user ? team.user_id === req.user.id : false,
+              players: mappedPlayers,
+              created_at: team.created_at,
+              rank: offset + idx + 1,
+            };
+          });
 
-        const calculatedTeamTotal = isUpcoming ? 0 : Math.round(mappedPlayers.reduce((sum, p) => sum + (p.points_earned || 0), 0) * 10) / 10;
-        const totalPoints = isUpcoming ? 0 : (Number(team.total_points) > 0 ? Number(team.total_points) : calculatedTeamTotal);
-        const capPlayer = mappedPlayers.find((p) => p.is_captain || p.id === team.captain_id);
-        const vcPlayer = mappedPlayers.find((p) => p.is_vice_captain || p.id === team.vice_captain_id);
+          const formattedB = searchedBots.map((bt, idx) => {
+            const rawLineup = bt.lineup || [];
+            const mappedPlayers = rawLineup.map((p) => ({
+              id: p.id,
+              name: p.name || 'Player',
+              role: p.role || null,
+              team_name: p.team_name || null,
+              points: playerPointsMap.get(p.id) ?? 0,
+              points_earned: p.points_earned || 0,
+              rank: playerRanks.get(p.id) || null,
+              is_captain: Boolean(p.is_captain),
+              is_vice_captain: Boolean(p.is_vice_captain),
+              photo_url: p.photo_url || null,
+              credits: p.credits || 9.0,
+              stats: {},
+            }));
+            const capPlayer = mappedPlayers.find((p) => p.is_captain || p.id === bt.captain_id);
+            const vcPlayer = mappedPlayers.find((p) => p.is_vice_captain || p.id === bt.vice_captain_id);
+            return {
+              team_id: bt.id,
+              user_id: bt.bot_id,
+              team_name: bt.team_name || 'Team',
+              username: bt.bot_username || bt.bot_name || 'Bot',
+              total_points: Number(bt.total_points) || 0,
+              captain_id: bt.captain_id,
+              vice_captain_id: bt.vice_captain_id,
+              captain_name: capPlayer?.name || 'Captain',
+              vice_captain_name: vcPlayer?.name || 'Vice-Captain',
+              is_my_team: false,
+              players: mappedPlayers,
+              created_at: bt.created_at,
+              rank: offset + formattedH.length + idx + 1,
+            };
+          });
 
-        return {
-          team_id: team.id,
-          user_id: team.user_id,
-          team_name: team.team_name || 'Team',
-          username: team.user?.username || team.user?.name || 'Player',
-          total_points: totalPoints,
-          captain_id: team.captain_id,
-          vice_captain_id: team.vice_captain_id,
-          captain_name: capPlayer?.name || 'Captain',
-          vice_captain_name: vcPlayer?.name || 'Vice-Captain',
-          is_my_team: req.user ? team.user_id === req.user.id : false,
-          players: mappedPlayers,
-          created_at: team.created_at,
-        };
-      });
+          contestLeaderboard = [...formattedH, ...formattedB].slice(0, batchLimit);
+          hasMoreBatches = (offset + batchLimit) < (searchedHumans.length + searchedBots.length);
+        } else {
+          // ⚡ 3. High-Performance Paginated DB Query (Strict SQL LIMIT & OFFSET: ~15ms)
+          // First page human teams
+          let pageHumanTeams = [];
+          if (offset < humanCount) {
+            pageHumanTeams = await CricketTeam.findAll({
+              where: { contest_id: selectedContest.id },
+              attributes: ['id', 'user_id', 'team_name', 'total_points', 'captain_id', 'vice_captain_id', 'created_at'],
+              include: [
+                { model: User, as: 'user', attributes: ['id', 'username', 'name'] },
+                {
+                  model: TeamPlayer,
+                  as: 'teamPlayers',
+                  attributes: ['is_captain', 'is_vice_captain', 'points_earned'],
+                  include: [{ model: CricketPlayer, as: 'player', attributes: ['id', 'name', 'role', 'team_name', 'points', 'stats', 'photo_url', 'credits'] }],
+                },
+              ],
+              order: [['total_points', 'DESC'], ['created_at', 'ASC']],
+              limit: batchLimit,
+              offset,
+            });
+          }
 
-      // Format Isolated Bot Teams
-      const formattedBotTeams = botTeams.map((bt) => {
-        const rawLineup = bt.lineup || [];
-        const mappedPlayers = rawLineup.map((p) => {
-          const basePoints = isUpcoming ? 0 : (playerPointsMap.get(p.id) ?? 0);
-          const mult = p.is_captain ? 2.0 : p.is_vice_captain ? 1.5 : 1.0;
-          const ptsEarned = isUpcoming ? 0 : Math.round(basePoints * mult * 10) / 10;
-          return {
-            id: p.id,
-            name: p.name || 'Player',
-            role: p.role || null,
-            team_name: p.team_name || null,
-            points: basePoints,
-            points_earned: ptsEarned,
-            rank: isUpcoming ? null : (playerRanks.get(p.id) || null),
-            is_captain: Boolean(p.is_captain),
-            is_vice_captain: Boolean(p.is_vice_captain),
-            photo_url: p.photo_url || null,
-            credits: p.credits || 9.0,
-            stats: {},
-          };
-        });
+          // Remaining spots for this page filled from isolated BotTeams
+          const botsNeeded = batchLimit - pageHumanTeams.length;
+          let pageBotTeams = [];
+          if (botsNeeded > 0) {
+            const botOffset = Math.max(0, offset - humanCount);
+            pageBotTeams = await BotTeam.findAll({
+              where: { contest_id: selectedContest.id },
+              attributes: ['id', 'bot_id', 'bot_name', 'bot_username', 'team_name', 'captain_id', 'vice_captain_id', 'total_points', 'phase', 'lineup', 'created_at'],
+              order: [['total_points', 'DESC'], ['created_at', 'ASC']],
+              limit: botsNeeded,
+              offset: botOffset,
+            });
+          }
 
-        const calculatedTeamTotal = isUpcoming ? 0 : Math.round(mappedPlayers.reduce((sum, p) => sum + (p.points_earned || 0), 0) * 10) / 10;
-        const totalPoints = isUpcoming ? 0 : (Number(bt.total_points) > 0 ? Number(bt.total_points) : calculatedTeamTotal);
-        const capPlayer = mappedPlayers.find((p) => p.is_captain || p.id === bt.captain_id);
-        const vcPlayer = mappedPlayers.find((p) => p.is_vice_captain || p.id === bt.vice_captain_id);
+          const formattedHumanTeams = pageHumanTeams.map((team, idx) => {
+            const mappedPlayers = (team.teamPlayers || []).map((entry) => {
+              const basePoints = isUpcoming ? 0 : (playerPointsMap.get(entry.player?.id) ?? Number(entry.player?.points ?? 0));
+              const mult = entry.is_captain ? 2.0 : entry.is_vice_captain ? 1.5 : 1.0;
+              const ptsEarned = isUpcoming ? 0 : (entry.points_earned && Number(entry.points_earned) > 0 ? Number(entry.points_earned) : Math.round(basePoints * mult * 10) / 10);
+              return {
+                id: entry.player?.id,
+                name: entry.player?.name || 'Player',
+                role: entry.player?.role || null,
+                team_name: entry.player?.team_name || null,
+                points: basePoints,
+                points_earned: ptsEarned,
+                rank: isUpcoming ? null : (playerRanks.get(entry.player?.id) || null),
+                is_captain: Boolean(entry.is_captain),
+                is_vice_captain: Boolean(entry.is_vice_captain),
+                photo_url: entry.player?.photo_url || null,
+                credits: entry.player?.credits || 9.0,
+                stats: entry.player?.stats || {},
+              };
+            });
+            const capPlayer = mappedPlayers.find((p) => p.is_captain || p.id === team.captain_id);
+            const vcPlayer = mappedPlayers.find((p) => p.is_vice_captain || p.id === team.vice_captain_id);
+            return {
+              team_id: team.id,
+              user_id: team.user_id,
+              team_name: team.team_name || 'Team',
+              username: team.user?.username || team.user?.name || 'Player',
+              total_points: Number(team.total_points) || 0,
+              captain_id: team.captain_id,
+              vice_captain_id: team.vice_captain_id,
+              captain_name: capPlayer?.name || 'Captain',
+              vice_captain_name: vcPlayer?.name || 'Vice-Captain',
+              is_my_team: req.user ? team.user_id === req.user.id : false,
+              players: mappedPlayers,
+              created_at: team.created_at,
+              rank: offset + idx + 1,
+            };
+          });
 
-        return {
-          team_id: bt.id,
-          user_id: bt.bot_id,
-          team_name: bt.team_name || 'Team',
-          username: bt.bot_username || bt.bot_name || 'Bot',
-          total_points: totalPoints,
-          captain_id: bt.captain_id,
-          vice_captain_id: bt.vice_captain_id,
-          captain_name: capPlayer?.name || 'Captain',
-          vice_captain_name: vcPlayer?.name || 'Vice-Captain',
-          is_my_team: false,
-          players: mappedPlayers,
-          created_at: bt.created_at,
-        };
-      });
+          const formattedBotTeams = pageBotTeams.map((bt, idx) => {
+            const rawLineup = bt.lineup || [];
+            const mappedPlayers = rawLineup.map((p) => {
+              const basePoints = isUpcoming ? 0 : (playerPointsMap.get(p.id) ?? 0);
+              const mult = p.is_captain ? 2.0 : p.is_vice_captain ? 1.5 : 1.0;
+              const ptsEarned = isUpcoming ? 0 : Math.round(basePoints * mult * 10) / 10;
+              return {
+                id: p.id,
+                name: p.name || 'Player',
+                role: p.role || null,
+                team_name: p.team_name || null,
+                points: basePoints,
+                points_earned: ptsEarned,
+                rank: isUpcoming ? null : (playerRanks.get(p.id) || null),
+                is_captain: Boolean(p.is_captain),
+                is_vice_captain: Boolean(p.is_vice_captain),
+                photo_url: p.photo_url || null,
+                credits: p.credits || 9.0,
+                stats: {},
+              };
+            });
+            const capPlayer = mappedPlayers.find((p) => p.is_captain || p.id === bt.captain_id);
+            const vcPlayer = mappedPlayers.find((p) => p.is_vice_captain || p.id === bt.vice_captain_id);
+            return {
+              team_id: bt.id,
+              user_id: bt.bot_id,
+              team_name: bt.team_name || 'Team',
+              username: bt.bot_username || bt.bot_name || 'Bot',
+              total_points: Number(bt.total_points) || 0,
+              captain_id: bt.captain_id,
+              vice_captain_id: bt.vice_captain_id,
+              captain_name: capPlayer?.name || 'Captain',
+              vice_captain_name: vcPlayer?.name || 'Vice-Captain',
+              is_my_team: false,
+              players: mappedPlayers,
+              created_at: bt.created_at,
+              rank: offset + formattedHumanTeams.length + idx + 1,
+            };
+          });
 
-      // Combine and sort in-memory (Zero DB overhead)
-      let allContestTeams = [...formattedHumanTeams, ...formattedBotTeams];
-      allContestTeams.sort((a, b) => {
-        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
-        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-      });
+          contestLeaderboard = [...formattedHumanTeams, ...formattedBotTeams];
+          hasMoreBatches = offset + batchLimit < totalContestTeams;
 
-      // Filter by search query if present
-      if (searchQuery) {
-        allContestTeams = allContestTeams.filter(
-          (t) =>
-            t.team_name.toLowerCase().includes(searchQuery) ||
-            t.username.toLowerCase().includes(searchQuery) ||
-            t.user_id === searchQuery
-        );
+          // Cache this page for 8 seconds
+          await redisCache.setContestLeaderboardCache(
+            match.id,
+            selectedContest.id,
+            batchPage,
+            batchLimit,
+            searchQuery,
+            { contest_leaderboard: contestLeaderboard, total_contest_teams: totalContestTeams, has_more: hasMoreBatches },
+            8
+          ).catch(() => {});
+        }
       }
-
-      totalContestTeams = allContestTeams.length;
-      hasMoreBatches = !searchQuery && offset + batchLimit < totalContestTeams;
-
-      // Assign in-memory ranks and slice pagination page
-      contestLeaderboard = allContestTeams.slice(offset, offset + batchLimit).map((team, idx) => ({
-        ...team,
-        rank: offset + idx + 1,
-      }));
 
       // Strictly contest-scoped myTeam: User must have registered a team specifically in this contest!
       if (req.user) {

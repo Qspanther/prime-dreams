@@ -12,6 +12,7 @@ const sequelize = require('../db/index');
 const { deleteMatchPermanently } = require('../services/cricketDeleteHelper');
 const { deployPreContestCricketBots } = require('./bot-manager');
 const { DEFAULT_CONTESTS } = require('../config/defaultContests');
+const redisCache = require('../cache/redis');
 
 const router = express.Router();
 
@@ -1145,6 +1146,9 @@ router.post('/cricket/matches/verify-and-create', async (req, res) => {
       .then(res => console.log(`🤖 [Admin Auto-Bot] Successfully deployed ${res.registered} bots across ${res.contestsProcessed} contests for "${newMatch.title}"`))
       .catch(botErr => console.warn(`⚠️ [Admin Auto-Bot Notice] ${botErr.message}`));
 
+    // Purge match & leaderboard caches immediately so newly created matches appear instantly
+    await redisCache.clearAllMatchesCache().catch(() => {});
+
     res.json({
       success: true,
       message: 'Match verified against live DB and created successfully with automated bot deployment!',
@@ -1266,6 +1270,8 @@ router.put('/cricket/matches/:id', async (req, res) => {
       .then(res => console.log(`🤖 [Admin Auto-Bot Update] Checked/deployed ${res.registered} bots for "${match.title}"`))
       .catch(botErr => console.warn(`⚠️ [Admin Auto-Bot Notice] ${botErr.message}`));
 
+    await redisCache.clearAllMatchesCache().catch(() => {});
+
     res.json({
       success: true,
       message: `Match "${match.title}" and its contests have been successfully updated!`,
@@ -1315,6 +1321,7 @@ router.post('/cricket/matches/:id/rearrange-bots', async (req, res) => {
 router.delete('/cricket/matches/:id', async (req, res) => {
   try {
     const result = await deleteMatchPermanently(req.params.id);
+    await redisCache.clearAllMatchesCache().catch(() => {});
     res.json(result);
   } catch (error) {
     console.error('Match delete error:', error);
@@ -1326,6 +1333,7 @@ router.delete('/cricket/matches/:id', async (req, res) => {
 router.delete('/matches/:id', async (req, res) => {
   try {
     const result = await deleteMatchPermanently(req.params.id);
+    await redisCache.clearAllMatchesCache().catch(() => {});
     res.json(result);
   } catch (error) {
     console.error('Match delete error:', error);
