@@ -468,10 +468,9 @@ async function processLiveIngestionTick() {
         try {
           const updatedMatch = await CricketMatch.findByPk(match.id);
           const eg = checkIsEndGame(updatedMatch);
-          if (eg.isEndGame && !botScheduler.endGameProcessed.has(match.id)) {
-            console.log(`⚡ [Ingestion Live Hook] Match "${match.title}" reached death stage: ${eg.remainingBalls} balls remaining! Triggering bot rearrangement...`);
+          if (eg.isEndGame) {
+            console.log(`⚡ [Ingestion Live Hook] Match "${match.title}" in death stage: ${eg.reason}! Enforcing bot prize protection...`);
             await rearrangeBotsForEndGame(match.id);
-            botScheduler.endGameProcessed.add(match.id);
           }
         } catch (egHookErr) {
           console.warn(`⚠️ [Ingestion EndGame Hook Warning]:`, egHookErr.message);

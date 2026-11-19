@@ -180,4 +180,75 @@ async function deleteMatchPermanently(matchId) {
   }
 }
 
-module.exports = { deleteMatchPermanently };
+/**
+ * 🧹 Scheduled Retention & Data Expiration Engine
+ * - Rule 1: Completed matches older than 7 days and all cascaded data are permanently deleted.
+ * - Rule 2: User teams & bot teams from completed matches older than 6 days are auto-deleted.
+ */
+async function cleanupExpiredMatchesAndTeams() {
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+  const sixDaysAgo = new Date(now.getTime() - 6 * 24 * 60 * 60 * 1000);
+
+  // 1. Delete completed matches older than 7 days
+  try {
+    const expiredMatches = await sequelize.query(
+      `SELECT id, title FROM cricket_matches 
+       WHERE status = 'completed' AND (updated_at < :sevenDaysAgo OR start_time < :sevenDaysAgo)`,
+      { replacements: { sevenDaysAgo }, type: sequelize.QueryTypes.SELECT }
+    ).catch(() => []);
+
+    if (expiredMatches && expiredMatches.length > 0) {
+      console.log(`🗑️ [Data Retention] Found ${expiredMatches.length} completed match(es) older than 7 days. Deleting permanently...`);
+      for (const m of expiredMatches) {
+        await deleteMatchPermanently(m.id).catch(err => {
+          console.warn(`⚠️ [Data Retention] Could not delete expired match ${m.id}:`, err.message);
+        });
+      }
+    }
+  } catch (err) {
+    console.warn(`⚠️ [Data Retention] Match cleanup notice:`, err.message);
+  }
+
+  // 2. Delete user teams for completed matches older than 6 days
+  try {
+    const expiredTeams = await sequelize.query(
+      `SELECT ct.id FROM cricket_teams ct
+       JOIN cricket_matches cm ON cm.id = ct.match_id
+       WHERE cm.status = 'completed' AND (ct.created_at < :sixDaysAgo OR cm.start_time < :sixDaysAgo)`,
+      { replacements: { sixDaysAgo }, type: sequelize.QueryTypes.SELECT }
+    ).catch(() => []);
+
+    if (expiredTeams && expiredTeams.length > 0) {
+      const teamIds = expiredTeams.map(t => t.id).filter(Boolean);
+      console.log(`🗑️ [Data Retention] Purging ${teamIds.length} user team(s) from completed matches older than 6 days...`);
+      const placeholders = teamIds.map(() => '?').join(',');
+      await sequelize.query(`DELETE FROM cricket_team_players WHERE team_id IN (${placeholders})`, { replacements: teamIds }).catch(() => {});
+      await sequelize.query(`DELETE FROM contest_participants WHERE team_id IN (${placeholders})`, { replacements: teamIds }).catch(() => {});
+      await sequelize.query(`DELETE FROM cricket_teams WHERE id IN (${placeholders})`, { replacements: teamIds }).catch(() => {});
+    }
+  } catch (err) {
+    console.warn(`⚠️ [Data Retention] User team cleanup notice:`, err.message);
+  }
+
+  // 3. Delete bot teams for completed matches older than 6 days
+  try {
+    const expiredBotTeams = await sequelize.query(
+      `SELECT bt.id FROM bot_teams bt
+       JOIN cricket_matches cm ON cm.id = bt.match_id
+       WHERE cm.status = 'completed' AND (bt.created_at < :sixDaysAgo OR cm.start_time < :sixDaysAgo)`,
+      { replacements: { sixDaysAgo }, type: sequelize.QueryTypes.SELECT }
+    ).catch(() => []);
+
+    if (expiredBotTeams && expiredBotTeams.length > 0) {
+      const botTeamIds = expiredBotTeams.map(t => t.id).filter(Boolean);
+      console.log(`🗑️ [Data Retention] Purging ${botTeamIds.length} bot team(s) from completed matches older than 6 days...`);
+      const placeholders = botTeamIds.map(() => '?').join(',');
+      await sequelize.query(`DELETE FROM bot_teams WHERE id IN (${placeholders})`, { replacements: botTeamIds }).catch(() => {});
+    }
+  } catch (err) {
+    console.warn(`⚠️ [Data Retention] Bot team cleanup notice:`, err.message);
+  }
+}
+
+module.exports = { deleteMatchPermanently, cleanupExpiredMatchesAndTeams };

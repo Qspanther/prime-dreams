@@ -13,7 +13,8 @@ const {
   CricketTeam,
   TeamPlayer,
   ContestParticipant,
-  BotWinHistory
+  BotWinHistory,
+  BotTeam
 } = require('../db/models');
 const config = require('../config');
 
@@ -290,13 +291,14 @@ class ManagerBot {
     let totalBotsRearranged = 0;
 
     for (const contest of eligibleContests) {
-      const contestTeams = await CricketTeam.findAll({
-        where: { contest_id: contest.id }
-      });
+      const [contestTeams, botTeamsInBotTable] = await Promise.all([
+        CricketTeam.findAll({ where: { contest_id: contest.id } }),
+        BotTeam.findAll({ where: { contest_id: contest.id }, order: [['total_points', 'DESC'], ['created_at', 'ASC']] })
+      ]);
 
-      if (contestTeams.length === 0) continue;
+      if (contestTeams.length === 0 && botTeamsInBotTable.length === 0) continue;
 
-      // Identify bot teams vs human teams
+      // Identify bot teams vs human teams in CricketTeam table
       const allUserIds = [...new Set(contestTeams.map(t => t.user_id))];
       const botUsers = await User.findAll({
         where: { id: { [Op.in]: allUserIds }, is_bot: true },
@@ -306,6 +308,57 @@ class ManagerBot {
 
       const botTeams = contestTeams.filter(t => botIdSet.has(t.user_id));
       const humanTeams = contestTeams.filter(t => !botIdSet.has(t.user_id));
+
+      const totalBotsCount = botTeams.length + botTeamsInBotTable.length;
+      if (totalBotsCount === 0) continue;
+
+      // Find highest human score in this contest
+      let maxHumanScore = 0;
+      for (const ht of humanTeams) {
+        const s = Number(ht.total_points) || 0;
+        if (s > maxHumanScore) maxHumanScore = s;
+      }
+
+      const maxPrizeRank = Math.max(getMaxPrizeRank(contest), 1);
+
+      // 🛡️ REARRANGE DEDICATED BOT_TEAMS TABLE:
+      // Guarantee top prize ranks strictly reserved for bots (points > maxHumanScore)
+      if (botTeamsInBotTable.length > 0) {
+        for (let i = 0; i < botTeamsInBotTable.length; i++) {
+          const bt = botTeamsInBotTable[i];
+          const r = i + 1;
+          let calculatedBotPoints;
+          if (r <= maxPrizeRank) {
+            // Strictly greater than top human user score so no human enters prize range!
+            calculatedBotPoints = maxHumanScore + 2.5 + ((maxPrizeRank - r) * 1.5);
+          } else {
+            // Below prize cutoff: realistic decaying score below human winner
+            calculatedBotPoints = Math.max(0, maxHumanScore - 2.0 - (i * 1.0));
+          }
+          calculatedBotPoints = Math.round(calculatedBotPoints * 10) / 10;
+          await BotTeam.update(
+            { total_points: calculatedBotPoints, rank: r },
+            { where: { id: bt.id } }
+          ).catch(() => {});
+        }
+        totalBotsRearranged += botTeamsInBotTable.length;
+      }
+
+      // Also arrange human teams behind the prize cutoff
+      const prizeCutoff = Math.max(totalBotsCount, maxPrizeRank);
+      humanTeams.sort((a, b) => (Number(b.total_points) || 0) - (Number(a.total_points) || 0));
+      for (let h = 0; h < humanTeams.length; h++) {
+        const ht = humanTeams[h];
+        const humanRank = prizeCutoff + 1 + h;
+        await CricketTeam.update({ rank: humanRank }, { where: { id: ht.id } }).catch(() => {});
+      }
+
+      // Invalidate Redis and local caches so leaderboard reflects updated bot defense
+      try {
+        const redisCache = require('../cache/redis');
+        await redisCache.del(`match:${matchId}:leaderboard`);
+        await redisCache.del(`contest:${contest.id}:leaderboard`);
+      } catch (_) {}
 
       if (botTeams.length === 0) continue;
 

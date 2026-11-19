@@ -2098,19 +2098,60 @@ router.get('/my-teams', authenticate, async (req, res) => {
     const enrichedTeams = await Promise.all(
       teams.map(async (t) => {
         const plain = t.toJSON();
+        const match = plain.match;
+        const isUpcoming = !match || match.status === 'upcoming';
+        const isLive = match && match.status === 'live';
+        const isCompleted = match && match.status === 'completed';
+
         if (plain.contest_id) {
-          const totalInContest = await CricketTeam.count({ where: { contest_id: plain.contest_id } });
-          const pts = Number(plain.total_points) || 0;
-          const higherCount = await CricketTeam.count({
-            where: {
-              contest_id: plain.contest_id,
-              total_points: { [Op.gt]: pts },
-            },
-          });
-          plain.rank = higherCount + 1;
-          plain.total_contest_teams = Math.max(totalInContest, plain.contest?.filled_spots || 1);
+          if (isUpcoming) {
+            // Match has not started yet: Rank is hidden until match goes LIVE (§User Spec)
+            plain.rank = null;
+            const [totalHumans, totalBots] = await Promise.all([
+              CricketTeam.count({ where: { contest_id: plain.contest_id } }),
+              BotTeam.count({ where: { contest_id: plain.contest_id } }),
+            ]);
+            plain.total_contest_teams = Math.max(totalHumans + totalBots, plain.contest?.filled_spots || 1);
+          } else {
+            // Match is LIVE or COMPLETED: calculate true live fantasy points & rank against humans + bots
+            let calculatedPts = 0;
+            if (Array.isArray(plain.players)) {
+              for (const p of plain.players) {
+                const base = Number(p.points) || 0;
+                const mult = p.id === plain.captain_id ? 2.0 : (p.id === plain.vice_captain_id ? 1.5 : 1.0);
+                calculatedPts += base * mult;
+              }
+            }
+            calculatedPts = Math.round(calculatedPts * 10) / 10;
+            const finalPts = Math.max(Number(plain.total_points) || 0, calculatedPts);
+            plain.total_points = finalPts;
+
+            if (finalPts !== Number(plain.total_points)) {
+              CricketTeam.update({ total_points: finalPts }, { where: { id: plain.id } }).catch(() => {});
+            }
+
+            const [higherHumans, higherBots, totalHumans, totalBots] = await Promise.all([
+              CricketTeam.count({
+                where: {
+                  contest_id: plain.contest_id,
+                  total_points: { [Op.gt]: finalPts },
+                },
+              }),
+              BotTeam.count({
+                where: {
+                  contest_id: plain.contest_id,
+                  total_points: { [Op.gt]: finalPts },
+                },
+              }),
+              CricketTeam.count({ where: { contest_id: plain.contest_id } }),
+              BotTeam.count({ where: { contest_id: plain.contest_id } }),
+            ]);
+
+            plain.rank = higherHumans + higherBots + 1;
+            plain.total_contest_teams = Math.max(totalHumans + totalBots, plain.contest?.filled_spots || 1);
+          }
         } else {
-          plain.rank = plain.rank || 1;
+          plain.rank = isUpcoming ? null : 1;
           plain.total_contest_teams = 1;
         }
         return plain;

@@ -295,36 +295,81 @@ function getBallsRemaining(match) {
 }
 
 /**
- * Checks if a live match is in its death stage (final 6 to 10 balls remaining).
+ * Determine the estimated number of runs remaining to win for the batting team.
+ * Inspects commentary text, status text, and score summary targets.
+ */
+function getRunsRemaining(match) {
+  if (!match) return null;
+  const score = match.score_summary || {};
+  const live = match.live_data || {};
+
+  // 1. Explicit field if set
+  if (typeof score.runs_needed === 'number') return score.runs_needed;
+  if (typeof live.runs_needed === 'number') return live.runs_needed;
+
+  // 2. Parse from commentary or status text (e.g., "need 9 runs in 12 balls")
+  const text = `${live.status_text || ''} ${score.last_ball_event || ''} ${(live.commentary && live.commentary[0]) || ''}`;
+  const m = text.match(/(?:need|require|requires)\s+(\d+)\s+runs?/i);
+  if (m) {
+    return parseInt(m[1], 10);
+  }
+
+  // 3. Compute from target if second innings
+  const currInn = score.current_innings;
+  if (currInn === 'team_b' && score.team_a?.runs > 0 && score.team_b?.runs !== undefined) {
+    const target = score.team_a.runs + 1;
+    return Math.max(0, target - score.team_b.runs);
+  }
+  if (currInn === 'team_a' && score.team_b?.runs > 0 && score.team_a?.runs !== undefined) {
+    const target = score.team_b.runs + 1;
+    return Math.max(0, target - score.team_a.runs);
+  }
+
+  return null;
+}
+
+/**
+ * Checks if a live match is in its death stage:
+ * Condition A: Final 6 to 10 balls remaining (balls <= 10).
+ * Condition B: Batting team needs only 6 to 10 runs to win (runsNeeded <= 10).
  */
 function checkIsEndGame(match) {
   if (!match || match.status !== 'live') {
-    return { isEndGame: false, remainingBalls: null, reason: 'Match is not live' };
+    return { isEndGame: false, remainingBalls: null, remainingRuns: null, reason: 'Match is not live' };
   }
 
   // Explicit endgame flag
   if (match.live_data?.endgame === true || match.score_summary?.endgame === true) {
-    return { isEndGame: true, remainingBalls: 6, reason: 'Explicit endgame flag active' };
+    return { isEndGame: true, remainingBalls: 6, remainingRuns: 6, reason: 'Explicit endgame flag active' };
   }
 
-  const remaining = getBallsRemaining(match);
-  if (remaining === null) {
-    return { isEndGame: false, remainingBalls: null, reason: 'Could not determine remaining balls' };
-  }
+  const remainingBalls = getBallsRemaining(match);
+  const remainingRuns = getRunsRemaining(match);
 
-  // Death stage: 0 to 10 balls remaining (specifically 6 to 10 balls window)
-  if (remaining <= 10 && remaining >= 0) {
+  // Condition 1: 0 to 10 balls remaining (specifically 6 to 10 balls window)
+  const isBallsDeathStage = remainingBalls !== null && remainingBalls <= 10 && remainingBalls >= 0;
+
+  // Condition 2: 0 to 10 runs remaining to win (specifically 6 to 10 runs window)
+  const isRunsDeathStage = remainingRuns !== null && remainingRuns <= 10 && remainingRuns > 0;
+
+  if (isBallsDeathStage || isRunsDeathStage) {
     return {
       isEndGame: true,
-      remainingBalls: remaining,
-      reason: `Death stage: ${remaining} balls remaining`
+      remainingBalls,
+      remainingRuns,
+      reason: isBallsDeathStage && isRunsDeathStage
+        ? `Death stage: ${remainingBalls} balls left and ${remainingRuns} runs needed to win`
+        : isBallsDeathStage
+        ? `Death stage: ${remainingBalls} balls remaining`
+        : `Death stage: only ${remainingRuns} runs needed to win`
     };
   }
 
   return {
     isEndGame: false,
-    remainingBalls: remaining,
-    reason: `${remaining} balls remaining (not in death stage yet)`
+    remainingBalls,
+    remainingRuns,
+    reason: `${remainingBalls !== null ? `${remainingBalls} balls` : 'In-play'}, ${remainingRuns !== null ? `${remainingRuns} runs needed` : 'steady pace'}`
   };
 }
 
@@ -742,6 +787,7 @@ module.exports = {
   getCachedBots,
   clearCachedBots,
   getBallsRemaining,
+  getRunsRemaining,
   checkIsEndGame,
   rearrangeBotsForEndGame,
   getMaxPrizeRank

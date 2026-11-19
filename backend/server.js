@@ -295,6 +295,20 @@ async function start() {
   } else {
     console.log('🛡️ [Bot Isolation] Internal bot scheduler disabled on backend API — handled by dedicated bot service.');
   }
+
+  // 🧹 Scheduled Retention & Data Expiration Engine (Completed Matches >7 Days, User Teams >6 Days)
+  try {
+    const { cleanupExpiredMatchesAndTeams } = require('./services/cricketDeleteHelper');
+    setTimeout(() => {
+      cleanupExpiredMatchesAndTeams().catch(err => console.warn('⚠️ Retention cleanup notice:', err.message));
+    }, 30000);
+    setInterval(() => {
+      cleanupExpiredMatchesAndTeams().catch(err => console.warn('⚠️ Retention cleanup notice:', err.message));
+    }, 6 * 60 * 60 * 1000);
+    console.log('🧹 Data Retention Engine active (Completed matches >7d & user teams >6d auto-cleanup)');
+  } catch (cleanErr) {
+    console.warn('⚠️ Data retention scheduler notice:', cleanErr.message);
+  }
 }
 
 start();
