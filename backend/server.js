@@ -11,7 +11,7 @@ const path = require('path');
 const config = require('./config');
 const sequelize = require('./db/index');
 const { SystemSetting } = require('./db/models'); // Load all models and associations
-const { seedCricketMatches } = require('./db/seedCricket');
+// const { seedCricketMatches } = require('./db/seedCricket'); // DISABLED: No auto-seeding on restart
 const { seedDefaultUsers } = require('./db/seedDefaultUsers');
 const { startLiveMatchWorker } = require('./services/cricbuzzService');
 const wsGateway = require('./services/websocket/wsGateway');
@@ -257,17 +257,10 @@ async function start() {
     console.warn('⚠️ Bot network seed notice:', botSeedErr.message);
   }
 
-  // Ensure default sample matches exist only if database is completely fresh and never seeded
-  try {
-    const { CricketMatch, SystemSetting } = require('./db/models');
-    const seedDone = await SystemSetting.findOne({ where: { key: 'cricket_initial_seed_done' } }).catch(() => null);
-    const matchCount = await CricketMatch.count().catch(() => 0);
-    if (!seedDone && matchCount === 0) {
-      await seedCricketMatches();
-    }
-  } catch (seedErr) {
-    console.warn('⚠️ Sample matches seed notice:', seedErr.message);
-  }
+  // 🛡️ Auto-seeding of default sample matches and contests on server restart
+  // has been DISABLED. Only admin-created matches and contests will persist.
+  // If you ever need to re-seed, run `node backend/db/seedCricket.js` manually.
+  console.log('🛡️ [Startup] Default match/contest auto-seeding is DISABLED. Only admin-created data will show.');
 
   // Start Ingestion Worker (Free tier: 30s poll, toggled via ENABLE_INGESTION)
   if (process.env.ENABLE_INGESTION !== 'false') {
